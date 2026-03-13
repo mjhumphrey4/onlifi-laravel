@@ -40,9 +40,6 @@ return [
         Illuminate\Translation\TranslationServiceProvider::class,
         Illuminate\Validation\ValidationServiceProvider::class,
         Illuminate\View\ViewServiceProvider::class,
-        Illuminate\RateLimiter\RateLimiterServiceProvider::class,
-        Illuminate\Routing\RoutingServiceProvider::class,
-        Illuminate\Seeding\DatabaseSeederServiceProvider::class,
 
         App\Providers\AppServiceProvider::class,
         App\Providers\AuthServiceProvider::class,
