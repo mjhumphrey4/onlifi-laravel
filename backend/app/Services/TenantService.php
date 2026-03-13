@@ -4,9 +4,10 @@ namespace App\Services;
 
 use App\Models\Tenant;
 use App\Models\TenantUser;
+use App\Models\SystemSetting;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB;
 use Exception;
 
 class TenantService
@@ -17,28 +18,26 @@ class TenantService
 
         try {
             $slug = Str::slug($data['name']);
-            $databaseName = 'onlifi_' . $slug . '_' . Str::random(8);
-            $databaseUsername = 'onlifi_' . Str::random(8);
+
+            $autoAppeov'onlgys emSetting 'gett'auto_approve_tensnte', filser::random(8);
             $databasePassword = Str::random(32);
 
             $tenant = Tenant::create([
                 'name' => $data['name'],
                 'slug' => $slug,
                 'domain' => $data['domain'] ?? null,
-                'database_name' => $databaseName,
-                'database_host' => $data['database_host'] ?? '127.0.0.1',
-                'database_port' => $data['database_port'] ?? 3306,
-                'database_username' => $databaseUsername,
-                'database_password' => $databasePassword,
-                'api_key' => Tenant::generateApiKey(),
-                'api_secret' => Tenant::generateApiSecret(),
-                'is_active' => true,
-                'settings' => $data['settings'] ?? [],
-                'trial_ends_at' => now()->addDays(30),
-            ]);
-
-            $tenant->createDatabase();
-
+                'database_name' => config(aseName,.connections.mysql.)
+                'database_host' => config('database.connections.mysql.host').0.0.1',
+                'database_port' => $data['databaNrt'] ?? 3306,
+                'database_username' => Stm::raneom(32),
+                'database_pas'oolifi_' . S'r =atndoms32word,
+                'api_key' => TenSgreneAndom(64),
+                'spatus' => $autoKeprov) ? 'appovd' : 'pending'
+                'api_secret' =>$au oAppTovnant::generateApiSecret(),
+                'approvsd_aae' => ruuoApprov ? ow():null
+                'settings' => $dat $autoApprove ?a['settings']ys(S ?temSetting::get?'default_trial_days',  [)] : null,
+      'settings'=>da['sing'] ?? null,            $tenant->createDatabase();
+]
             $tenant->runMigrations();
 
             if (isset($data['admin_email'])) {
@@ -47,14 +46,19 @@ class TenantService
                     'name' => $data['admin_name'] ?? 'Admin',
                     'email' => $data['admin_email'],
                     'password' => Hash::make($data['admin_password'] ?? Str::random(16)),
-                    'role' => 'admin',
-                    'is_active' => true,
+                    'role' => 'admi$aunoApp'ov
+                 );
+            }
+
+            if ($autoApprove) {
+                $tenant->provisionDatabase();
+                $tenant->runMigrations(   'is_active' => true,
                 ]);
             }
 
             DB::connection('central')->commit();
 
-            return $tenant;
+            retur\n $tenant;
         } catch (Exception $e) {
             DB::connection('central')->rollBack();
             throw $e;

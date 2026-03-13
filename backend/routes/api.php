@@ -8,19 +8,62 @@ use App\Http\Controllers\MikrotikController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\RadiusController;
+use App\Http\Controllers\SuperAdminAuthController;
+use App\Http\Controllers\AdminTenantController;
+use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\SystemSettingController;
 
-Route::prefix('admin/tenants')->group(function () {
-    Route::get('/', [TenantController::class, 'index']);
+Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
+
+Route::get('/system/settings/public', [SystemSettingController::class, 'publicSettings']);
+
+Route::prefix('tenant/signup')->group(function () {
     Route::post('/', [TenantController::class, 'store']);
-    Route::get('/{tenant}', [TenantController::class, 'show']);
-    Route::put('/{tenant}', [TenantController::class, 'update']);
-    Route::delete('/{tenant}', [TenantController::class, 'destroy']);
-    Route::post('/{tenant}/suspend', [TenantController::class, 'suspend']);
-    Route::post('/{tenant}/activate', [TenantController::class, 'activate']);
-    Route::post('/{tenant}/regenerate-credentials', [TenantController::class, 'regenerateCredentials']);
-    Route::post('/{tenant}/extend-trial', [TenantController::class, 'extendTrial']);
-    Route::post('/{tenant}/subscribe', [TenantController::class, 'subscribe']);
-    Route::get('/{tenant}/stats', [TenantController::class, 'stats']);
+});
+
+Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
+    Route::post('/logout', [SuperAdminAuthController::class, 'logout']);
+    Route::get('/me', [SuperAdminAuthController::class, 'me']);
+    Route::post('/change-password', [SuperAdminAuthController::class, 'changePassword']);
+
+    Route::prefix('tenants')->group(function () {
+        Route::get('/', [TenantController::class, 'index']);
+        Route::get('/pending', [AdminTenantController::class, 'pending']);
+        Route::get('/statistics', [AdminTenantController::class, 'statistics']);
+        Route::get('/recent-activity', [AdminTenantController::class, 'recentActivity']);
+        Route::get('/{tenant}', [TenantController::class, 'show']);
+        Route::put('/{tenant}', [TenantController::class, 'update']);
+        Route::delete('/{tenant}', [TenantController::class, 'destroy']);
+        Route::post('/{tenant}/approve', [AdminTenantController::class, 'approve']);
+        Route::post('/{tenant}/reject', [AdminTenantController::class, 'reject']);
+        Route::post('/{tenant}/suspend', [TenantController::class, 'suspend']);
+        Route::post('/{tenant}/activate', [TenantController::class, 'activate']);
+        Route::post('/{tenant}/regenerate-credentials', [TenantController::class, 'regenerateCredentials']);
+        Route::post('/{tenant}/extend-trial', [TenantController::class, 'extendTrial']);
+        Route::post('/{tenant}/subscribe', [TenantController::class, 'subscribe']);
+        Route::get('/{tenant}/stats', [TenantController::class, 'stats']);
+        Route::get('/{tenant}/database', [AdminTenantController::class, 'viewDatabase']);
+        Route::post('/{tenant}/database/query', [AdminTenantController::class, 'queryDatabase']);
+    });
+
+    Route::prefix('announcements')->group(function () {
+        Route::get('/', [AnnouncementController::class, 'index']);
+        Route::post('/', [AnnouncementController::class, 'store']);
+        Route::get('/{announcement}', [AnnouncementController::class, 'show']);
+        Route::put('/{announcement}', [AnnouncementController::class, 'update']);
+        Route::delete('/{announcement}', [AnnouncementController::class, 'destroy']);
+    });
+
+    Route::prefix('settings')->group(function () {
+        Route::get('/', [SystemSettingController::class, 'index']);
+        Route::get('/groups', [SystemSettingController::class, 'groups']);
+        Route::get('/group/{group}', [SystemSettingController::class, 'byGroup']);
+        Route::post('/', [SystemSettingController::class, 'store']);
+        Route::get('/{key}', [SystemSettingController::class, 'show']);
+        Route::put('/{key}', [SystemSettingController::class, 'update']);
+        Route::delete('/{key}', [SystemSettingController::class, 'destroy']);
+        Route::post('/bulk-update', [SystemSettingController::class, 'bulkUpdate']);
+    });
 });
 
 Route::middleware(['tenant'])->group(function () {
