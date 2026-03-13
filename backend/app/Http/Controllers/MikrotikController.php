@@ -137,13 +137,15 @@ class MikrotikController extends Controller
     public function ingestTelemetry(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'router_ip' => 'required|ip',
+            'router_id' => 'required|integer',
             'cpu_load' => 'nullable|numeric',
             'memory_used_mb' => 'nullable|integer',
             'memory_total_mb' => 'nullable|integer',
             'uptime_seconds' => 'nullable|integer',
             'active_connections' => 'nullable|integer',
             'total_clients' => 'nullable|integer',
+            'bandwidth_upload_kbps' => 'nullable|numeric',
+            'bandwidth_download_kbps' => 'nullable|numeric',
         ]);
 
         if ($validator->fails()) {
@@ -153,7 +155,7 @@ class MikrotikController extends Controller
             ], 422);
         }
 
-        $router = MikrotikRouter::where('ip_address', $request->router_ip)->first();
+        $router = MikrotikRouter::find($request->router_id);
 
         if (!$router) {
             return response()->json([
@@ -161,18 +163,65 @@ class MikrotikController extends Controller
             ], 404);
         }
 
-        $telemetry = $router->telemetry()->create([
-            'cpu_load' => $request->cpu_load,
-            'memory_used_mb' => $request->memory_used_mb,
-            'memory_total_mb' => $request->memory_total_mb,
-            'uptime_seconds' => $request->uptime_seconds,
-            'active_connections' => $request->active_connections,
-            'total_clients' => $request->total_clients,
-            'recorded_at' => now(),
+        $router->update([
+            'last_seen' => now(),
+            'last_cpu_load' => $request->cpu_load,
+            'last_memory_used_mb' => $request->memory_used_mb,
+            'last_active_connections' => $request->active_connections,
         ]);
 
-        $router->update(['last_seen' => now()]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Telemetry received',
+            'router' => [
+                'id' => $router->id,
+                'name' => $router->name,
+                'last_seen' => $router->last_seen,
+            ],
+        ]);
+    }
 
-        return response()->json($telemetry);
+    public function getRealtimeStats($id)
+    {
+        $router = MikrotikRouter::findOrFail($id);
+
+        return response()->json([
+            'router_id' => $router->id,
+            'router_name' => $router->name,
+            'cpu_load' => $router->last_cpu_load ?? 0,
+            'memory_used_mb' => $router->last_memory_used_mb ?? 0,
+            'memory_total_mb' => $router->memory_total_mb ?? 0,
+            'active_connections' => $router->last_active_connections ?? 0,
+            'last_seen' => $router->last_seen,
+            'is_online' => $router->last_seen && $router->last_seen->diffInMinutes(now()) < 10,
+        ]);
+    }
+
+    public function getAllActiveUsers()
+    {
+        $routers = MikrotikRouter::where('is_active', true)->get();
+        $allUsers = [];
+
+        foreach ($routers as $router) {
+            if ($this->mikrotikService->connect($router)) {
+                $users = $this->mikrotikService->getActiveUsers($router);
+                
+                foreach ($users as $user) {
+                    $allUsers[] = array_merge($user, [
+                        'router_id' => $router->id,
+                        'router_name' => $router->name,
+                        'router_location' => $router->location,
+                    ]);
+                }
+                
+                $this->mikrotikService->disconnect();
+            }
+        }
+
+        return response()->json([
+            'total_active_users' => count($allUsers),
+            'users' => $allUsers,
+            'timestamp' => now()->toIso8601String(),
+        ]);
     }
 }

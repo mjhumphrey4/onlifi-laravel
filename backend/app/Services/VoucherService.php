@@ -162,8 +162,10 @@ class VoucherService
         $vouchers = [];
         $count = $data['count'] ?? 10;
 
+        $radiusService = app(FreeRadiusService::class);
+
         for ($i = 0; $i < $count; $i++) {
-            $vouchers[] = Voucher::create([
+            $voucher = Voucher::create([
                 'voucher_code' => $this->generateVoucherCode(),
                 'password' => $this->generateVoucherPassword(),
                 'group_id' => $group->id,
@@ -175,6 +177,16 @@ class VoucherService
                 'sales_point_id' => $group->sales_point_id,
                 'status' => 'unused',
             ]);
+
+            $radiusService->syncVoucherToRadius([
+                'voucher_code' => $voucher->voucher_code,
+                'password' => $voucher->password,
+                'validity_hours' => $voucher->validity_hours,
+                'data_limit_mb' => $voucher->data_limit_mb,
+                'speed_limit_kbps' => $voucher->speed_limit_kbps,
+            ]);
+
+            $vouchers[] = $voucher;
         }
 
         return [

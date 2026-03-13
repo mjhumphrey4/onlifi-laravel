@@ -12,6 +12,7 @@ use App\Http\Controllers\SuperAdminAuthController;
 use App\Http\Controllers\AdminTenantController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\SystemSettingController;
+use App\Http\Controllers\TenantDashboardController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
