@@ -18,11 +18,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'tenant' => \App\Http\Middleware\IdentifyTenant::class,
-            'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
             'super.admin' => \App\Http\Middleware\SuperAdminAuth::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
-    })
-    ->create();
+    })->create();
