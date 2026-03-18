@@ -3,13 +3,19 @@
 # OnLiFi Multi-Tenant FreeRADIUS Module
 # 
 # This Perl module enables FreeRADIUS to route authentication requests
-# to the correct tenant database based on the NAS (router) IP address.
+# to the correct tenant database based on the NAS-Identifier attribute.
+#
+# Since routers often have dynamic IPs, we use a unique router_identifier
+# (format: ONLIFI-{tenant_id}-{router_id}-{random}) sent via NAS-Identifier.
 #
 # Installation:
 # 1. Copy to /etc/freeradius/3.0/mods-config/perl/
 # 2. Enable perl module: ln -s ../mods-available/perl /etc/freeradius/3.0/mods-enabled/
 # 3. Configure perl module to use this script
 # 4. Add 'perl' to authorize section in sites-available/default
+#
+# MikroTik Configuration:
+# /radius set nas-identifier=ONLIFI-X-Y-XXXXXXXX
 #
 
 use strict;
@@ -22,7 +28,7 @@ my $central_db_name = "onlifi_central";
 my $central_db_user = "radius_user";
 my $central_db_pass = "your_secure_password";
 
-# Cache for tenant database connections
+# Cache for tenant database connections (keyed by router_identifier)
 my %tenant_cache;
 
 # FreeRADIUS return codes
@@ -39,13 +45,14 @@ use constant {
 };
 
 #
-# Get tenant database info from NAS IP
+# Get tenant database info from router identifier (NAS-Identifier)
+# Router identifier format: ONLIFI-{tenant_id}-{router_id}-{random}
 #
 sub get_tenant_db {
-    my ($nas_ip) = @_;
+    my ($router_identifier) = @_;
     
     # Check cache first
-    return $tenant_cache{$nas_ip} if exists $tenant_cache{$nas_ip};
+    return $tenant_cache{$router_identifier} if exists $tenant_cache{$router_identifier};
     
     my $dbh = DBI->connect(
         "DBI:mysql:database=$central_db_name;host=$central_db_host",
@@ -56,21 +63,22 @@ sub get_tenant_db {
     
     return undef unless $dbh;
     
+    # Look up by router_identifier (unique per router)
     my $sth = $dbh->prepare(q{
         SELECT t.database_name, t.database_host, t.database_username, t.database_password
         FROM nas n
         JOIN tenants t ON n.tenant_id = t.id
-        WHERE n.nasname = ?
+        WHERE n.router_identifier = ?
         AND t.is_active = 1
     });
     
-    $sth->execute($nas_ip);
+    $sth->execute($router_identifier);
     my $row = $sth->fetchrow_hashref();
     $sth->finish();
     $dbh->disconnect();
     
     if ($row) {
-        $tenant_cache{$nas_ip} = $row;
+        $tenant_cache{$router_identifier} = $row;
         return $row;
     }
     
@@ -81,14 +89,15 @@ sub get_tenant_db {
 # Authorize - Check if user exists and get password
 #
 sub authorize {
-    my $nas_ip = $RAD_REQUEST{'NAS-IP-Address'} // '';
+    # Use NAS-Identifier (router_identifier) instead of IP since routers have dynamic IPs
+    my $router_identifier = $RAD_REQUEST{'NAS-Identifier'} // '';
     my $username = $RAD_REQUEST{'User-Name'} // '';
     
-    # Get tenant database
-    my $tenant = get_tenant_db($nas_ip);
+    # Get tenant database using router identifier
+    my $tenant = get_tenant_db($router_identifier);
     
     unless ($tenant) {
-        &radiusd::radlog(1, "No tenant found for NAS: $nas_ip");
+        &radiusd::radlog(1, "No tenant found for router identifier: $router_identifier");
         return RLM_MODULE_REJECT;
     }
     
@@ -157,11 +166,12 @@ sub authenticate {
 # Accounting - Record session data
 #
 sub accounting {
+    my $router_identifier = $RAD_REQUEST{'NAS-Identifier'} // '';
     my $nas_ip = $RAD_REQUEST{'NAS-IP-Address'} // '';
     my $username = $RAD_REQUEST{'User-Name'} // '';
     my $acct_status = $RAD_REQUEST{'Acct-Status-Type'} // '';
     
-    my $tenant = get_tenant_db($nas_ip);
+    my $tenant = get_tenant_db($router_identifier);
     return RLM_MODULE_NOOP unless $tenant;
     
     my $dbh = DBI->connect(
@@ -239,10 +249,10 @@ sub accounting {
 # Post-auth - Log authentication result
 #
 sub post_auth {
-    my $nas_ip = $RAD_REQUEST{'NAS-IP-Address'} // '';
+    my $router_identifier = $RAD_REQUEST{'NAS-Identifier'} // '';
     my $username = $RAD_REQUEST{'User-Name'} // '';
     
-    my $tenant = get_tenant_db($nas_ip);
+    my $tenant = get_tenant_db($router_identifier);
     return RLM_MODULE_NOOP unless $tenant;
     
     my $dbh = DBI->connect(

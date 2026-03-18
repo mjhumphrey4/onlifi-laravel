@@ -13,6 +13,7 @@ use App\Http\Controllers\AdminTenantController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\SystemSettingController;
 use App\Http\Controllers\TenantDashboardController;
+use App\Http\Controllers\PlatformFeeController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -64,6 +65,15 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
         Route::put('/{key}', [SystemSettingController::class, 'update']);
         Route::delete('/{key}', [SystemSettingController::class, 'destroy']);
         Route::post('/bulk-update', [SystemSettingController::class, 'bulkUpdate']);
+    });
+
+    // Platform Fee Management
+    Route::prefix('platform-fees')->group(function () {
+        Route::get('/settings', [PlatformFeeController::class, 'getSettings']);
+        Route::put('/settings', [PlatformFeeController::class, 'updateSettings']);
+        Route::get('/revenue', [PlatformFeeController::class, 'getRevenueSummary']);
+        Route::get('/records', [PlatformFeeController::class, 'getFeeRecords']);
+        Route::get('/tenant-balances', [PlatformFeeController::class, 'getTenantBalances']);
     });
 });
 
