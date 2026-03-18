@@ -13,15 +13,17 @@ class MikrotikRouter extends Model
 
     protected $fillable = [
         'name',
-        'host',
-        'port',
+        'ip_address',
+        'api_port',
         'username',
         'password',
-        'status',
+        'is_active',
         'last_seen',
-        'firmware_version',
-        'model',
         'location',
+        'last_cpu_load',
+        'last_memory_used_mb',
+        'memory_total_mb',
+        'last_active_connections',
     ];
 
     protected $hidden = [
@@ -32,6 +34,11 @@ class MikrotikRouter extends Model
         'last_seen' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'is_active' => 'boolean',
+        'last_cpu_load' => 'decimal:2',
+        'last_memory_used_mb' => 'integer',
+        'memory_total_mb' => 'integer',
+        'last_active_connections' => 'integer',
     ];
 
 

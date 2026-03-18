@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('mikrotik_routers', function (Blueprint $table) {
+        Schema::connection('tenant')->create('mikrotik_routers', function (Blueprint $table) {
             $table->id();
             $table->string('name', 100);
             $table->string('ip_address', 15)->unique();
@@ -24,6 +24,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('mikrotik_routers');
+        Schema::connection('tenant')->dropIfExists('mikrotik_routers');
     }
 };

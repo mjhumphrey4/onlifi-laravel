@@ -44,11 +44,11 @@ class MikrotikService
         }
 
         try {
-            $result = $this->api->addUser(
+            $result = $this->api->addHotspotUser(
                 $voucherData['voucher_code'],
                 $voucherData['password'],
                 $voucherData['profile_name'] ?? 'default',
-                $voucherData['validity_hours'] ?? 24
+                'Voucher: ' . ($voucherData['validity_hours'] ?? 24) . 'h'
             );
 
             $this->disconnect();
@@ -70,7 +70,7 @@ class MikrotikService
         }
 
         try {
-            $users = $this->api->getActiveUsers();
+            $users = $this->api->getHotspotUsers();
             $this->disconnect();
             return $users;
         } catch (\Exception $e) {
@@ -90,22 +90,33 @@ class MikrotikService
         }
 
         try {
-            $systemResource = $this->api->getSystemResource();
-            $interfaces = $this->api->getInterfaces();
+            $systemResource = $this->api->getSystemResources();
+            
+            if (!$systemResource) {
+                $this->disconnect();
+                return null;
+            }
 
             $telemetry = RouterTelemetry::create([
                 'router_id' => $router->id,
                 'cpu_load' => $systemResource['cpu_load'] ?? null,
-                'memory_used_mb' => isset($systemResource['free_memory']) 
-                    ? ($systemResource['total_memory'] - $systemResource['free_memory']) / 1024 / 1024
+                'memory_usage' => isset($systemResource['free_memory']) 
+                    ? round(($systemResource['total_memory'] - $systemResource['free_memory']) / 1024 / 1024)
+                    : null,
+                'uptime' => $systemResource['uptime'] ?? null,
+                'active_users' => count($this->api->getHotspotUsers()),
+                'recorded_at' => now(),
+            ]);
+
+            $router->update([
+                'last_cpu_load' => $systemResource['cpu_load'] ?? null,
+                'last_memory_used_mb' => isset($systemResource['free_memory']) 
+                    ? round(($systemResource['total_memory'] - $systemResource['free_memory']) / 1024 / 1024)
                     : null,
                 'memory_total_mb' => isset($systemResource['total_memory'])
-                    ? $systemResource['total_memory'] / 1024 / 1024
+                    ? round($systemResource['total_memory'] / 1024 / 1024)
                     : null,
-                'uptime_seconds' => $systemResource['uptime'] ?? null,
-                'active_connections' => $systemResource['active_connections'] ?? null,
-                'total_clients' => count($this->getActiveUsers($router)),
-                'recorded_at' => now(),
+                'last_active_connections' => count($this->api->getHotspotUsers()),
             ]);
 
             $this->disconnect();
@@ -127,7 +138,7 @@ class MikrotikService
         }
 
         try {
-            $result = $this->api->removeUser($username);
+            $result = $this->api->removeHotspotUser($username);
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
