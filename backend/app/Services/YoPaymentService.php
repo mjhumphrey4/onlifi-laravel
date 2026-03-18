@@ -11,15 +11,35 @@ class YoPaymentService
     private $username;
     private $password;
     private $mode;
+    private $tenant;
 
     public function __construct()
     {
-        $this->username = config('services.yoapi.username');
-        $this->password = config('services.yoapi.password');
-        $this->mode = config('services.yoapi.mode');
+        // Get current tenant if available
+        $this->tenant = app()->bound('tenant') ? app('tenant') : null;
+        
+        // Use tenant-specific credentials if available, otherwise fall back to global config
+        if ($this->tenant && $this->tenant->yoapi_username && $this->tenant->yoapi_password) {
+            $this->username = $this->tenant->yoapi_username;
+            $this->password = $this->tenant->yoapi_password;
+            $this->mode = $this->tenant->yoapi_mode ?? 'sandbox';
+        } else {
+            // Fallback to global credentials (platform collects on behalf of tenants)
+            $this->username = config('services.yoapi.username');
+            $this->password = config('services.yoapi.password');
+            $this->mode = config('services.yoapi.mode', 'sandbox');
+        }
         
         require_once base_path('app/Services/YoAPI.php');
         $this->yoAPI = new \YoAPI($this->username, $this->password, $this->mode);
+    }
+    
+    /**
+     * Check if tenant has their own YoAPI credentials configured
+     */
+    public function hasTenantCredentials(): bool
+    {
+        return $this->tenant && $this->tenant->yoapi_username && $this->tenant->yoapi_password;
     }
 
     public function initiatePayment(array $data): array

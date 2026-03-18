@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MikrotikRouter;
+use App\Models\RadiusNas;
 use App\Services\MikrotikService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -54,6 +55,12 @@ class MikrotikController extends Controller
         }
 
         $router = MikrotikRouter::create($request->all());
+
+        // Auto-register in RADIUS NAS table for multi-tenant authentication
+        $tenant = app('tenant');
+        if ($tenant) {
+            RadiusNas::registerRouter($router, $tenant);
+        }
 
         return response()->json($router, 201);
     }

@@ -28,6 +28,15 @@ return new class extends Migration
             $table->foreignId('approved_by')->nullable()->constrained('super_admins')->onDelete('set null');
             $table->text('rejection_reason')->nullable();
             $table->json('settings')->nullable();
+            
+            // Per-tenant YoAPI credentials (for direct payments to tenant)
+            $table->string('yoapi_username')->nullable();
+            $table->string('yoapi_password')->nullable();
+            $table->enum('yoapi_mode', ['sandbox', 'production'])->default('sandbox');
+            
+            // Per-tenant RADIUS secret (for FreeRADIUS authentication)
+            $table->string('radius_secret')->nullable();
+            
             $table->timestamps();
             $table->softDeletes();
         });

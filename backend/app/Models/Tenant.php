@@ -29,11 +29,21 @@ class Tenant extends Model
         'settings',
         'trial_ends_at',
         'subscribed_at',
+        'status',
+        'approved_at',
+        'approved_by',
+        'rejection_reason',
+        'yoapi_username',
+        'yoapi_password',
+        'yoapi_mode',
+        'radius_secret',
     ];
 
     protected $hidden = [
         'database_password',
         'api_secret',
+        'yoapi_password',
+        'radius_secret',
     ];
 
     protected $casts = [
