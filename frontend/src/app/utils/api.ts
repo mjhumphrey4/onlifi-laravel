@@ -157,3 +157,29 @@ export const apiStats = () => getTenantDashboardStats();
 export const apiTransactions = (p: { page?: number; limit?: number; status?: string; search?: string }) =>
   getTransactions({ page: p.page, status: p.status, search: p.search });
 export const apiVoucherStock = () => getVoucherStatistics();
+
+// Performance analytics - placeholder until backend endpoint is implemented
+export const apiPerformance = async (site: string, days: number) => {
+  // TODO: Implement backend endpoint for performance analytics
+  return { data: [], site, days };
+};
+
+// Withdrawals - placeholder until backend endpoint is implemented
+export const apiWithdrawals = async (p: { page?: number; limit?: number }) => {
+  // TODO: Implement backend endpoint for withdrawals
+  return { withdrawals: [], total: 0, page: p.page ?? 1 };
+};
+
+export const apiRequestWithdrawal = async (body: { site: string; amount: number; phone: string }) => {
+  // TODO: Implement backend endpoint for withdrawal requests
+  return { success: false, message: 'Withdrawal feature not yet implemented' };
+};
+
+// Import vouchers - placeholder until backend endpoint is implemented
+export const apiImportVouchers = async (site: string, file: File) => {
+  // TODO: Implement backend endpoint for voucher import
+  const formData = new FormData();
+  formData.append('site', site);
+  formData.append('file', file);
+  return { success: false, message: 'Voucher import feature not yet implemented' };
+};
