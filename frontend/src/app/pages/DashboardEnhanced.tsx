@@ -1,17 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, Wallet, RefreshCw, Users, Server, Ticket, Activity } from 'lucide-react';
+import { DollarSign, RefreshCw, Users, Server, Ticket, Activity } from 'lucide-react';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
-import { apiStats, apiTransactions } from '../utils/api';
+import { getTenantDashboardStats, getTransactions, getVoucherStatistics } from '../utils/api';
 
-interface SiteStat {
-  total_amount: number;
-  today_amount: number;
-  week_amount: number;
-  withdrawn: number;
-  pending_withdraw: number;
-  balance: number;
-  total_sales: number;
+interface DashboardStats {
+  total_active_users: number;
+  total_routers: number;
+  online_routers: number;
+  today_transactions: number;
+  today_revenue: number;
+  active_vouchers: number;
+  unused_vouchers: number;
+  routers: RouterStats[];
+}
+
+interface RouterStats {
+  id: number;
+  name: string;
+  location: string;
+  cpu_load: number;
+  memory_used_mb: number;
+  memory_total_mb: number;
+  active_users: number;
+  last_seen: string;
+  is_online: boolean;
 }
 
 interface TxRow {
@@ -26,30 +39,12 @@ interface TxRow {
 }
 
 interface VoucherStats {
-  total_vouchers: number;
+  total: number;
   unused: number;
+  active: number;
   used: number;
   expired: number;
-  total_revenue: number;
 }
-
-interface RouterTelemetry {
-  router_name: string;
-  cpu_load: number;
-  memory_used_mb: number;
-  memory_total_mb: number;
-  uptime_seconds: number;
-  bandwidth_download_kbps?: number;
-  bandwidth_upload_kbps?: number;
-}
-
-const SITE_COLORS: Record<string, string> = {
-  Enock:   'from-blue-600 to-blue-700',
-  Richard: 'from-emerald-600 to-emerald-700',
-  STK:     'from-purple-600 to-purple-700',
-  Remmy:   'from-orange-500 to-orange-600',
-  Guma:    'from-teal-600 to-teal-700',
-};
 
 function fmt(n: number) {
   return 'UGX ' + Math.round(n).toLocaleString();
@@ -66,37 +61,28 @@ function statusStyle(s: string) {
 
 export function Dashboard() {
   const { user, isAdmin } = useAuth();
-  const [sites, setSites] = useState<Record<string, SiteStat>>({});
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [voucherStats, setVoucherStats] = useState<VoucherStats | null>(null);
-  const [routerTelemetry, setRouterTelemetry] = useState<RouterTelemetry[]>([]);
-  const [activeClients, setActiveClients] = useState(0);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, txRes, voucherRes, clientsRes, telemetryRes] = await Promise.all([
-        apiStats(),
-        apiTransactions({ limit: 10 }),
-        fetch('/api/mikrotik_api.php?action=voucher_stats').then(r => r.json()).catch(() => ({ overall: null })),
-        fetch('/api/mikrotik_api.php?action=clients').then(r => r.json()).catch(() => ({ count: 0 })),
-        fetch('/api/mikrotik_api.php?action=router_telemetry').then(r => r.json()).catch(() => ({ telemetry: [] })),
+      const [statsRes, txRes, voucherRes] = await Promise.all([
+        getTenantDashboardStats().catch(() => null),
+        getTransactions({ page: 1 }).catch(() => ({ data: [] })),
+        getVoucherStatistics().catch(() => null),
       ]);
       
-      setSites(statsRes.sites ?? {});
-      setTxs(txRes.transactions ?? []);
-      
-      if (voucherRes.overall) {
-        setVoucherStats(voucherRes.overall);
+      if (statsRes) {
+        setDashboardStats(statsRes);
       }
       
-      if (clientsRes.count !== undefined) {
-        setActiveClients(clientsRes.count);
-      }
+      setTxs(txRes.data ?? []);
       
-      if (telemetryRes.telemetry) {
-        setRouterTelemetry(telemetryRes.telemetry.slice(0, 3));
+      if (voucherRes) {
+        setVoucherStats(voucherRes);
       }
       
       setLastUpdated(new Date());
@@ -113,10 +99,11 @@ export function Dashboard() {
     return () => clearInterval(iv);
   }, [load]);
 
-  const siteList = Object.entries(sites);
-  const totalEarnings   = siteList.reduce((s, [, v]) => s + v.total_amount,  0);
-  const todayEarnings   = siteList.reduce((s, [, v]) => s + v.today_amount,  0);
-  const totalWithdrawn  = siteList.reduce((s, [, v]) => s + v.withdrawn,     0);
+  const todayRevenue = dashboardStats?.today_revenue ?? 0;
+  const activeUsers = dashboardStats?.total_active_users ?? 0;
+  const totalRouters = dashboardStats?.total_routers ?? 0;
+  const onlineRouters = dashboardStats?.online_routers ?? 0;
+  const routerStats = dashboardStats?.routers ?? [];
 
   if (loading) {
     return (
@@ -141,10 +128,10 @@ export function Dashboard() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <StatsCard title="Today's Earnings"  value={fmt(todayEarnings)}  icon={DollarSign} trend={{ value: 'Live data', isPositive: true }} />
-        <StatsCard title="Total Earnings"    value={fmt(totalEarnings)}  icon={TrendingUp} />
-        <StatsCard title="Total Withdrawals" value={fmt(totalWithdrawn)} icon={Wallet} />
-        <StatsCard title="Active Clients" value={activeClients.toString()} icon={Users} trend={{ value: 'Real-time', isPositive: true }} />
+        <StatsCard title="Today's Revenue"  value={fmt(todayRevenue)}  icon={DollarSign} trend={{ value: 'Live data', isPositive: true }} />
+        <StatsCard title="Active Users"    value={activeUsers.toString()}  icon={Users} trend={{ value: 'Real-time', isPositive: true }} />
+        <StatsCard title="Online Routers" value={`${onlineRouters}/${totalRouters}`} icon={Server} />
+        <StatsCard title="Unused Vouchers" value={(voucherStats?.unused ?? 0).toString()} icon={Ticket} />
       </div>
 
       {/* MikroTik Stats Section */}
@@ -163,7 +150,7 @@ export function Dashboard() {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Total Vouchers</p>
-                <p className="text-2xl font-bold text-card-foreground">{voucherStats.total_vouchers}</p>
+                <p className="text-2xl font-bold text-card-foreground">{voucherStats.total}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Available</p>
@@ -174,8 +161,8 @@ export function Dashboard() {
                 <p className="text-2xl font-bold text-blue-500">{voucherStats.used}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Revenue</p>
-                <p className="text-xl font-bold text-primary">{fmt(voucherStats.total_revenue)}</p>
+                <p className="text-sm text-muted-foreground mb-1">Active</p>
+                <p className="text-xl font-bold text-primary">{voucherStats.active}</p>
               </div>
             </div>
 
@@ -184,8 +171,8 @@ export function Dashboard() {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-muted-foreground">Usage Rate</span>
                 <span className="text-xs font-semibold text-card-foreground">
-                  {voucherStats.total_vouchers > 0 
-                    ? `${((voucherStats.used / voucherStats.total_vouchers) * 100).toFixed(1)}%`
+                  {voucherStats.total > 0 
+                    ? `${((voucherStats.used / voucherStats.total) * 100).toFixed(1)}%`
                     : '0%'}
                 </span>
               </div>
@@ -193,8 +180,8 @@ export function Dashboard() {
                 <div
                   className="bg-primary h-2 rounded-full transition-all"
                   style={{ 
-                    width: voucherStats.total_vouchers > 0 
-                      ? `${Math.min((voucherStats.used / voucherStats.total_vouchers) * 100, 100)}%`
+                    width: voucherStats.total > 0 
+                      ? `${Math.min((voucherStats.used / voucherStats.total) * 100, 100)}%`
                       : '0%'
                   }}
                 />
@@ -213,15 +200,15 @@ export function Dashboard() {
             <a href="/devices" className="text-sm text-primary hover:text-primary/80">View all →</a>
           </div>
 
-          {routerTelemetry.length > 0 ? (
+          {routerStats.length > 0 ? (
             <div className="space-y-4">
-              {routerTelemetry.map((router, idx) => {
-                const memPercent = (router.memory_used_mb / router.memory_total_mb) * 100;
+              {routerStats.slice(0, 3).map((router) => {
+                const memPercent = router.memory_total_mb > 0 ? (router.memory_used_mb / router.memory_total_mb) * 100 : 0;
                 return (
-                  <div key={idx} className="bg-muted/50 rounded-lg p-4">
+                  <div key={router.id} className="bg-muted/50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="font-semibold text-card-foreground">{router.router_name}</p>
-                      <Activity className="w-4 h-4 text-emerald-500" />
+                      <p className="font-semibold text-card-foreground">{router.name}</p>
+                      <Activity className={`w-4 h-4 ${router.is_online ? 'text-emerald-500' : 'text-muted-foreground'}`} />
                     </div>
                     
                     <div className="space-y-2">
@@ -259,19 +246,17 @@ export function Dashboard() {
 
                       <div className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-border">
                         <div>
-                          <span className="text-xs text-muted-foreground block mb-1">Uptime</span>
+                          <span className="text-xs text-muted-foreground block mb-1">Active Users</span>
                           <span className="text-xs font-semibold text-card-foreground">
-                            {Math.floor(router.uptime_seconds / 86400)}d {Math.floor((router.uptime_seconds % 86400) / 3600)}h
+                            {router.active_users}
                           </span>
                         </div>
-                        {router.bandwidth_download_kbps !== undefined && (
-                          <div>
-                            <span className="text-xs text-muted-foreground block mb-1">Speed</span>
-                            <span className="text-xs font-semibold text-card-foreground">
-                              ↓{(router.bandwidth_download_kbps / 1024).toFixed(1)} Mbps
-                            </span>
-                          </div>
-                        )}
+                        <div>
+                          <span className="text-xs text-muted-foreground block mb-1">Location</span>
+                          <span className="text-xs font-semibold text-card-foreground">
+                            {router.location || 'N/A'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -286,38 +271,6 @@ export function Dashboard() {
           )}
         </div>
       </div>
-
-      {/* Per-site cards (admin sees all, user sees their own) */}
-      {siteList.length > 0 && (
-        <div className="mb-6 sm:mb-8">
-          {isAdmin() && <h2 className="text-lg text-foreground mb-4">Site Performance</h2>}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            {siteList.map(([site, stat]) => (
-              <div
-                key={site}
-                className={`bg-gradient-to-br ${SITE_COLORS[site] ?? 'from-slate-600 to-slate-700'} rounded-xl p-5 text-white`}
-              >
-                <p className="text-sm font-semibold opacity-80 mb-1">{site}</p>
-                <p className="text-2xl font-bold mb-3">{fmt(stat.total_amount)}</p>
-                <div className="space-y-1 text-xs bg-white/10 rounded-lg p-3">
-                  <div className="flex justify-between">
-                    <span className="opacity-80">Today</span>
-                    <span className="font-semibold">{fmt(stat.today_amount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="opacity-80">Withdrawn</span>
-                    <span className="font-semibold text-red-200">{fmt(stat.withdrawn)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-white/20 pt-1 mt-1">
-                    <span className="font-semibold">Balance</span>
-                    <span className="font-bold text-yellow-200">{fmt(stat.balance)}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Recent transactions */}
       <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
