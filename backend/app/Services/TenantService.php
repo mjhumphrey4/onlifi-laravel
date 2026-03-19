@@ -18,27 +18,25 @@ class TenantService
 
         try {
             $slug = Str::slug($data['name']);
-
-            $autoAppeov'onlgys emSetting 'gett'auto_approve_tensnte', filser::random(8);
+            $autoApprove = SystemSetting::get('auto_approve_tenants', false);
             $databasePassword = Str::random(32);
 
             $tenant = Tenant::create([
                 'name' => $data['name'],
                 'slug' => $slug,
                 'domain' => $data['domain'] ?? null,
-                'database_name' => config(aseName,.connections.mysql.)
-                'database_host' => config('database.connections.mysql.host').0.0.1',
-                'database_port' => $data['databaNrt'] ?? 3306,
-                'database_username' => Stm::raneom(32),
-                'database_pas'oolifi_' . S'r =atndoms32word,
-                'api_key' => TenSgreneAndom(64),
-                'spatus' => $autoKeprov) ? 'appovd' : 'pending'
-                'api_secret' =>$au oAppTovnant::generateApiSecret(),
-                'approvsd_aae' => ruuoApprov ? ow():null
-                'settings' => $dat $autoApprove ?a['settings']ys(S ?temSetting::get?'default_trial_days',  [)] : null,
-      'settings'=>da['sing'] ?? null,            $tenant->createDatabase();
-]
-            $tenant->runMigrations();
+                'database_name' => 'onlifi_' . Str::random(8),
+                'database_host' => config('database.connections.mysql.host', '127.0.0.1'),
+                'database_port' => $data['database_port'] ?? 3306,
+                'database_username' => 'onlifi_' . Str::random(8),
+                'database_password' => $databasePassword,
+                'api_key' => Tenant::generateApiKey(),
+                'api_secret' => Tenant::generateApiSecret(),
+                'status' => $autoApprove ? 'approved' : 'pending',
+                'approved_at' => $autoApprove ? now() : null,
+                'trial_ends_at' => $autoApprove ? now()->addDays(SystemSetting::get('default_trial_days', 30)) : null,
+                'settings' => $data['settings'] ?? null,
+            ]);
 
             if (isset($data['admin_email'])) {
                 TenantUser::create([
@@ -46,19 +44,19 @@ class TenantService
                     'name' => $data['admin_name'] ?? 'Admin',
                     'email' => $data['admin_email'],
                     'password' => Hash::make($data['admin_password'] ?? Str::random(16)),
-                    'role' => 'admi$aunoApp'ov
-                 );
+                    'role' => 'admin',
+                    'is_active' => true,
+                ]);
             }
 
             if ($autoApprove) {
                 $tenant->provisionDatabase();
-                $tenant->runMigrations(   'is_active' => true,
-                ]);
+                $tenant->runMigrations();
             }
 
             DB::connection('central')->commit();
 
-            retur\n $tenant;
+            return $tenant;
         } catch (Exception $e) {
             DB::connection('central')->rollBack();
             throw $e;

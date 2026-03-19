@@ -35,11 +35,17 @@ export function Users() {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/auth_api.php?action=users');
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch('/api/super-admin/tenants', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
       const data = await response.json();
       
-      if (data.success) {
-        setUsers(data.users);
+      if (response.ok) {
+        setUsers(data.tenants || data);
       }
     } catch (error) {
       console.error('Failed to load users:', error);
@@ -73,18 +79,22 @@ export function Users() {
 
   const updateUserStatus = async (userId: number, newStatus: string) => {
     try {
-      const response = await fetch('/api/auth_api.php?action=update_user_status', {
+      const token = localStorage.getItem('admin_token');
+      const action = newStatus === 'active' ? 'activate' : 'suspend';
+      const response = await fetch(`/api/super-admin/tenants/${userId}/${action}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, status: newStatus }),
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok) {
         loadUsers();
       } else {
-        alert(data.error || 'Failed to update user status');
+        alert(data.message || data.error || 'Failed to update user status');
       }
     } catch (error) {
       console.error('Failed to update user status:', error);
@@ -98,19 +108,22 @@ export function Users() {
     }
 
     try {
-      const response = await fetch('/api/auth_api.php?action=approve_user', {
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`/api/super-admin/tenants/${userId}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId }),
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok) {
         alert('User approved successfully! Database created and account activated.');
         loadUsers();
       } else {
-        alert(data.error || 'Failed to approve user');
+        alert(data.message || data.error || 'Failed to approve user');
       }
     } catch (error) {
       console.error('Failed to approve user:', error);
@@ -129,19 +142,22 @@ export function Users() {
     }
 
     try {
-      const response = await fetch('/api/auth_api.php?action=delete_user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId }),
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`/api/super-admin/tenants/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok) {
         alert(data.message || 'User deleted successfully');
         loadUsers();
       } else {
-        alert(data.error || 'Failed to delete user');
+        alert(data.message || data.error || 'Failed to delete user');
       }
     } catch (error) {
       console.error('Failed to delete user:', error);

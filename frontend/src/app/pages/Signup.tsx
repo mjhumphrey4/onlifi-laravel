@@ -97,27 +97,28 @@ export function Signup() {
     setApiError('');
 
     try {
-      const response = await fetch('/api/auth_api.php?action=signup', {
+      const response = await fetch('/api/tenant/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
-          full_name: formData.full_name,
-          phone: formData.phone,
+          name: formData.username,
+          domain: `${formData.username}.onlifi.local`,
+          admin_email: formData.email,
+          admin_name: formData.full_name,
+          admin_password: formData.password,
+          settings: { phone: formData.phone },
         }),
       });
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok) {
         setSuccess(true);
         setTimeout(() => {
           navigate('/login');
         }, 2000);
       } else {
-        setApiError(data.error || 'Failed to create account');
+        setApiError(data.message || data.error || 'Failed to create account');
       }
     } catch (error) {
       console.error('Signup error:', error);
