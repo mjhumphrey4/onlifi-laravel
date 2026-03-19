@@ -32,10 +32,28 @@ async function request<T = any>(
     ...options,
   });
 
-  const data = await res.json();
+  // Check if response has content
+  const contentType = res.headers.get('content-type');
+  const hasJson = contentType && contentType.includes('application/json');
+  
+  let data: any = null;
+  
+  if (hasJson) {
+    const text = await res.text();
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch (e) {
+      console.error('JSON parse error:', e, 'Response text:', text);
+      throw new Error('Invalid JSON response from server');
+    }
+  } else {
+    const text = await res.text();
+    console.error('Non-JSON response:', text);
+    throw new Error(`Server returned non-JSON response: ${res.status} ${res.statusText}`);
+  }
 
   if (!res.ok) {
-    throw new Error(data.message || data.error || 'Request failed');
+    throw new Error(data?.message || data?.error || `Request failed: ${res.status} ${res.statusText}`);
   }
 
   return data;
