@@ -78,6 +78,14 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
 });
 
 Route::middleware(['tenant'])->group(function () {
+    // Tenant Dashboard
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/stats', [TenantDashboardController::class, 'getRealtimeStats']);
+        Route::get('/realtime', [TenantDashboardController::class, 'getRealtimeStats']);
+        Route::get('/active-users', [TenantDashboardController::class, 'getActiveUsers']);
+        Route::get('/router-script', [TenantDashboardController::class, 'getRouterScript']);
+    });
+
     Route::prefix('payments')->group(function () {
         Route::post('/initiate', [PaymentController::class, 'initiate']);
         Route::get('/check-status', [PaymentController::class, 'checkStatus']);

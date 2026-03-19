@@ -1,12 +1,12 @@
 import { useState, FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router';
-import { Zap, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Zap, Eye, EyeOff, UserPlus, Shield } from 'lucide-react';
 
 export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -17,8 +17,8 @@ export function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(username.trim(), password);
-      window.location.href = '/';
+      await login(email.trim(), password);
+      navigate('/admin/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -50,14 +50,14 @@ export function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm text-card-foreground mb-2">Username</label>
+              <label className="block text-sm text-card-foreground mb-2">Email</label>
               <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
-                autoComplete="username"
-                placeholder="Enter your username"
+                autoComplete="email"
+                placeholder="Enter your email"
                 className="w-full px-4 py-3 bg-input-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
               />
             </div>
@@ -106,10 +106,21 @@ export function Login() {
               Create New Account
             </Link>
           </div>
+
+          {/* Admin Login Link */}
+          <div className="mt-4 text-center">
+            <Link
+              to="/admin/login"
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Shield className="w-4 h-4" />
+              Super Admin Login
+            </Link>
+          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} Onlifi-LITE Edition. Parent App Under Development.
+          &copy; {new Date().getFullYear()} OnLiFi - WiFi Hotspot Management Platform
         </p>
       </div>
     </div>

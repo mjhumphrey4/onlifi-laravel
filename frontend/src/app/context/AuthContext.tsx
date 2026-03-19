@@ -1,89 +1,100 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { adminMe, adminLogin, adminLogout } from '../utils/api';
 
 export interface AuthUser {
   id: number;
   username: string;
   name: string;
   email: string;
-  role: 'admin' | 'user' | 'reseller';
-  site: string | null;
+  role: 'super_admin' | 'tenant' | 'user';
+  tenant_id?: number;
+  tenant_name?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  selectedSite: string | null;
-  setSelectedSite: (site: string) => void;
-  login: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: () => boolean;
-  userSites: () => string[];
+  isTenant: () => boolean;
 }
-
-const ALL_SITES = ['Enock', 'Richard', 'STK', 'Remmy', 'Guma'];
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedSite, setSelectedSite] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check authentication with new multi-tenant API
-    fetch('/api/auth_api.php?action=me')
-      .then(res => res.json())
-      .then((d) => {
-        if (d.success && d.user) {
-          setUser({
-            id: d.user.id,
-            username: d.user.username,
-            name: d.user.name,
-            email: d.user.email,
-            role: d.user.role,
-            site: null // Multi-tenant system doesn't use site concept
-          });
-        } else {
-          setUser(null);
-        }
-      })
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    checkAuth();
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const response = await fetch('/api/auth_api.php?action=login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-
-    const data = await response.json();
-
-    if (!data.success) {
-      throw new Error(data.error || 'Login failed');
+  const checkAuth = async () => {
+    const token = localStorage.getItem('admin_token') || localStorage.getItem('tenant_token');
+    
+    if (!token) {
+      setUser(null);
+      setLoading(false);
+      return;
     }
 
+    try {
+      // Try admin auth first
+      if (localStorage.getItem('admin_token')) {
+        const data = await adminMe();
+        setUser({
+          id: data.admin.id,
+          username: data.admin.email,
+          name: data.admin.name,
+          email: data.admin.email,
+          role: 'super_admin',
+        });
+      }
+      // TODO: Add tenant auth check when tenant login is implemented
+    } catch (error) {
+      // Token invalid, clear it
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('tenant_token');
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    const data = await adminLogin(email, password);
+
+    // Store token
+    localStorage.setItem('admin_token', data.token);
+    localStorage.setItem('admin_user', JSON.stringify(data.admin));
+
     setUser({
-      id: data.user.id,
-      username: data.user.username,
-      name: data.user.name,
-      email: data.user.email,
-      role: data.user.role,
-      site: null
+      id: data.admin.id,
+      username: data.admin.email,
+      name: data.admin.name,
+      email: data.admin.email,
+      role: 'super_admin',
     });
   };
 
   const logout = async () => {
-    await fetch('/api/auth_api.php?action=logout', { method: 'POST' });
+    try {
+      await adminLogout();
+    } catch (error) {
+      // Ignore logout errors
+    }
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    localStorage.removeItem('tenant_token');
     setUser(null);
   };
 
-  const isAdmin = () => user?.role === 'admin';
-  const userSites = () => (user?.role === 'admin' ? ALL_SITES : user?.site ? [user.site] : []);
+  const isAdmin = () => user?.role === 'super_admin';
+  const isTenant = () => user?.role === 'tenant';
 
   return (
-    <AuthContext.Provider value={{ user, loading, selectedSite, setSelectedSite, login, logout, isAdmin, userSites }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, isTenant }}>
       {children}
     </AuthContext.Provider>
   );

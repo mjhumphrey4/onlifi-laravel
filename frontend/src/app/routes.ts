@@ -15,7 +15,14 @@ import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Users } from './pages/Users';
 
+// Admin pages
+import AdminLogin from './pages/admin/AdminLogin';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import TenantApproval from './pages/admin/TenantApproval';
+import Announcements from './pages/admin/Announcements';
+
 export const router = createBrowserRouter([
+  // Tenant Dashboard Routes
   {
     path: '/',
     Component: Layout,
@@ -36,4 +43,12 @@ export const router = createBrowserRouter([
   },
   { path: '/login', Component: Login },
   { path: '/signup', Component: Signup },
+
+  // Admin Routes
+  { path: '/admin/login', Component: AdminLogin },
+  { path: '/admin/dashboard', Component: AdminDashboard },
+  { path: '/admin/tenants/pending', Component: TenantApproval },
+  { path: '/admin/tenants', Component: AdminDashboard },
+  { path: '/admin/announcements', Component: Announcements },
+  { path: '/admin/settings', Component: AdminDashboard },
 ]);
