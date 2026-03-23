@@ -88,6 +88,11 @@ class Tenant extends Model
         $connection->statement("FLUSH PRIVILEGES");
     }
 
+    public function provisionDatabase()
+    {
+        return $this->createDatabase();
+    }
+
     public function runMigrations()
     {
         $this->configure();

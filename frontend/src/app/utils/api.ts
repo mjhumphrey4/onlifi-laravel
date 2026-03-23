@@ -140,6 +140,12 @@ export const getVoucherTypes = () => get('/vouchers/types');
 export const getVoucherGroups = () => get('/vouchers/groups');
 export const getVoucherStatistics = () => get('/vouchers/statistics');
 
+// ============ VOUCHER TYPES MANAGEMENT (Tenant) ============
+export const listVoucherTypes = () => get('/vouchers/types');
+export const createVoucherType = (data: Record<string, unknown>) => post('/vouchers/types', data);
+export const updateVoucherType = (id: number, data: Record<string, unknown>) => put(`/vouchers/types/${id}`, data);
+export const deleteVoucherType = (id: number) => del(`/vouchers/types/${id}`);
+
 // ============ ROUTERS (Tenant) ============
 export const getRouters = () => get('/routers');
 export const getRouter = (id: number) => get(`/routers/${id}`);

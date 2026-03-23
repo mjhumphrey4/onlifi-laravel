@@ -95,12 +95,15 @@ Route::middleware(['tenant'])->group(function () {
 
     Route::prefix('vouchers')->group(function () {
         Route::get('/', [VoucherController::class, 'index']);
-        Route::get('/{id}', [VoucherController::class, 'show']);
-        Route::post('/generate-batch', [VoucherController::class, 'generateBatch']);
-        Route::post('/validate', [VoucherController::class, 'validate']);
         Route::get('/statistics', [VoucherController::class, 'statistics']);
         Route::get('/types', [VoucherController::class, 'getTypes']);
+        Route::post('/types', [VoucherController::class, 'storeType']);
+        Route::put('/types/{id}', [VoucherController::class, 'updateType']);
+        Route::delete('/types/{id}', [VoucherController::class, 'destroyType']);
         Route::get('/groups', [VoucherController::class, 'getGroups']);
+        Route::post('/generate-batch', [VoucherController::class, 'generateBatch']);
+        Route::post('/validate', [VoucherController::class, 'validate']);
+        Route::get('/{id}', [VoucherController::class, 'show']);
     });
 
     Route::prefix('routers')->group(function () {

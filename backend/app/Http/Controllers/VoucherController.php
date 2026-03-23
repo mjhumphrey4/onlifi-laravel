@@ -121,8 +121,97 @@ class VoucherController extends Controller
 
     public function getTypes()
     {
-        $types = VoucherType::active()->get();
-        return response()->json($types);
+        $types = VoucherType::withCount(['vouchers as total_vouchers', 'vouchers as unused_count' => function ($query) {
+            $query->where('status', 'unused');
+        }, 'vouchers as used_count' => function ($query) {
+            $query->where('status', 'used');
+        }])->get();
+        return response()->json(['types' => $types]);
+    }
+
+    public function storeType(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'type_name' => 'required|string|max:100',
+            'duration_hours' => 'required|integer|min:1',
+            'base_amount' => 'required|numeric|min:0',
+            'description' => 'nullable|string|max:255',
+            'data_limit_mb' => 'nullable|integer|min:0',
+            'speed_limit_kbps' => 'nullable|integer|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $type = VoucherType::create([
+            'type_name' => $request->type_name,
+            'duration_hours' => $request->duration_hours,
+            'base_amount' => $request->base_amount,
+            'description' => $request->description,
+            'data_limit_mb' => $request->data_limit_mb,
+            'speed_limit_kbps' => $request->speed_limit_kbps,
+            'is_active' => true,
+        ]);
+
+        return response()->json([
+            'message' => 'Voucher type created successfully',
+            'type' => $type,
+        ], 201);
+    }
+
+    public function updateType(Request $request, $id)
+    {
+        $type = VoucherType::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'type_name' => 'sometimes|string|max:100',
+            'duration_hours' => 'sometimes|integer|min:1',
+            'base_amount' => 'sometimes|numeric|min:0',
+            'description' => 'nullable|string|max:255',
+            'data_limit_mb' => 'nullable|integer|min:0',
+            'speed_limit_kbps' => 'nullable|integer|min:0',
+            'is_active' => 'sometimes|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $type->update($request->only([
+            'type_name', 'duration_hours', 'base_amount', 'description',
+            'data_limit_mb', 'speed_limit_kbps', 'is_active'
+        ]));
+
+        return response()->json([
+            'message' => 'Voucher type updated successfully',
+            'type' => $type->fresh(),
+        ]);
+    }
+
+    public function destroyType($id)
+    {
+        $type = VoucherType::findOrFail($id);
+        
+        $voucherCount = $type->vouchers()->count();
+        if ($voucherCount > 0) {
+            return response()->json([
+                'error' => 'Cannot delete voucher type with existing vouchers',
+                'message' => "This type has {$voucherCount} vouchers associated with it",
+            ], 400);
+        }
+
+        $type->delete();
+
+        return response()->json([
+            'message' => 'Voucher type deleted successfully',
+        ]);
     }
 
     public function getGroups()

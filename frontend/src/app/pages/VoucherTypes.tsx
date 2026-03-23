@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Clock, DollarSign, Database, Zap } from 'lucide-react';
+import { listVoucherTypes, createVoucherType, updateVoucherType, deleteVoucherType } from '../utils/api';
 
 interface VoucherType {
   id: number;
@@ -37,9 +38,9 @@ export function VoucherTypes() {
   const loadTypes = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/voucher_types_api.php?action=list');
-      const data = await res.json();
+      const data = await listVoucherTypes();
       if (data.types) setTypes(data.types);
+      else if (Array.isArray(data)) setTypes(data);
     } catch (error) {
       console.error('Failed to load voucher types:', error);
     } finally {
@@ -59,14 +60,12 @@ export function VoucherTypes() {
     };
 
     try {
-      const action = editingType ? 'update' : 'create';
-      const res = await fetch(`/api/voucher_types_api.php?action=${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
+      let data;
+      if (editingType) {
+        data = await updateVoucherType(editingType.id, payload);
+      } else {
+        data = await createVoucherType(payload);
+      }
       
       if (data.error) {
         alert(data.error);
@@ -100,13 +99,7 @@ export function VoucherTypes() {
     if (!confirm('Are you sure you want to delete this voucher type?')) return;
 
     try {
-      const res = await fetch('/api/voucher_types_api.php?action=delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
-      });
-
-      const data = await res.json();
+      const data = await deleteVoucherType(id);
       
       if (data.error) {
         alert(data.error);

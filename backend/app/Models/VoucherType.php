@@ -12,20 +12,29 @@ class VoucherType extends Model
     protected $connection = 'tenant';
 
     protected $fillable = [
-        'name',
-        'duration',
-        'bandwidth_limit',
-        'data_limit',
-        'price',
+        'type_name',
+        'duration_hours',
+        'base_amount',
         'description',
+        'data_limit_mb',
+        'speed_limit_kbps',
+        'is_active',
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
+        'base_amount' => 'decimal:2',
+        'duration_hours' => 'integer',
+        'data_limit_mb' => 'integer',
+        'speed_limit_kbps' => 'integer',
         'is_active' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    public function vouchers()
+    {
+        return $this->hasMany(Voucher::class, 'voucher_type_id');
+    }
 
     public function scopeActive($query)
     {

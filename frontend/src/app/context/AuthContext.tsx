@@ -18,6 +18,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAdmin: () => boolean;
   isTenant: () => boolean;
+  userSites: () => string[];
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -92,9 +93,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAdmin = () => user?.role === 'super_admin';
   const isTenant = () => user?.role === 'tenant';
+  const userSites = (): string[] => {
+    // For super_admin, return all sites or a default list
+    // For tenant users, return their assigned sites
+    if (user?.role === 'super_admin') {
+      return ['Default Site'];
+    }
+    // TODO: Fetch actual sites from user data when tenant auth is implemented
+    return user?.tenant_name ? [user.tenant_name] : ['Default Site'];
+  };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, isTenant }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, isTenant, userSites }}>
       {children}
     </AuthContext.Provider>
   );
