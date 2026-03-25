@@ -42,12 +42,22 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
     loadVoucherTypes();
   }, []);
 
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  };
+
   const loadSalesPoints = async () => {
     try {
-      const response = await fetch('/api/mikrotik_api.php?action=sales_points');
-      const data = await response.json();
-      if (data.sales_points) {
-        setSalesPoints(data.sales_points);
+      const response = await fetch('/api/sales-points', { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setSalesPoints(Array.isArray(data) ? data : data.sales_points || []);
       }
     } catch (error) {
       console.error('Failed to load sales points:', error);
@@ -56,10 +66,10 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
 
   const loadVoucherTypes = async () => {
     try {
-      const response = await fetch('/api/voucher_types_api.php?action=list');
-      const data = await response.json();
-      if (data.types) {
-        setVoucherTypes(data.types);
+      const response = await fetch('/api/vouchers/types', { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setVoucherTypes(data.types || (Array.isArray(data) ? data : []));
       }
     } catch (error) {
       console.error('Failed to load voucher types:', error);
@@ -70,19 +80,38 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
     e.preventDefault();
     setLoading(true);
 
+    const selectedType = voucherTypes.find(t => t.id === formData.voucher_type_id);
+    if (!selectedType) {
+      alert('Please select a voucher type');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch('/api/mikrotik_api.php?action=create_vouchers', {
+      const payload = {
+        group_name: formData.group_name,
+        description: formData.description,
+        profile_name: formData.profile_name || selectedType.type_name,
+        validity_hours: selectedType.duration_hours,
+        price: selectedType.base_amount,
+        count: formData.quantity,
+        data_limit_mb: selectedType.data_limit_mb,
+        speed_limit_kbps: selectedType.speed_limit_kbps,
+        sales_point_id: formData.sales_point_id || null,
+      };
+
+      const response = await fetch('/api/vouchers/generate-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok) {
         onSuccess();
       } else {
-        alert(data.error || 'Failed to create vouchers');
+        alert(data.message || data.error || 'Failed to create vouchers');
       }
     } catch (error) {
       console.error('Failed to create vouchers:', error);

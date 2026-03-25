@@ -80,17 +80,44 @@ class Tenant extends Model
 
     public function createDatabase()
     {
-        $connection = DB::connection('mysql');
-        $connection->statement("CREATE DATABASE IF NOT EXISTS `{$this->database_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        // Use the central/admin connection which should have CREATE DATABASE privileges
+        // This connection should be configured with root or admin MySQL credentials
+        $connection = DB::connection('central');
         
-        $connection->statement("CREATE USER IF NOT EXISTS '{$this->database_username}'@'localhost' IDENTIFIED BY '{$this->database_password}'");
-        $connection->statement("GRANT ALL PRIVILEGES ON `{$this->database_name}`.* TO '{$this->database_username}'@'localhost'");
-        $connection->statement("FLUSH PRIVILEGES");
+        try {
+            // Create the database
+            $connection->statement("CREATE DATABASE IF NOT EXISTS `{$this->database_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            
+            // Create user and grant privileges (skip if using same credentials as central)
+            if ($this->database_username !== config('database.connections.central.username')) {
+                $host = $this->database_host === 'localhost' ? 'localhost' : '%';
+                $connection->statement("CREATE USER IF NOT EXISTS '{$this->database_username}'@'{$host}' IDENTIFIED BY '{$this->database_password}'");
+                $connection->statement("GRANT ALL PRIVILEGES ON `{$this->database_name}`.* TO '{$this->database_username}'@'{$host}'");
+                $connection->statement("FLUSH PRIVILEGES");
+            }
+        } catch (\Exception $e) {
+            // If central connection doesn't have privileges, log the error with helpful message
+            \Log::error("Database provisioning failed: " . $e->getMessage());
+            \Log::info("Ensure the central database connection has CREATE DATABASE privileges, or create the database manually: {$this->database_name}");
+            throw new \Exception("Database provisioning failed. Please ensure the database user has CREATE DATABASE privileges or create the database '{$this->database_name}' manually.");
+        }
     }
 
     public function provisionDatabase()
     {
         return $this->createDatabase();
+    }
+
+    public function useCentralDatabase()
+    {
+        // Alternative: Use the central database with table prefixes instead of separate databases
+        // This avoids the need for CREATE DATABASE privileges
+        $this->database_name = config('database.connections.central.database');
+        $this->database_host = config('database.connections.central.host');
+        $this->database_port = config('database.connections.central.port');
+        $this->database_username = config('database.connections.central.username');
+        $this->database_password = config('database.connections.central.password');
+        $this->save();
     }
 
     public function runMigrations()

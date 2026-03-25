@@ -14,6 +14,7 @@ use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\SystemSettingController;
 use App\Http\Controllers\TenantDashboardController;
 use App\Http\Controllers\PlatformFeeController;
+use App\Http\Controllers\SalesPointController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -34,12 +35,13 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
         Route::get('/statistics', [AdminTenantController::class, 'statistics']);
         Route::get('/recent-activity', [AdminTenantController::class, 'recentActivity']);
         Route::get('/{tenant}', [TenantController::class, 'show']);
-        Route::put('/{tenant}', [TenantController::class, 'update']);
+        Route::put('/{tenant}', [AdminTenantController::class, 'updateTenant']);
         Route::delete('/{tenant}', [TenantController::class, 'destroy']);
         Route::post('/{tenant}/approve', [AdminTenantController::class, 'approve']);
         Route::post('/{tenant}/reject', [AdminTenantController::class, 'reject']);
         Route::post('/{tenant}/suspend', [TenantController::class, 'suspend']);
         Route::post('/{tenant}/activate', [TenantController::class, 'activate']);
+        Route::post('/{tenant}/reset-password', [AdminTenantController::class, 'resetPassword']);
         Route::post('/{tenant}/regenerate-credentials', [TenantController::class, 'regenerateCredentials']);
         Route::post('/{tenant}/extend-trial', [TenantController::class, 'extendTrial']);
         Route::post('/{tenant}/subscribe', [TenantController::class, 'subscribe']);
@@ -116,6 +118,14 @@ Route::middleware(['tenant'])->group(function () {
         Route::get('/{id}/active-users', [MikrotikController::class, 'getActiveUsers']);
         Route::post('/{id}/collect-telemetry', [MikrotikController::class, 'collectTelemetry']);
         Route::post('/telemetry/ingest', [MikrotikController::class, 'ingestTelemetry']);
+    });
+
+    Route::prefix('sales-points')->group(function () {
+        Route::get('/', [SalesPointController::class, 'index']);
+        Route::post('/', [SalesPointController::class, 'store']);
+        Route::get('/{id}', [SalesPointController::class, 'show']);
+        Route::put('/{id}', [SalesPointController::class, 'update']);
+        Route::delete('/{id}', [SalesPointController::class, 'destroy']);
     });
 
     Route::prefix('transactions')->group(function () {

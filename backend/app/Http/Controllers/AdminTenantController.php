@@ -231,4 +231,88 @@ class AdminTenantController extends Controller
             ], 500);
         }
     }
+
+    public function resetPassword(Request $request, Tenant $tenant)
+    {
+        $validator = Validator::make($request->all(), [
+            'password' => 'required|string|min:8',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            // Get the primary user for this tenant
+            $user = $tenant->users()->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'error' => 'No user found',
+                    'message' => 'This tenant has no associated users',
+                ], 404);
+            }
+
+            $user->update([
+                'password' => bcrypt($request->password),
+            ]);
+
+            return response()->json([
+                'message' => 'Password reset successfully',
+                'user_email' => $user->email,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Password reset failed',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateTenant(Request $request, Tenant $tenant)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'sometimes|string|max:255',
+            'domain' => 'sometimes|nullable|string|max:255',
+            'trial_days' => 'sometimes|integer|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $updateData = [];
+            
+            if ($request->has('name')) {
+                $updateData['name'] = $request->name;
+            }
+            
+            if ($request->has('domain')) {
+                $updateData['domain'] = $request->domain;
+            }
+            
+            if ($request->has('trial_days') && $request->trial_days > 0) {
+                $updateData['trial_ends_at'] = now()->addDays($request->trial_days);
+            }
+
+            $tenant->update($updateData);
+
+            return response()->json([
+                'message' => 'Tenant updated successfully',
+                'tenant' => $tenant->fresh(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Update failed',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

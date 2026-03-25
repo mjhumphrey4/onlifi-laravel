@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router';
 import { Layout } from './components/Layout';
+import { AdminLayout } from './components/AdminLayout';
 import { Dashboard } from './pages/DashboardEnhanced';
 import { Transactions } from './pages/Transactions';
 import { Withdrawals } from './pages/Withdrawals';
@@ -19,7 +20,10 @@ import { Users } from './pages/Users';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import TenantApproval from './pages/admin/TenantApproval';
+import TenantList from './pages/admin/TenantList';
 import Announcements from './pages/admin/Announcements';
+import SystemSettings from './pages/admin/SystemSettings';
+import PlatformFees from './pages/admin/PlatformFees';
 
 export const router = createBrowserRouter([
   // Tenant Dashboard Routes
@@ -44,11 +48,18 @@ export const router = createBrowserRouter([
   { path: '/login', Component: Login },
   { path: '/signup', Component: Signup },
 
-  // Admin Routes
+  // Admin Routes with AdminLayout
   { path: '/admin/login', Component: AdminLogin },
-  { path: '/admin/dashboard', Component: AdminDashboard },
-  { path: '/admin/tenants/pending', Component: TenantApproval },
-  { path: '/admin/tenants', Component: AdminDashboard },
-  { path: '/admin/announcements', Component: Announcements },
-  { path: '/admin/settings', Component: AdminDashboard },
+  {
+    path: '/admin',
+    Component: AdminLayout,
+    children: [
+      { path: 'dashboard', Component: AdminDashboard },
+      { path: 'tenants', Component: TenantList },
+      { path: 'tenants/pending', Component: TenantApproval },
+      { path: 'announcements', Component: Announcements },
+      { path: 'settings', Component: SystemSettings },
+      { path: 'platform-fees', Component: PlatformFees },
+    ],
+  },
 ]);

@@ -15,6 +15,7 @@ class VoucherSalesPoint extends Model
         'name',
         'location',
         'contact_person',
+        'contact_phone',
         'phone',
         'email',
         'is_active',

@@ -59,16 +59,36 @@ export function Vouchers() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const [groupsRes, statsRes] = await Promise.all([
-        fetch('/api/mikrotik_api.php?action=voucher_groups'),
-        fetch('/api/mikrotik_api.php?action=voucher_stats')
+        fetch('/api/vouchers/groups', { headers }),
+        fetch('/api/vouchers/statistics', { headers })
       ]);
 
-      const groupsData = await groupsRes.json();
-      const statsData = await statsRes.json();
-
-      if (groupsData.groups) setGroups(groupsData.groups);
-      if (statsData) setStats(statsData);
+      if (groupsRes.ok) {
+        const groupsData = await groupsRes.json();
+        setGroups(Array.isArray(groupsData) ? groupsData : groupsData.groups || []);
+      }
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setStats({
+          overall: {
+            total_vouchers: statsData.total_vouchers || 0,
+            unused: statsData.unused_vouchers || 0,
+            used: statsData.used_vouchers || 0,
+            expired: statsData.expired_vouchers || 0,
+            total_revenue: statsData.total_revenue || 0,
+          },
+          daily: statsData.daily || [],
+          by_sales_point: statsData.by_sales_point || [],
+        });
+      }
     } catch (error) {
       console.error('Failed to load vouchers:', error);
     } finally {

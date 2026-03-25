@@ -32,13 +32,23 @@ export function SalesPointsDialog({ onClose, onUpdate }: SalesPointsDialogProps)
     loadSalesPoints();
   }, []);
 
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  };
+
   const loadSalesPoints = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/mikrotik_api.php?action=sales_points');
-      const data = await response.json();
-      if (data.sales_points) {
-        setSalesPoints(data.sales_points);
+      const response = await fetch('/api/sales-points', { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setSalesPoints(Array.isArray(data) ? data : data.sales_points || []);
       }
     } catch (error) {
       console.error('Failed to load sales points:', error);
@@ -51,21 +61,21 @@ export function SalesPointsDialog({ onClose, onUpdate }: SalesPointsDialogProps)
     e.preventDefault();
     
     try {
-      const response = await fetch('/api/mikrotik_api.php?action=create_sales_point', {
+      const response = await fetch('/api/sales-points', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(formData),
       });
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok) {
         setFormData({ name: '', location: '', contact_person: '', contact_phone: '' });
         setShowAddForm(false);
         loadSalesPoints();
         onUpdate();
       } else {
-        alert(data.error || 'Failed to create sales point');
+        alert(data.message || data.error || 'Failed to create sales point');
       }
     } catch (error) {
       console.error('Failed to create sales point:', error);
