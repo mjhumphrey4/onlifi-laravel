@@ -204,8 +204,21 @@ class VoucherController extends Controller
     public function getGroups()
     {
         $groups = VoucherGroup::with('salesPoint')
+            ->withCount([
+                'vouchers as total_vouchers',
+                'vouchers as unused_count' => function ($query) {
+                    $query->where('status', 'unused');
+                },
+                'vouchers as used_count' => function ($query) {
+                    $query->where('status', 'used');
+                }
+            ])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($group) {
+                $group->sales_point_name = $group->salesPoint?->name;
+                return $group;
+            });
         return response()->json($groups);
     }
 

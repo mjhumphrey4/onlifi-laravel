@@ -1,5 +1,6 @@
-import { Package, Clock, DollarSign, Users, TrendingUp, Printer, Eye } from 'lucide-react';
+import { Package, Clock, DollarSign, Users, TrendingUp, Download, Eye } from 'lucide-react';
 import { useState } from 'react';
+import { VoucherListDialog } from './VoucherListDialog';
 
 interface VoucherGroup {
   id: number;
@@ -19,11 +20,11 @@ interface VoucherGroup {
 
 interface VoucherGroupCardProps {
   group: VoucherGroup;
-  onSelect: () => void;
+  onSelect?: () => void;
 }
 
-export function VoucherGroupCard({ group, onSelect }: VoucherGroupCardProps) {
-  const [showDetails, setShowDetails] = useState(false);
+export function VoucherGroupCard({ group }: VoucherGroupCardProps) {
+  const [showVoucherList, setShowVoucherList] = useState(false);
 
   const usagePercent = group.total_vouchers > 0 
     ? (group.used_count / group.total_vouchers) * 100 
@@ -33,9 +34,44 @@ export function VoucherGroupCard({ group, onSelect }: VoucherGroupCardProps) {
     return `UGX ${amount.toLocaleString()}`;
   };
 
-  const handlePrintUnused = async () => {
-    // Open vouchers page filtered to this group and unused status
-    window.open(`/vouchers/print?group_id=${group.id}&status=unused`, '_blank');
+  const handleDownloadUnused = () => {
+    // Download unused vouchers as CSV
+    const downloadVouchers = async () => {
+      try {
+        const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`/api/vouchers?group_id=${group.id}&status=unused`, { headers });
+        if (response.ok) {
+          const data = await response.json();
+          const vouchers = data.data || data || [];
+          
+          const csvContent = [
+            ['Voucher Code', 'Password', 'Price', 'Validity (Hours)'].join(','),
+            ...vouchers.map((v: any) => [
+              v.voucher_code,
+              v.password,
+              v.price,
+              v.validity_hours
+            ].join(','))
+          ].join('\n');
+
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `${group.group_name}_unused_vouchers.csv`;
+          link.click();
+          URL.revokeObjectURL(link.href);
+        }
+      } catch (error) {
+        console.error('Failed to download vouchers:', error);
+      }
+    };
+    downloadVouchers();
   };
 
   return (
@@ -111,75 +147,46 @@ export function VoucherGroupCard({ group, onSelect }: VoucherGroupCardProps) {
           </div>
         )}
 
-        {showDetails && (
-          <>
-            {group.data_limit_mb && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Data Limit</span>
-                <span className="font-medium text-card-foreground">{group.data_limit_mb} MB</span>
-              </div>
-            )}
-            
-            {group.speed_limit_kbps && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Speed Limit</span>
-                <span className="font-medium text-card-foreground">{group.speed_limit_kbps} Kbps</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Profile</span>
-              <span className="font-medium text-card-foreground">{group.profile_name}</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Created</span>
-              <span className="font-medium text-card-foreground">
-                {new Date(group.created_at).toLocaleDateString()}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between border-t border-border pt-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <TrendingUp className="w-4 h-4" />
-                <span>Potential Revenue</span>
-              </div>
-              <span className="font-bold text-primary">
-                {formatCurrency(group.total_vouchers * group.price)}
-              </span>
-            </div>
-          </>
-        )}
+        <div className="flex items-center justify-between border-t border-border pt-2">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <TrendingUp className="w-4 h-4" />
+            <span>Potential Revenue</span>
+          </div>
+          <span className="font-bold text-primary">
+            {formatCurrency(group.total_vouchers * group.price)}
+          </span>
+        </div>
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2 mt-4 pt-3 border-t border-border">
-        <button
-          onClick={() => setShowDetails(!showDetails)}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm bg-muted hover:bg-muted/80 text-card-foreground rounded-lg transition-colors"
-        >
-          <Eye className="w-4 h-4" />
-          {showDetails ? 'Less' : 'More'}
-        </button>
-        
-        <button
-          onClick={onSelect}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
-        >
-          <Package className="w-4 h-4" />
-          View All
-        </button>
-        
         {group.unused_count > 0 && (
           <button
-            onClick={handlePrintUnused}
-            className="px-3 py-2 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
-            title="Print unused vouchers"
+            onClick={handleDownloadUnused}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+            title="Download unused vouchers"
           >
-            <Printer className="w-4 h-4" />
+            <Download className="w-4 h-4" />
+            Download
           </button>
         )}
+        
+        <button
+          onClick={() => setShowVoucherList(true)}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+        >
+          <Eye className="w-4 h-4" />
+          View All
+        </button>
       </div>
+
+      {/* Voucher List Dialog */}
+      {showVoucherList && (
+        <VoucherListDialog
+          group={group}
+          onClose={() => setShowVoucherList(false)}
+        />
+      )}
     </div>
   );
 }
