@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
-use App\Models\MikrotikRouter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +20,9 @@ class TelemetryController extends Controller
         // Extract Bearer token from Authorization header
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            Log::warning('Telemetry rejected: Missing or invalid Authorization header');
+            Log::warning('Telemetry rejected: Missing or invalid Authorization header', [
+                'headers' => $request->headers->all()
+            ]);
             return response()->json([
                 'error' => 'Unauthorized',
                 'message' => 'Missing or invalid Authorization header',
@@ -33,46 +34,36 @@ class TelemetryController extends Controller
         // Find site by API token
         $site = Site::where('api_token', $token)->first();
         if (!$site) {
-            Log::warning('Telemetry rejected: Invalid API token', ['token' => substr($token, 0, 10) . '...']);
+            Log::warning('Telemetry rejected: Invalid API token', [
+                'token_prefix' => substr($token, 0, 10) . '...',
+                'all_sites' => Site::pluck('name', 'id')->toArray()
+            ]);
             return response()->json([
                 'error' => 'Unauthorized',
                 'message' => 'Invalid API token',
             ], 401);
         }
 
-        // Validate required fields
-        $requiredFields = ['router_name', 'cpu_load', 'memory_total_mb', 'memory_used_mb'];
-        foreach ($requiredFields as $field) {
-            if (!$request->has($field)) {
-                Log::warning('Telemetry rejected: Missing required field', ['field' => $field]);
-                return response()->json([
-                    'error' => 'Validation failed',
-                    'message' => "Missing required field: {$field}",
-                ], 422);
-            }
-        }
+        Log::info('Telemetry authenticated successfully', [
+            'site' => $site->name,
+            'site_id' => $site->id,
+        ]);
 
-        // Find or create router
-        $router = MikrotikRouter::firstOrCreate(
-            [
-                'name' => $request->input('router_name'),
-                'site_id' => $site->id,
-            ],
-            [
-                'host' => 'auto-detected',
-                'username' => 'telemetry',
-                'password' => 'auto',
-                'port' => 8728,
-                'is_active' => true,
-            ]
-        );
-
-        // Store telemetry data
+        // Store telemetry data directly without router dependency
         try {
-            DB::table('router_telemetry')->insert([
-                'router_id' => $router->id,
+            // Check if router_telemetry table exists
+            if (!DB::getSchemaBuilder()->hasTable('router_telemetry')) {
+                Log::error('router_telemetry table does not exist');
+                return response()->json([
+                    'error' => 'Configuration error',
+                    'message' => 'Telemetry storage not configured',
+                ], 500);
+            }
+
+            $telemetryData = [
+                'router_id' => null, // Will be null for now
                 'site_id' => $site->id,
-                'router_identity' => $request->input('router_identity', $request->input('router_name')),
+                'router_identity' => $request->input('router_identity', $request->input('router_name', 'unknown')),
                 'router_version' => $request->input('router_version'),
                 'router_board' => $request->input('router_board'),
                 'cpu_load' => $request->input('cpu_load', 0),
@@ -86,18 +77,21 @@ class TelemetryController extends Controller
                 'total_rx_bytes' => $request->input('total_rx_bytes', 0),
                 'timestamp' => $request->input('timestamp', now()),
                 'created_at' => now(),
-            ]);
+            ];
+
+            DB::table('router_telemetry')->insert($telemetryData);
 
             Log::info('Telemetry stored successfully', [
                 'site' => $site->name,
-                'router' => $router->name,
+                'router_identity' => $telemetryData['router_identity'],
+                'cpu_load' => $telemetryData['cpu_load'],
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Telemetry data received successfully',
                 'site' => $site->name,
-                'router' => $router->name,
+                'router' => $telemetryData['router_identity'],
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to store telemetry', [
@@ -107,7 +101,7 @@ class TelemetryController extends Controller
 
             return response()->json([
                 'error' => 'Internal server error',
-                'message' => 'Failed to store telemetry data',
+                'message' => 'Failed to store telemetry data: ' . $e->getMessage(),
             ], 500);
         }
     }
