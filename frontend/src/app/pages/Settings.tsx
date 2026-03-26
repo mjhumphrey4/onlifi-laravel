@@ -279,7 +279,7 @@ export function Settings() {
   :put ("Onlifi: Users: " . \$hotspotUsers)
   
   :do {
-    /tool fetch url=\$dashboardUrl mode=http http-method=post http-data=\$reportJson http-header-field="Authorization: Bearer \$apiToken,Content-Type: application/json" keep-result=no
+    /tool fetch url=\$dashboardUrl mode=http http-method=post http-data=\$reportJson http-header-field="Authorization: Bearer \$apiToken" http-content-type="application/json" keep-result=no
     :log info "onlifi-telemetry: data posted successfully"
     :put "SUCCESS: Telemetry posted to dashboard"
   } on-error={
