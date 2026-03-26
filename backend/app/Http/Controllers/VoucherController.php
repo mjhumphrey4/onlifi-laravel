@@ -53,7 +53,7 @@ class VoucherController extends Controller
             'description' => 'nullable|string',
             'data_limit_mb' => 'nullable|integer',
             'speed_limit_kbps' => 'nullable|integer',
-            'sales_point_id' => 'nullable|exists:voucher_sales_points,id',
+            'sales_point_id' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {

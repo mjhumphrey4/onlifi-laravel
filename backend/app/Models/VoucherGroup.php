@@ -12,16 +12,24 @@ class VoucherGroup extends Model
     protected $connection = 'tenant';
 
     protected $fillable = [
-        'name',
-        'voucher_type_id',
-        'quantity',
-        'generated_count',
-        'status',
-        'generated_at',
+        'group_name',
+        'description',
+        'profile_name',
+        'validity_hours',
+        'data_limit_mb',
+        'speed_limit_kbps',
+        'price',
+        'sales_point_id',
+        'created_by',
     ];
 
     protected $casts = [
-        'generated_at' => 'datetime',
+        'price' => 'decimal:2',
+        'validity_hours' => 'integer',
+        'data_limit_mb' => 'integer',
+        'speed_limit_kbps' => 'integer',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     public function vouchers()

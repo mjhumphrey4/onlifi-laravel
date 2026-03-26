@@ -83,8 +83,8 @@ export function SalesPointsDialog({ onClose, onUpdate }: SalesPointsDialogProps)
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return `UGX ${amount.toLocaleString()}`;
+  const formatCurrency = (amount: number | null | undefined) => {
+    return `UGX ${(amount ?? 0).toLocaleString()}`;
   };
 
   return (
@@ -240,11 +240,11 @@ export function SalesPointsDialog({ onClose, onUpdate }: SalesPointsDialogProps)
                   <div className="grid grid-cols-2 gap-4 mb-3">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Total Vouchers</p>
-                      <p className="text-lg font-bold text-card-foreground">{point.total_vouchers}</p>
+                      <p className="text-lg font-bold text-card-foreground">{point.total_vouchers ?? 0}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Total Revenue</p>
-                      <p className="text-lg font-bold text-primary">{formatCurrency(point.total_revenue)}</p>
+                      <p className="text-lg font-bold text-primary">{formatCurrency(point.total_revenue ?? 0)}</p>
                     </div>
                   </div>
 
