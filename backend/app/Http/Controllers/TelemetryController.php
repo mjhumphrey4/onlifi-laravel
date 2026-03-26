@@ -60,6 +60,27 @@ class TelemetryController extends Controller
                 ], 500);
             }
 
+            // Parse MikroTik timestamp format (e.g., "mar/26/2026 23:45:25")
+            $timestamp = $request->input('timestamp');
+            $parsedTimestamp = null;
+            
+            if ($timestamp) {
+                try {
+                    // Try to parse MikroTik format: "mar/26/2026 23:45:25"
+                    $parsedTimestamp = \Carbon\Carbon::createFromFormat('M/d/Y H:i:s', $timestamp);
+                } catch (\Exception $e) {
+                    try {
+                        // Try standard format
+                        $parsedTimestamp = \Carbon\Carbon::parse($timestamp);
+                    } catch (\Exception $e2) {
+                        // Fall back to now
+                        $parsedTimestamp = now();
+                    }
+                }
+            } else {
+                $parsedTimestamp = now();
+            }
+
             $telemetryData = [
                 'router_id' => null, // Will be null for now
                 'site_id' => $site->id,
@@ -75,7 +96,7 @@ class TelemetryController extends Controller
                 'bandwidth_upload_kbps' => $request->input('bandwidth_upload_kbps', 0),
                 'total_tx_bytes' => $request->input('total_tx_bytes', 0),
                 'total_rx_bytes' => $request->input('total_rx_bytes', 0),
-                'timestamp' => $request->input('timestamp', now()),
+                'timestamp' => $parsedTimestamp,
                 'created_at' => now(),
             ];
 
