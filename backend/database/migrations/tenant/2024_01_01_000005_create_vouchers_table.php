@@ -6,20 +6,12 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    protected $connection = 'tenant';
+    
     public function up(): void
     {
-        if (Schema::hasTable('vouchers')) {
-            if (!Schema::hasColumn('vouchers', 'tenant_id')) {
-                Schema::table('vouchers', function (Blueprint $table) {
-                    $table->unsignedBigInteger('tenant_id')->after('id')->index();
-                });
-            }
-            return;
-        }
-        
         Schema::create('vouchers', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('tenant_id')->index();
             $table->string('voucher_code', 64)->unique();
             $table->string('password', 64);
             $table->foreignId('group_id')->constrained('voucher_groups')->cascadeOnDelete();

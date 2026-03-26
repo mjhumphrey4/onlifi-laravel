@@ -80,66 +80,40 @@ class Tenant extends Model
 
     public function createDatabase()
     {
-        // Option 1: Try to use a separate database per tenant (requires CREATE DATABASE privileges)
-        // Option 2: Fall back to using the central database (shared database approach)
+        // Each tenant gets their own database for complete data isolation
+        // Use the central database credentials (root/admin) to create tenant databases
         
-        $useSeparateDatabase = config('tenancy.use_separate_databases', false);
+        $centralUsername = config('database.connections.central.username');
+        $centralPassword = config('database.connections.central.password');
+        $centralHost = config('database.connections.central.host');
         
-        if (!$useSeparateDatabase) {
-            // Use shared database approach - all tenants use central database
-            return $this->useCentralDatabase();
-        }
+        // Tenant will use the same credentials as central (simpler, no user creation needed)
+        $this->database_username = $centralUsername;
+        $this->database_password = $centralPassword;
+        $this->database_host = $centralHost;
+        $this->database_port = config('database.connections.central.port', 3306);
         
-        // Try to create separate database
         $connection = DB::connection('central');
         
         try {
-            // Create the database
+            // Create the tenant's dedicated database
             $connection->statement("CREATE DATABASE IF NOT EXISTS `{$this->database_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
             
-            // Create user and grant privileges (skip if using same credentials as central)
-            if ($this->database_username !== config('database.connections.central.username')) {
-                $host = $this->database_host === 'localhost' ? 'localhost' : '%';
-                
-                // Try to create user - may fail if user exists
-                try {
-                    $connection->statement("CREATE USER IF NOT EXISTS '{$this->database_username}'@'{$host}' IDENTIFIED BY '{$this->database_password}'");
-                } catch (\Exception $e) {
-                    // User might already exist, try to alter password instead
-                    try {
-                        $connection->statement("ALTER USER '{$this->database_username}'@'{$host}' IDENTIFIED BY '{$this->database_password}'");
-                    } catch (\Exception $e2) {
-                        \Log::warning("Could not create/alter user: " . $e2->getMessage());
-                    }
-                }
-                
-                $connection->statement("GRANT ALL PRIVILEGES ON `{$this->database_name}`.* TO '{$this->database_username}'@'{$host}'");
-                $connection->statement("FLUSH PRIVILEGES");
-            }
+            \Log::info("Created database {$this->database_name} for tenant {$this->name}");
+            
+            // Save the updated credentials
+            $this->save();
+            
+            return true;
         } catch (\Exception $e) {
-            \Log::warning("Separate database provisioning failed, falling back to shared database: " . $e->getMessage());
-            // Fall back to shared database approach
-            return $this->useCentralDatabase();
+            \Log::error("Database provisioning failed for tenant {$this->name}: " . $e->getMessage());
+            throw $e;
         }
     }
 
     public function provisionDatabase()
     {
         return $this->createDatabase();
-    }
-
-    public function useCentralDatabase()
-    {
-        // Use the central database - all tenants share the same database
-        // This is simpler and doesn't require CREATE DATABASE privileges
-        $this->database_name = config('database.connections.central.database');
-        $this->database_host = config('database.connections.central.host');
-        $this->database_port = config('database.connections.central.port');
-        $this->database_username = config('database.connections.central.username');
-        $this->database_password = config('database.connections.central.password');
-        $this->save();
-        
-        \Log::info("Tenant {$this->name} configured to use shared central database");
     }
 
     public function runMigrations()

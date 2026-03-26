@@ -6,16 +6,10 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    protected $connection = 'tenant';
+    
     public function up(): void
     {
-        if (!Schema::hasTable('mikrotik_routers')) {
-            return;
-        }
-        
-        if (Schema::hasColumn('mikrotik_routers', 'last_cpu_load')) {
-            return;
-        }
-        
         Schema::table('mikrotik_routers', function (Blueprint $table) {
             $table->decimal('last_cpu_load', 5, 2)->nullable()->after('last_seen');
             $table->integer('last_memory_used_mb')->nullable()->after('last_cpu_load');
@@ -26,10 +20,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (!Schema::hasTable('mikrotik_routers')) {
-            return;
-        }
-        
         Schema::table('mikrotik_routers', function (Blueprint $table) {
             $table->dropColumn([
                 'last_cpu_load',

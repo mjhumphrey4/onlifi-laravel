@@ -6,13 +6,10 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    protected $connection = 'tenant';
+    
     public function up(): void
     {
-        // Skip if tables already exist (shared database approach)
-        if (Schema::hasTable('radcheck')) {
-            return;
-        }
-        
         Schema::create('radcheck', function (Blueprint $table) {
             $table->id();
             $table->string('username', 64)->index();

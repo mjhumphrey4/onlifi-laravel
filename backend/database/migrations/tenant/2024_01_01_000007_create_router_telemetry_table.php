@@ -6,20 +6,12 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    protected $connection = 'tenant';
+    
     public function up(): void
     {
-        if (Schema::hasTable('router_telemetry')) {
-            if (!Schema::hasColumn('router_telemetry', 'tenant_id')) {
-                Schema::table('router_telemetry', function (Blueprint $table) {
-                    $table->unsignedBigInteger('tenant_id')->after('id')->index();
-                });
-            }
-            return;
-        }
-        
         Schema::create('router_telemetry', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('tenant_id')->index();
             $table->foreignId('router_id')->constrained('mikrotik_routers')->cascadeOnDelete();
             $table->decimal('cpu_load', 5, 2)->nullable();
             $table->integer('memory_used_mb')->nullable();
