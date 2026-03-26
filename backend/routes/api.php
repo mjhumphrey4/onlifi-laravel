@@ -15,6 +15,7 @@ use App\Http\Controllers\SystemSettingController;
 use App\Http\Controllers\TenantDashboardController;
 use App\Http\Controllers\PlatformFeeController;
 use App\Http\Controllers\SalesPointController;
+use App\Http\Controllers\SiteController;
 use App\Http\Controllers\TenantAuthController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
@@ -166,13 +167,15 @@ Route::middleware(['tenant'])->group(function () {
         Route::delete('/{id}', [SalesPointController::class, 'destroy']);
     });
 
-    // Alias for sites (same as sales-points)
+    // Sites - Independent entities for telemetry and voucher management
     Route::prefix('sites')->group(function () {
-        Route::get('/', [SalesPointController::class, 'index']);
-        Route::post('/', [SalesPointController::class, 'store']);
-        Route::get('/{id}', [SalesPointController::class, 'show']);
-        Route::put('/{id}', [SalesPointController::class, 'update']);
-        Route::delete('/{id}', [SalesPointController::class, 'destroy']);
+        Route::get('/', [SiteController::class, 'index']);
+        Route::post('/', [SiteController::class, 'store']);
+        Route::get('/{id}', [SiteController::class, 'show']);
+        Route::put('/{id}', [SiteController::class, 'update']);
+        Route::delete('/{id}', [SiteController::class, 'destroy']);
+        Route::post('/{id}/regenerate-token', [SiteController::class, 'regenerateToken']);
+        Route::get('/{id}/token', [SiteController::class, 'getToken']);
     });
 
     Route::prefix('transactions')->group(function () {

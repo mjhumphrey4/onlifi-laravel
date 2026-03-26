@@ -149,20 +149,14 @@ export default function TenantList() {
 
   const getRadiusInfo = (tenant: Tenant) => {
     const dbName = tenant.database || `tenant_${tenant.slug}`;
+    // Generate a unique DB user for this tenant (convention: radius_<slug>)
+    const dbUser = `radius_${tenant.slug.replace(/-/g, '_').substring(0, 16)}`;
     return {
       server: '192.168.0.180',
       port: '3306',
       database: dbName,
-      table_radcheck: 'radcheck',
-      table_radreply: 'radreply',
-      table_radgroupcheck: 'radgroupcheck',
-      table_radgroupreply: 'radgroupreply',
-      table_radusergroup: 'radusergroup',
-      table_radacct: 'radacct',
-      table_radpostauth: 'radpostauth',
-      nas_table: 'nas',
-      username_field: 'voucher_code',
-      password_field: 'password',
+      db_user: dbUser,
+      db_password: '<SET_PASSWORD_HERE>',
     };
   };
 
@@ -632,6 +626,8 @@ function RadiusInfoModal({
   copyToClipboard: (text: string, field: string) => void;
   copiedField: string | null;
 }) {
+  const [activeTab, setActiveTab] = useState<'config' | 'sql'>('config');
+
   const CopyButton = ({ value, field }: { value: string; field: string }) => (
     <button
       onClick={() => copyToClipboard(value, field)}
@@ -646,81 +642,213 @@ function RadiusInfoModal({
     </button>
   );
 
-  const InfoRow = ({ label, value, field }: { label: string; value: string; field: string }) => (
-    <div className="flex items-center justify-between py-2 border-b border-slate-700 last:border-0">
-      <span className="text-sm text-slate-400">{label}</span>
-      <div className="flex items-center gap-2">
-        <code className="text-sm font-mono bg-slate-700 px-2 py-1 rounded text-indigo-300">{value}</code>
-        <CopyButton value={value} field={field} />
-      </div>
-    </div>
-  );
+  // Generate the actual FreeRADIUS sql.conf content
+  const sqlConfContent = `# FreeRADIUS SQL Configuration for ${tenant.name}
+# Add this to /etc/freeradius/3.0/mods-available/sql
+
+sql {
+    driver = "rlm_sql_mysql"
+    dialect = "mysql"
+    
+    # Connection info
+    server = "${radiusInfo.server}"
+    port = ${radiusInfo.port}
+    login = "${radiusInfo.db_user}"
+    password = "${radiusInfo.db_password}"
+    
+    # Database
+    radius_db = "${radiusInfo.database}"
+    
+    # Table configuration
+    read_clients = yes
+    client_table = "nas"
+    
+    # Query configuration
+    mysql {
+        warnings = auto
+    }
+}`;
+
+  // Generate the SQL queries for RADIUS tables
+  const sqlQueriesContent = `-- FreeRADIUS SQL Queries for ${tenant.name}
+-- These queries authenticate vouchers from the tenant database
+
+-- Authorization Query (checks if voucher exists and is valid)
+authorize_check_query = "\\
+    SELECT id, voucher_code AS username, 'Cleartext-Password' AS attribute, \\
+           password AS value, ':=' AS op \\
+    FROM vouchers \\
+    WHERE voucher_code = '%{SQL-User-Name}' \\
+    AND status = 'unused' \\
+    AND (expires_at IS NULL OR expires_at > NOW())"
+
+-- Group membership query
+authorize_group_check_query = "\\
+    SELECT vg.profile_name AS groupname \\
+    FROM vouchers v \\
+    JOIN voucher_groups vg ON v.group_id = vg.id \\
+    WHERE v.voucher_code = '%{SQL-User-Name}'"
+
+-- Post-Auth query (mark voucher as used on successful auth)
+post_auth_query = "\\
+    UPDATE vouchers \\
+    SET status = 'used', \\
+        used_at = NOW(), \\
+        first_used_at = COALESCE(first_used_at, NOW()) \\
+    WHERE voucher_code = '%{SQL-User-Name}' \\
+    AND status = 'unused'"
+
+-- Accounting Start query
+accounting_start_query = "\\
+    INSERT INTO radacct \\
+    (acctsessionid, acctuniqueid, username, nasipaddress, \\
+     nasportid, acctstarttime, acctupdatetime, acctstoptime, \\
+     acctsessiontime, acctinputoctets, acctoutputoctets, \\
+     calledstationid, callingstationid, servicetype, \\
+     framedprotocol, framedipaddress) \\
+    VALUES \\
+    ('%{Acct-Session-Id}', '%{Acct-Unique-Session-Id}', '%{SQL-User-Name}', \\
+     '%{NAS-IP-Address}', '%{NAS-Port}', NOW(), NOW(), NULL, \\
+     0, 0, 0, '%{Called-Station-Id}', '%{Calling-Station-Id}', \\
+     '%{Service-Type}', '%{Framed-Protocol}', '%{Framed-IP-Address}')"
+
+-- Accounting Stop query
+accounting_stop_query = "\\
+    UPDATE radacct \\
+    SET acctstoptime = NOW(), \\
+        acctsessiontime = '%{Acct-Session-Time}', \\
+        acctinputoctets = '%{Acct-Input-Octets}', \\
+        acctoutputoctets = '%{Acct-Output-Octets}', \\
+        acctterminatecause = '%{Acct-Terminate-Cause}' \\
+    WHERE acctsessionid = '%{Acct-Session-Id}' \\
+    AND acctuniqueid = '%{Acct-Unique-Session-Id}'"`;
+
+  const downloadConfig = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-2xl w-full max-w-lg border border-slate-700 max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-slate-800 rounded-2xl w-full max-w-3xl border border-slate-700 max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-slate-700 flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">
             <Database className="w-5 h-5 text-indigo-400" />
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="text-xl font-bold text-white">RADIUS Configuration</h2>
             <p className="text-sm text-slate-400">FreeRADIUS settings for {tenant.name}</p>
           </div>
         </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-700">
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'config'
+                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-slate-700/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            SQL Module Config
+          </button>
+          <button
+            onClick={() => setActiveTab('sql')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'sql'
+                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-slate-700/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            SQL Queries
+          </button>
+        </div>
         
-        <div className="p-6 overflow-y-auto space-y-6">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
-              Database Connection
-            </h3>
-            <div className="bg-slate-900/50 rounded-xl p-4">
-              <InfoRow label="Server" value={radiusInfo.server} field="server" />
-              <InfoRow label="Port" value={radiusInfo.port} field="port" />
-              <InfoRow label="Database" value={radiusInfo.database} field="database" />
+        <div className="p-6 overflow-y-auto flex-1">
+          {activeTab === 'config' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-300">
+                  /etc/freeradius/3.0/mods-available/sql
+                </h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copyToClipboard(sqlConfContent, 'sqlconf')}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                  >
+                    {copiedField === 'sqlconf' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => downloadConfig(sqlConfContent, `sql-${tenant.slug}.conf`)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                  >
+                    Download
+                  </button>
+                </div>
+              </div>
+              <pre className="bg-slate-900 rounded-xl p-4 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
+                {sqlConfContent}
+              </pre>
+              
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mt-4">
+                <p className="text-sm text-yellow-300">
+                  <strong>Setup Instructions:</strong>
+                </p>
+                <ol className="text-xs text-yellow-200 mt-2 space-y-1 list-decimal list-inside">
+                  <li>Copy this configuration to <code className="bg-slate-700 px-1 rounded">/etc/freeradius/3.0/mods-available/sql</code></li>
+                  <li>Enable the module: <code className="bg-slate-700 px-1 rounded">ln -s ../mods-available/sql /etc/freeradius/3.0/mods-enabled/</code></li>
+                  <li>Restart FreeRADIUS: <code className="bg-slate-700 px-1 rounded">systemctl restart freeradius</code></li>
+                </ol>
+              </div>
             </div>
-          </div>
+          )}
 
-          <div>
-            <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              RADIUS Tables
-            </h3>
-            <div className="bg-slate-900/50 rounded-xl p-4">
-              <InfoRow label="radcheck" value={radiusInfo.table_radcheck} field="radcheck" />
-              <InfoRow label="radreply" value={radiusInfo.table_radreply} field="radreply" />
-              <InfoRow label="radgroupcheck" value={radiusInfo.table_radgroupcheck} field="radgroupcheck" />
-              <InfoRow label="radgroupreply" value={radiusInfo.table_radgroupreply} field="radgroupreply" />
-              <InfoRow label="radusergroup" value={radiusInfo.table_radusergroup} field="radusergroup" />
-              <InfoRow label="radacct" value={radiusInfo.table_radacct} field="radacct" />
-              <InfoRow label="radpostauth" value={radiusInfo.table_radpostauth} field="radpostauth" />
-              <InfoRow label="NAS Table" value={radiusInfo.nas_table} field="nas" />
+          {activeTab === 'sql' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-300">
+                  SQL Queries for Voucher Authentication
+                </h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copyToClipboard(sqlQueriesContent, 'sqlqueries')}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                  >
+                    {copiedField === 'sqlqueries' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => downloadConfig(sqlQueriesContent, `queries-${tenant.slug}.conf`)}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
+                  >
+                    Download
+                  </button>
+                </div>
+              </div>
+              <pre className="bg-slate-900 rounded-xl p-4 text-xs font-mono text-green-400 overflow-x-auto whitespace-pre-wrap">
+                {sqlQueriesContent}
+              </pre>
+
+              <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 mt-4">
+                <p className="text-sm text-indigo-300">
+                  <strong>Note:</strong> Add these queries to your <code className="bg-slate-700 px-1 rounded">queries.conf</code> file to enable voucher authentication and accounting.
+                </p>
+              </div>
             </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-              Authentication Fields
-            </h3>
-            <div className="bg-slate-900/50 rounded-xl p-4">
-              <InfoRow label="Username Field" value={radiusInfo.username_field} field="username" />
-              <InfoRow label="Password Field" value={radiusInfo.password_field} field="password" />
-            </div>
-          </div>
-
-          <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4">
-            <p className="text-sm text-indigo-300">
-              <strong>Note:</strong> Use these settings in your FreeRADIUS <code className="bg-slate-700 px-1 rounded">sql.conf</code> to authenticate users from this tenant's database.
-            </p>
-          </div>
+          )}
         </div>
 
-        <div className="p-6 border-t border-slate-700">
+        <div className="p-6 border-t border-slate-700 flex gap-3">
           <button
             onClick={onClose}
-            className="w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
+            className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
           >
             Close
           </button>

@@ -78,9 +78,10 @@ export function Layout() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
-  const [newSiteLocation, setNewSiteLocation] = useState('');
+  const [newSiteDescription, setNewSiteDescription] = useState('');
   const [savingSite, setSavingSite] = useState(false);
-  const [availableSites, setAvailableSites] = useState<string[]>(['Main Site']);
+  const [availableSites, setAvailableSites] = useState<{id: number; name: string; slug: string}[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
 
   // Fetch sites on mount
   useEffect(() => {
@@ -98,12 +99,18 @@ export function Layout() {
         
         if (response.ok) {
           const data = await response.json();
-          const sites = data.sites || data.data || data || [];
+          const sites = data.sites || [];
           if (Array.isArray(sites) && sites.length > 0) {
-            setAvailableSites(sites.map((s: any) => s.name || s));
-            if (!sites.find((s: any) => (s.name || s) === selectedSite)) {
-              setSelectedSite(sites[0]?.name || sites[0] || 'Main Site');
+            setAvailableSites(sites);
+            // Set first site as selected if none selected
+            if (!selectedSiteId) {
+              setSelectedSiteId(sites[0].id);
+              setSelectedSite(sites[0].name);
             }
+          } else {
+            // No sites exist, keep default
+            setAvailableSites([]);
+            setSelectedSite('Default');
           }
         }
       } catch (error) {
@@ -129,21 +136,22 @@ export function Layout() {
         },
         body: JSON.stringify({
           name: newSiteName.trim(),
-          location: newSiteLocation.trim() || null,
+          description: newSiteDescription.trim() || null,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        const siteName = data.site?.name || newSiteName.trim();
-        setAvailableSites(prev => [...prev, siteName]);
-        setSelectedSite(siteName);
+        const newSite = data.site;
+        setAvailableSites(prev => [...prev, newSite]);
+        setSelectedSiteId(newSite.id);
+        setSelectedSite(newSite.name);
         setShowAddSiteModal(false);
         setNewSiteName('');
-        setNewSiteLocation('');
+        setNewSiteDescription('');
       } else {
         const error = await response.json();
-        alert(error.message || 'Failed to create site');
+        alert(error.message || error.error || 'Failed to create site');
       }
     } catch (error) {
       console.error('Failed to create site:', error);
@@ -267,22 +275,27 @@ export function Layout() {
             {/* Dropdown Menu */}
             {isSiteDropdownOpen && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
-                {availableSites.map((site) => (
-                  <button
-                    key={site}
-                    onClick={() => {
-                      setSelectedSite(site);
-                      setIsSiteDropdownOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                      selectedSite === site
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-card-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {site}
-                  </button>
-                ))}
+                {availableSites.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">No sites yet</div>
+                ) : (
+                  availableSites.map((site) => (
+                    <button
+                      key={site.id}
+                      onClick={() => {
+                        setSelectedSiteId(site.id);
+                        setSelectedSite(site.name);
+                        setIsSiteDropdownOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                        selectedSiteId === site.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-card-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {site.name}
+                    </button>
+                  ))
+                )}
                 {/* Add New Site Option */}
                 <button
                   onClick={() => {
@@ -537,13 +550,13 @@ export function Layout() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-card-foreground mb-2">
-                  Location (Optional)
+                  Description (Optional)
                 </label>
                 <input
                   type="text"
-                  value={newSiteLocation}
-                  onChange={(e) => setNewSiteLocation(e.target.value)}
-                  placeholder="e.g., 123 Main Street, City"
+                  value={newSiteDescription}
+                  onChange={(e) => setNewSiteDescription(e.target.value)}
+                  placeholder="e.g., Main branch, Remote office"
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
                 />
               </div>
@@ -553,7 +566,7 @@ export function Layout() {
                 onClick={() => {
                   setShowAddSiteModal(false);
                   setNewSiteName('');
-                  setNewSiteLocation('');
+                  setNewSiteDescription('');
                 }}
                 className="flex-1 px-4 py-2 border border-border text-card-foreground rounded-lg hover:bg-muted transition-colors"
               >

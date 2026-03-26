@@ -1,21 +1,38 @@
 import { useState, useEffect } from 'react';
-import { Download, Server, Copy, Check } from 'lucide-react';
+import { Download, Server, Copy, Check, Settings as SettingsIcon, RefreshCw, Building2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-// API base URL for telemetry endpoint
-const API_BASE_URL = 'http://192.168.0.180:8000';
+interface Site {
+  id: number;
+  name: string;
+  slug: string;
+  api_token?: string;
+}
 
 export function Settings() {
   const { user } = useAuth();
-  const [copied, setCopied] = useState(false);
-  const [apiToken, setApiToken] = useState('');
-  const [routers, setRouters] = useState<Array<{id: number; name: string}>>([]);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [routers, setRouters] = useState<Array<{id: number; name: string; site_id?: number}>>([]);
   const [selectedRouter, setSelectedRouter] = useState<string>('');
+  const [sites, setSites] = useState<Site[]>([]);
+  const [selectedSite, setSelectedSite] = useState<Site | null>(null);
+  const [siteToken, setSiteToken] = useState<string>('');
+  const [loadingToken, setLoadingToken] = useState(false);
+  
+  // Admin configurable telemetry URL
+  const [telemetryUrl, setTelemetryUrl] = useState('http://192.168.0.180:8000/api/telemetry');
+  const [showUrlConfig, setShowUrlConfig] = useState(false);
 
   useEffect(() => {
+    loadSites();
     loadRouters();
-    generateApiToken();
   }, []);
+
+  useEffect(() => {
+    if (selectedSite) {
+      loadSiteToken(selectedSite.id);
+    }
+  }, [selectedSite]);
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
@@ -27,6 +44,56 @@ export function Settings() {
     return headers;
   };
 
+  const loadSites = async () => {
+    try {
+      const response = await fetch('/api/sites', { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        const siteList = data.sites || [];
+        setSites(siteList);
+        if (siteList.length > 0 && !selectedSite) {
+          setSelectedSite(siteList[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load sites:', error);
+    }
+  };
+
+  const loadSiteToken = async (siteId: number) => {
+    try {
+      setLoadingToken(true);
+      const response = await fetch(`/api/sites/${siteId}/token`, { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setSiteToken(data.api_token || '');
+      }
+    } catch (error) {
+      console.error('Failed to load site token:', error);
+    } finally {
+      setLoadingToken(false);
+    }
+  };
+
+  const regenerateSiteToken = async () => {
+    if (!selectedSite) return;
+    try {
+      setLoadingToken(true);
+      const response = await fetch(`/api/sites/${selectedSite.id}/regenerate-token`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSiteToken(data.api_token || '');
+      }
+    } catch (error) {
+      console.error('Failed to regenerate token:', error);
+    } finally {
+      setLoadingToken(false);
+    }
+  };
+
   const loadRouters = async () => {
     try {
       const headers = getAuthHeaders();
@@ -35,8 +102,8 @@ export function Settings() {
       if (response.ok) {
         const data = await response.json();
         const routerList = data.routers || data.data || data || [];
+        setRouters(routerList);
         if (routerList.length > 0) {
-          setRouters(routerList);
           setSelectedRouter(routerList[0].name);
         }
       }
@@ -45,23 +112,29 @@ export function Settings() {
     }
   };
 
-  const generateApiToken = () => {
-    // Generate a unique token based on user ID and timestamp
-    const token = btoa(`${user?.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
-    setApiToken(token);
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(field);
+      setTimeout(() => setCopied(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const telemetryScript = `# ============================================
 # Onlifi Router Telemetry Script (RouterOS)
 # ============================================
-# Pre-configured for: ${selectedRouter || 'YOUR_ROUTER'}
-# API Token: ${apiToken || 'GENERATING...'}
+# Site: ${selectedSite?.name || 'Default'}
+# Router: ${selectedRouter || 'YOUR_ROUTER'}
+# Generated: ${new Date().toISOString()}
 
 #---------- CONFIGURATION ----------
-:local dashboardUrl "${API_BASE_URL}/api/telemetry"
+:local dashboardUrl "${telemetryUrl}"
 :local routerName "${selectedRouter || '[system identity get name]'}"
-:local apiToken "${apiToken}"
-:local schedulerName "onlifi-telemetry-scheduler"
+:local apiToken "${siteToken || 'TOKEN_NOT_LOADED'}"
+:local siteSlug "${selectedSite?.slug || 'default'}"
+:local schedulerName "onlifi-telemetry-${selectedSite?.slug || 'default'}"
 
 #---------- TELEMETRY COLLECTION FUNCTIONS ----------
 
@@ -175,6 +248,7 @@ export function Settings() {
   :if (\$totalTxBytes > 0) do={ :set bandwidthUpKbps ((\$totalTxBytes * 8) / (300 * 1024)) }
   
   :local reportJson "{"
+  :set reportJson (\$reportJson . "\\"site_slug\\":\\"" . \$siteSlug . "\\",")
   :set reportJson (\$reportJson . "\\"router_name\\":\\"" . \$routerIdentity . "\\",")
   :set reportJson (\$reportJson . "\\"router_identity\\":\\"" . \$routerIdentity . "\\",")
   :set reportJson (\$reportJson . "\\"router_version\\":\\"" . \$routerVersion . "\\",")
@@ -224,7 +298,7 @@ export function Settings() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'onlifi-telemetry.rsc';
+    a.download = `onlifi-telemetry-${selectedSite?.slug || 'default'}.rsc`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -232,13 +306,7 @@ export function Settings() {
   };
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(telemetryScript);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
+    await copyToClipboard(telemetryScript, 'script');
   };
 
   return (
@@ -249,6 +317,55 @@ export function Settings() {
         <p className="text-sm text-muted-foreground mt-1">
           Configure your system and download router scripts
         </p>
+      </div>
+
+      {/* Telemetry URL Configuration (Admin) */}
+      <div className="bg-card border border-border rounded-lg p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-orange-500/10 rounded-lg">
+              <SettingsIcon className="w-6 h-6 text-orange-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-card-foreground">Telemetry Configuration</h2>
+              <p className="text-sm text-muted-foreground">
+                Configure the telemetry endpoint URL
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowUrlConfig(!showUrlConfig)}
+            className="px-3 py-1.5 text-sm bg-muted hover:bg-muted/80 rounded-lg transition-colors"
+          >
+            {showUrlConfig ? 'Hide' : 'Configure'}
+          </button>
+        </div>
+
+        {showUrlConfig && (
+          <div className="space-y-4 pt-4 border-t border-border">
+            <div>
+              <label className="block text-sm font-medium text-card-foreground mb-2">
+                Telemetry API Endpoint
+              </label>
+              <input
+                type="url"
+                value={telemetryUrl}
+                onChange={(e) => setTelemetryUrl(e.target.value)}
+                placeholder="http://your-server.com/api/telemetry"
+                className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                This URL will be used in all generated telemetry scripts
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+          <p className="text-sm text-muted-foreground">
+            <strong>Current URL:</strong> <code className="bg-background px-2 py-0.5 rounded">{telemetryUrl}</code>
+          </p>
+        </div>
       </div>
 
       {/* Link Router Section */}
@@ -266,6 +383,69 @@ export function Settings() {
         </div>
 
         <div className="space-y-4">
+          {/* Site Selection */}
+          <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Building2 className="w-4 h-4 text-indigo-600" />
+              <h3 className="font-medium text-indigo-600">Select Site</h3>
+            </div>
+            {sites.length === 0 ? (
+              <p className="text-sm text-indigo-600/80">No sites created yet. Create a site first to generate telemetry scripts.</p>
+            ) : (
+              <>
+                <select
+                  value={selectedSite?.id || ''}
+                  onChange={(e) => {
+                    const site = sites.find(s => s.id === Number(e.target.value));
+                    setSelectedSite(site || null);
+                  }}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                >
+                  {sites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-indigo-600/80 mt-2">
+                  Each site has its own unique API token for telemetry isolation
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Site API Token */}
+          {selectedSite && (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-medium text-emerald-600">Site API Token</h3>
+                <button
+                  onClick={regenerateSiteToken}
+                  disabled={loadingToken}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingToken ? 'animate-spin' : ''}`} />
+                  Regenerate
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-3 py-2 bg-background border border-border rounded text-xs font-mono truncate">
+                  {loadingToken ? 'Loading...' : siteToken || 'No token generated'}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(siteToken, 'token')}
+                  className="p-2 hover:bg-emerald-500/20 rounded transition-colors"
+                  title="Copy token"
+                >
+                  {copied === 'token' ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-emerald-600" />}
+                </button>
+              </div>
+              <p className="text-xs text-emerald-600/80 mt-2">
+                This token is auto-included in the script. Regenerating will invalidate the old token.
+              </p>
+            </div>
+          )}
+
           {/* Router Selection */}
           {routers.length > 0 && (
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
@@ -314,7 +494,7 @@ export function Settings() {
                   onClick={handleCopy}
                   className="flex items-center gap-2 px-3 py-1.5 text-sm bg-background border border-border rounded-lg hover:bg-muted transition-colors"
                 >
-                  {copied ? (
+                  {copied === 'script' ? (
                     <>
                       <Check className="w-4 h-4 text-green-600" />
                       <span className="text-green-600">Copied!</span>
