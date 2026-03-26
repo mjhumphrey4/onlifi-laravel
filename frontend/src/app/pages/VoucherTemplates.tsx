@@ -40,6 +40,93 @@ const LAYOUT_OPTIONS = [
   { value: 'grid-3x3', label: 'Grid 3x3 (9 per page)', cols: 3, rows: 3 },
 ];
 
+const DEFAULT_SKINS = [
+  {
+    id: 'classic',
+    name: 'Classic',
+    description: 'Clean and professional look',
+    preview: 'bg-white border-gray-200',
+    settings: {
+      background_color: '#ffffff',
+      text_color: '#1f2937',
+      accent_color: '#3b82f6',
+      header_text: 'WiFi Voucher',
+      footer_text: 'Thank you for choosing us!',
+      instructions: 'Connect to WiFi network and enter the code above',
+    }
+  },
+  {
+    id: 'modern-dark',
+    name: 'Modern Dark',
+    description: 'Sleek dark theme',
+    preview: 'bg-slate-900 border-slate-700',
+    settings: {
+      background_color: '#0f172a',
+      text_color: '#f1f5f9',
+      accent_color: '#22d3ee',
+      header_text: 'Internet Access',
+      footer_text: 'Enjoy your connection!',
+      instructions: 'Select our network and enter this code',
+    }
+  },
+  {
+    id: 'vibrant',
+    name: 'Vibrant',
+    description: 'Bold and colorful',
+    preview: 'bg-gradient-to-br from-purple-600 to-pink-500',
+    settings: {
+      background_color: '#7c3aed',
+      text_color: '#ffffff',
+      accent_color: '#fbbf24',
+      header_text: '🌐 WiFi Pass',
+      footer_text: 'Stay Connected!',
+      instructions: 'Join our network with this code',
+    }
+  },
+  {
+    id: 'minimal',
+    name: 'Minimal',
+    description: 'Simple and clean',
+    preview: 'bg-gray-50 border-gray-100',
+    settings: {
+      background_color: '#f9fafb',
+      text_color: '#374151',
+      accent_color: '#6b7280',
+      header_text: '',
+      footer_text: '',
+      instructions: '',
+    }
+  },
+  {
+    id: 'nature',
+    name: 'Nature',
+    description: 'Fresh green theme',
+    preview: 'bg-emerald-50 border-emerald-200',
+    settings: {
+      background_color: '#ecfdf5',
+      text_color: '#065f46',
+      accent_color: '#10b981',
+      header_text: 'WiFi Access Code',
+      footer_text: 'Enjoy browsing!',
+      instructions: 'Connect to our WiFi and use this code',
+    }
+  },
+  {
+    id: 'sunset',
+    name: 'Sunset',
+    description: 'Warm orange tones',
+    preview: 'bg-orange-50 border-orange-200',
+    settings: {
+      background_color: '#fff7ed',
+      text_color: '#9a3412',
+      accent_color: '#f97316',
+      header_text: 'Internet Voucher',
+      footer_text: 'Happy Surfing!',
+      instructions: 'Enter this code after connecting',
+    }
+  },
+];
+
 export function VoucherTemplates() {
   const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +134,7 @@ export function VoucherTemplates() {
   const [showPreview, setShowPreview] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<VoucherTemplate | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<VoucherTemplate | null>(null);
+  const [selectedSkin, setSelectedSkin] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState<{
@@ -242,7 +330,19 @@ export function VoucherTemplates() {
   const openCreateDialog = () => {
     setEditingTemplate(null);
     resetForm();
+    setSelectedSkin(null);
     setShowDialog(true);
+  };
+
+  const applySkin = (skinId: string) => {
+    const skin = DEFAULT_SKINS.find(s => s.id === skinId);
+    if (skin) {
+      setSelectedSkin(skinId);
+      setFormData(prev => ({
+        ...prev,
+        ...skin.settings,
+      }));
+    }
   };
 
   const getLayoutInfo = (layout: string) => {
@@ -462,6 +562,36 @@ export function VoucherTemplates() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* Skin Selector - Only show when creating new template */}
+              {!editingTemplate && (
+                <div>
+                  <label className="block text-sm font-medium text-card-foreground mb-3">
+                    Start with a Skin (Optional)
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {DEFAULT_SKINS.map((skin) => (
+                      <button
+                        key={skin.id}
+                        type="button"
+                        onClick={() => applySkin(skin.id)}
+                        className={`p-3 rounded-lg border-2 text-left transition-all ${
+                          selectedSkin === skin.id
+                            ? 'border-primary ring-2 ring-primary/20'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <div 
+                          className={`w-full h-8 rounded mb-2 border ${skin.preview}`}
+                          style={{ backgroundColor: skin.settings.background_color }}
+                        />
+                        <p className="text-sm font-medium text-card-foreground">{skin.name}</p>
+                        <p className="text-xs text-muted-foreground">{skin.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-card-foreground mb-2">Name *</label>

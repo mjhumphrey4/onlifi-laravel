@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, Wallet, RefreshCw, Users, ArrowRight, Calendar, Ticket, Clock } from 'lucide-react';
+import { DollarSign, TrendingUp, RefreshCw, Users, ArrowRight, Server, Wifi, Activity } from 'lucide-react';
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
@@ -26,24 +26,11 @@ interface TxRow {
   external_ref: string;
 }
 
-interface TodayStats {
-  mobile_money: {
-    total_transactions: number;
-    successful_transactions: number;
-    failed_transactions: number;
-    total_amount: number;
-    average_amount: number;
-  };
-  vouchers: {
-    total_used: number;
-    total_created: number;
-    revenue: number;
-  };
-  hourly_breakdown: Array<{
-    hour: number;
-    transactions: number;
-    amount: number;
-  }>;
+interface DeviceStats {
+  total_routers: number;
+  online_routers: number;
+  total_clients: number;
+  active_connections: number;
 }
 
 interface Client {
@@ -85,8 +72,7 @@ export function Dashboard() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'today'>('overview');
-  const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
+  const [deviceStats, setDeviceStats] = useState<DeviceStats>({ total_routers: 0, online_routers: 0, total_clients: 0, active_connections: 0 });
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
@@ -110,54 +96,38 @@ export function Dashboard() {
       setSites(statsRes.sites ?? {});
       setTxs(txRes.transactions ?? []);
 
-      // Fetch clients (top 20)
+      // Fetch clients (top 10)
       try {
-        const clientsRes = await fetch('/api/clients?limit=20', { headers });
+        const clientsRes = await fetch('/api/clients?limit=10', { headers });
         if (clientsRes.ok) {
           const clientsData = await clientsRes.json();
           setClients(clientsData.data || clientsData.clients || []);
         }
       } catch {
-        // Clients endpoint may not exist yet
         setClients([]);
       }
 
-      // Fetch today's stats
+      // Fetch device stats
       try {
-        const todayRes = await fetch('/api/dashboard/today', { headers });
-        if (todayRes.ok) {
-          const todayData = await todayRes.json();
-          setTodayStats(todayData);
-        } else {
-          // Calculate from existing data if endpoint doesn't exist
-          const todayTxs = txRes.transactions?.filter((tx: TxRow) => {
-            const txDate = new Date(tx.created_at);
-            const today = new Date();
-            return txDate.toDateString() === today.toDateString();
-          }) || [];
-          
-          const successTxs = todayTxs.filter((tx: TxRow) => tx.status === 'success');
-          const failedTxs = todayTxs.filter((tx: TxRow) => tx.status === 'failed');
-          const totalAmount = successTxs.reduce((sum: number, tx: TxRow) => sum + parseFloat(tx.amount), 0);
-          
-          setTodayStats({
-            mobile_money: {
-              total_transactions: todayTxs.length,
-              successful_transactions: successTxs.length,
-              failed_transactions: failedTxs.length,
-              total_amount: totalAmount,
-              average_amount: successTxs.length > 0 ? totalAmount / successTxs.length : 0,
-            },
-            vouchers: {
-              total_used: 0,
-              total_created: 0,
-              revenue: 0,
-            },
-            hourly_breakdown: [],
+        const routersRes = await fetch('/api/routers', { headers });
+        if (routersRes.ok) {
+          const routersData = await routersRes.json();
+          const routers = Array.isArray(routersData) ? routersData : routersData.data || [];
+          const onlineRouters = routers.filter((r: any) => {
+            if (!r.last_seen) return false;
+            const diff = Date.now() - new Date(r.last_seen).getTime();
+            return diff < 600000; // 10 minutes
+          });
+          const totalConnections = routers.reduce((sum: number, r: any) => sum + (r.last_active_connections || 0), 0);
+          setDeviceStats({
+            total_routers: routers.length,
+            online_routers: onlineRouters.length,
+            total_clients: clients.length,
+            active_connections: totalConnections,
           });
         }
       } catch {
-        setTodayStats(null);
+        // Device stats not available
       }
 
       setLastUpdated(new Date());
@@ -170,14 +140,13 @@ export function Dashboard() {
 
   useEffect(() => {
     load();
-    const iv = setInterval(load, 60000);
+    const iv = setInterval(load, 5000); // Refresh every 5 seconds
     return () => clearInterval(iv);
   }, [load]);
 
   const siteList = Object.entries(sites);
   const totalEarnings   = siteList.reduce((s, [, v]) => s + v.total_amount,  0);
   const todayEarnings   = siteList.reduce((s, [, v]) => s + v.today_amount,  0);
-  const totalWithdrawn  = siteList.reduce((s, [, v]) => s + v.withdrawn,     0);
 
   if (loading) {
     return (
@@ -200,133 +169,52 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6 border-b border-border">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'overview'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <TrendingUp className="w-4 h-4" />
-          Overview
-        </button>
-        <button
-          onClick={() => setActiveTab('today')}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'today'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Calendar className="w-4 h-4" />
-          Today
-        </button>
-      </div>
-
-      {activeTab === 'today' && todayStats && (
-        <div className="space-y-6 mb-6">
-          {/* Today's Performance Header */}
-          <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-semibold text-foreground">
-              Today's Performance - {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </h2>
+      {/* Device Stats Widget */}
+      <div className="bg-card border border-border rounded-lg p-4 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Server className="w-5 h-5 text-primary" />
+          <h2 className="text-sm font-semibold text-card-foreground">Network Status</h2>
+          <span className="ml-auto flex items-center gap-1 text-xs text-emerald-500">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            Live
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-muted/30 rounded-lg p-3 text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Server className="w-4 h-4 text-primary" />
+              <span className="text-xl font-bold text-card-foreground">{deviceStats.total_routers}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Total Routers</p>
           </div>
-
-          {/* Mobile Money Stats */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <DollarSign className="w-5 h-5 text-emerald-500" />
-              <h3 className="text-md font-semibold text-card-foreground">Mobile Money</h3>
+          <div className="bg-emerald-500/10 rounded-lg p-3 text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Wifi className="w-4 h-4 text-emerald-500" />
+              <span className="text-xl font-bold text-emerald-500">{deviceStats.online_routers}</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-              <div className="bg-muted/30 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">{todayStats.mobile_money.total_transactions}</p>
-                <p className="text-xs text-muted-foreground">Total Transactions</p>
-              </div>
-              <div className="bg-emerald-500/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-emerald-500">{todayStats.mobile_money.successful_transactions}</p>
-                <p className="text-xs text-muted-foreground">Successful</p>
-              </div>
-              <div className="bg-red-500/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-red-500">{todayStats.mobile_money.failed_transactions}</p>
-                <p className="text-xs text-muted-foreground">Failed</p>
-              </div>
-              <div className="bg-primary/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-primary">{fmt(todayStats.mobile_money.total_amount)}</p>
-                <p className="text-xs text-muted-foreground">Total Revenue</p>
-              </div>
-              <div className="bg-muted/30 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-card-foreground">{fmt(todayStats.mobile_money.average_amount)}</p>
-                <p className="text-xs text-muted-foreground">Avg. Transaction</p>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">Online</p>
           </div>
-
-          {/* Voucher Stats */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Ticket className="w-5 h-5 text-purple-500" />
-              <h3 className="text-md font-semibold text-card-foreground">Vouchers</h3>
+          <div className="bg-blue-500/10 rounded-lg p-3 text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Users className="w-4 h-4 text-blue-500" />
+              <span className="text-xl font-bold text-blue-500">{deviceStats.total_clients}</span>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-purple-500/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-purple-500">{todayStats.vouchers.total_used}</p>
-                <p className="text-xs text-muted-foreground">Used Today</p>
-              </div>
-              <div className="bg-blue-500/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-blue-500">{todayStats.vouchers.total_created}</p>
-                <p className="text-xs text-muted-foreground">Created Today</p>
-              </div>
-              <div className="bg-primary/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-primary">{fmt(todayStats.vouchers.revenue)}</p>
-                <p className="text-xs text-muted-foreground">Voucher Revenue</p>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">Clients</p>
           </div>
-
-          {/* Success Rate */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Clock className="w-5 h-5 text-primary" />
-              <h3 className="text-md font-semibold text-card-foreground">Success Rate</h3>
+          <div className="bg-purple-500/10 rounded-lg p-3 text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Activity className="w-4 h-4 text-purple-500" />
+              <span className="text-xl font-bold text-purple-500">{deviceStats.active_connections}</span>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Transaction Success Rate</span>
-                  <span className="text-sm font-semibold text-card-foreground">
-                    {todayStats.mobile_money.total_transactions > 0
-                      ? ((todayStats.mobile_money.successful_transactions / todayStats.mobile_money.total_transactions) * 100).toFixed(1)
-                      : 0}%
-                  </span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-3">
-                  <div
-                    className="bg-emerald-500 h-3 rounded-full transition-all"
-                    style={{
-                      width: `${todayStats.mobile_money.total_transactions > 0
-                        ? (todayStats.mobile_money.successful_transactions / todayStats.mobile_money.total_transactions) * 100
-                        : 0}%`
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">Active Connections</p>
           </div>
         </div>
-      )}
+      </div>
 
-      {activeTab === 'overview' && (
-        <>
-          {/* Summary stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <StatsCard title="Today's Earnings"  value={fmt(todayEarnings)}  icon={DollarSign} trend={{ value: 'Live data', isPositive: true }} />
-        <StatsCard title="Total Earnings"    value={fmt(totalEarnings)}  icon={TrendingUp} />
-        <StatsCard title="Total Withdrawals" value={fmt(totalWithdrawn)} icon={Wallet} />
+      {/* Summary stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <StatsCard title="Today's Earnings" value={fmt(todayEarnings)} icon={DollarSign} trend={{ value: 'Live', isPositive: true }} />
+        <StatsCard title="Total Earnings" value={fmt(totalEarnings)} icon={TrendingUp} />
       </div>
 
       {/* Per-site cards (admin sees all, user sees their own) */}
@@ -345,10 +233,6 @@ export function Dashboard() {
                   <div className="flex justify-between">
                     <span className="opacity-80">Today</span>
                     <span className="font-semibold">{fmt(stat.today_amount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="opacity-80">Withdrawn</span>
-                    <span className="font-semibold text-red-200">{fmt(stat.withdrawn)}</span>
                   </div>
                   <div className="flex justify-between border-t border-white/20 pt-1 mt-1">
                     <span className="font-semibold">Balance</span>
@@ -473,8 +357,6 @@ export function Dashboard() {
           </div>
         </div>
       </div>
-        </>
-      )}
     </div>
   );
 }

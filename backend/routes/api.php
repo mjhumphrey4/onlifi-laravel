@@ -24,6 +24,9 @@ Route::post('/tenant/login', [TenantAuthController::class, 'login']);
 
 Route::get('/system/settings/public', [SystemSettingController::class, 'publicSettings']);
 
+// Public telemetry endpoint for routers (authenticated via API token in request)
+Route::post('/telemetry', [MikrotikController::class, 'ingestTelemetry']);
+
 Route::prefix('tenant/signup')->group(function () {
     Route::post('/', [TenantController::class, 'store']);
 });
@@ -156,6 +159,15 @@ Route::middleware(['tenant'])->group(function () {
     });
 
     Route::prefix('sales-points')->group(function () {
+        Route::get('/', [SalesPointController::class, 'index']);
+        Route::post('/', [SalesPointController::class, 'store']);
+        Route::get('/{id}', [SalesPointController::class, 'show']);
+        Route::put('/{id}', [SalesPointController::class, 'update']);
+        Route::delete('/{id}', [SalesPointController::class, 'destroy']);
+    });
+
+    // Alias for sites (same as sales-points)
+    Route::prefix('sites')->group(function () {
         Route::get('/', [SalesPointController::class, 'index']);
         Route::post('/', [SalesPointController::class, 'store']);
         Route::get('/{id}', [SalesPointController::class, 'show']);

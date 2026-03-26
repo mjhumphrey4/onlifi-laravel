@@ -15,7 +15,10 @@ class SalesPointController extends Controller
             ->orderBy('name')
             ->get();
 
-        return response()->json($salesPoints);
+        return response()->json([
+            'sites' => $salesPoints,
+            'data' => $salesPoints,
+        ]);
     }
 
     public function store(Request $request)
@@ -43,7 +46,8 @@ class SalesPointController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Sales point created successfully',
+            'message' => 'Site created successfully',
+            'site' => $salesPoint,
             'sales_point' => $salesPoint,
         ], 201);
     }

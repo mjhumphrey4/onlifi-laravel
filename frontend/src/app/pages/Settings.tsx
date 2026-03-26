@@ -55,7 +55,8 @@ export function Settings() {
 # API Token: ${apiToken || 'GENERATING...'}
 
 #---------- CONFIGURATION ----------
-:local dashboardUrl "http://192.168.0.180/api/telemetry"
+:local dashboardUrl "${window.location.origin}/api/telemetry"
+:local routerName "${selectedRouter || '[system identity get name]'}"
 :local apiToken "${apiToken}"
 :local schedulerName "onlifi-telemetry-scheduler"
 
@@ -171,6 +172,7 @@ export function Settings() {
   :if (\$totalTxBytes > 0) do={ :set bandwidthUpKbps ((\$totalTxBytes * 8) / (300 * 1024)) }
   
   :local reportJson "{"
+  :set reportJson (\$reportJson . "\\"router_name\\":\\"" . \$routerIdentity . "\\",")
   :set reportJson (\$reportJson . "\\"router_identity\\":\\"" . \$routerIdentity . "\\",")
   :set reportJson (\$reportJson . "\\"router_version\\":\\"" . \$routerVersion . "\\",")
   :set reportJson (\$reportJson . "\\"router_board\\":\\"" . \$routerBoard . "\\",")
@@ -179,7 +181,7 @@ export function Settings() {
   :set reportJson (\$reportJson . "\\"memory_total_mb\\":" . (\$memTotal / 1048576) . ",")
   :set reportJson (\$reportJson . "\\"memory_used_mb\\":" . (\$memUsed / 1048576) . ",")
   :set reportJson (\$reportJson . "\\"uptime_seconds\\":" . \$uptimeSeconds . ",")
-  :set reportJson (\$reportJson . "\\"active_clients\\":" . \$hotspotUsers . ",")
+  :set reportJson (\$reportJson . "\\"active_connections\\":" . \$hotspotUsers . ",")
   :set reportJson (\$reportJson . "\\"bandwidth_download_kbps\\":" . \$bandwidthDownKbps . ",")
   :set reportJson (\$reportJson . "\\"bandwidth_upload_kbps\\":" . \$bandwidthUpKbps . ",")
   :set reportJson (\$reportJson . "\\"total_tx_bytes\\":" . \$totalTxBytes . ",")

@@ -144,7 +144,9 @@ class MikrotikController extends Controller
     public function ingestTelemetry(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'router_id' => 'required|integer',
+            'router_id' => 'nullable|integer',
+            'router_name' => 'nullable|string',
+            'api_token' => 'nullable|string',
             'cpu_load' => 'nullable|numeric',
             'memory_used_mb' => 'nullable|integer',
             'memory_total_mb' => 'nullable|integer',
@@ -162,11 +164,26 @@ class MikrotikController extends Controller
             ], 422);
         }
 
-        $router = MikrotikRouter::find($request->router_id);
+        // Find router by ID or name
+        $router = null;
+        if ($request->router_id) {
+            $router = MikrotikRouter::find($request->router_id);
+        } elseif ($request->router_name) {
+            $router = MikrotikRouter::where('name', $request->router_name)->first();
+        }
+
+        // If router not found, try to create it (auto-register)
+        if (!$router && $request->router_name) {
+            $router = MikrotikRouter::create([
+                'name' => $request->router_name,
+                'ip_address' => $request->ip() ?? '0.0.0.0',
+                'is_active' => true,
+            ]);
+        }
 
         if (!$router) {
             return response()->json([
-                'error' => 'Router not found',
+                'error' => 'Router not found. Provide router_id or router_name.',
             ], 404);
         }
 
@@ -174,6 +191,7 @@ class MikrotikController extends Controller
             'last_seen' => now(),
             'last_cpu_load' => $request->cpu_load,
             'last_memory_used_mb' => $request->memory_used_mb,
+            'memory_total_mb' => $request->memory_total_mb,
             'last_active_connections' => $request->active_connections,
         ]);
 

@@ -1,34 +1,31 @@
 import { useState, useEffect } from 'react';
-import { Server, Activity, Cpu, HardDrive, Clock, AlertCircle, CheckCircle } from 'lucide-react';
+import { Server, Plus, Trash2, ExternalLink, CheckCircle, XCircle, RefreshCw, Globe, MapPin } from 'lucide-react';
 
 interface Router {
   id: number;
   name: string;
   ip_address: string;
   location: string | null;
+  uptime_kuma_url: string | null;
   is_active: boolean;
-  last_seen: string | null;
-}
-
-interface Telemetry {
-  router_id: number;
-  router_name: string;
-  cpu_load: number;
-  memory_used_mb: number;
-  memory_total_mb: number;
-  active_connections: number;
-  last_seen: string | null;
-  is_online: boolean;
+  status: 'online' | 'offline' | 'unknown';
 }
 
 export function Devices() {
   const [routers, setRouters] = useState<Router[]>([]);
-  const [telemetry, setTelemetry] = useState<Telemetry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    ip_address: '',
+    location: '',
+    uptime_kuma_url: '',
+  });
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 60000); // Refresh every minute
+    const interval = setInterval(loadData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -50,24 +47,16 @@ export function Devices() {
       if (routersRes.ok) {
         const routersData = await routersRes.json();
         const routersList = Array.isArray(routersData) ? routersData : routersData.data || [];
-        setRouters(routersList);
         
-        // Fetch telemetry for each router
-        const telemetryPromises = routersList.map(async (router: Router) => {
-          try {
-            const telRes = await fetch(`/api/routers/${router.id}/telemetry/latest`, { headers });
-            if (telRes.ok) {
-              const telData = await telRes.json();
-              return telData;
-            }
-          } catch {
-            // Telemetry not available for this router
-          }
-          return null;
-        });
+        // Check status for each router (simple ping check via Uptime Kuma if configured)
+        const routersWithStatus = routersList.map((router: any) => ({
+          ...router,
+          status: router.last_seen && (Date.now() - new Date(router.last_seen).getTime() < 600000) 
+            ? 'online' 
+            : router.last_seen ? 'offline' : 'unknown'
+        }));
         
-        const telemetryResults = await Promise.all(telemetryPromises);
-        setTelemetry(telemetryResults.filter(t => t !== null));
+        setRouters(routersWithStatus);
       }
     } catch (error) {
       console.error('Failed to load devices:', error);
@@ -76,32 +65,79 @@ export function Devices() {
     }
   };
 
-  const formatUptime = (seconds: number) => {
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
+  const handleAddRouter = async () => {
+    if (!formData.name.trim() || !formData.ip_address.trim()) return;
     
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
+    setSaving(true);
+    try {
+      const headers = getAuthHeaders();
+      const res = await fetch('/api/routers', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(formData),
+      });
+
+      if (res.ok) {
+        setShowAddModal(false);
+        setFormData({ name: '', ip_address: '', location: '', uptime_kuma_url: '' });
+        loadData();
+      } else {
+        const error = await res.json();
+        alert(error.message || 'Failed to add router');
+      }
+    } catch (error) {
+      console.error('Failed to add router:', error);
+      alert('Failed to add router');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const getLatestTelemetry = (routerId: number) => {
-    return telemetry.find(t => t.router_id === routerId);
+  const handleDeleteRouter = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this router?')) return;
+    
+    try {
+      const headers = getAuthHeaders();
+      const res = await fetch(`/api/routers/${id}`, {
+        method: 'DELETE',
+        headers,
+      });
+
+      if (res.ok) {
+        loadData();
+      }
+    } catch (error) {
+      console.error('Failed to delete router:', error);
+    }
   };
 
-  const getStatusColor = (lastSeen: string | null) => {
-    if (!lastSeen) return 'text-muted-foreground';
-    const diff = Date.now() - new Date(lastSeen).getTime();
-    if (diff < 300000) return 'text-emerald-500'; // < 5 minutes
-    if (diff < 900000) return 'text-yellow-500'; // < 15 minutes
-    return 'text-destructive'; // > 15 minutes
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'online':
+        return (
+          <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500">
+            <CheckCircle className="w-3 h-3" /> Online
+          </span>
+        );
+      case 'offline':
+        return (
+          <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-red-500/10 text-red-500">
+            <XCircle className="w-3 h-3" /> Offline
+          </span>
+        );
+      default:
+        return (
+          <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+            Unknown
+          </span>
+        );
+    }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Activity className="w-6 h-6 text-primary animate-spin" />
+        <RefreshCw className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -109,187 +145,198 @@ export function Devices() {
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl text-foreground mb-1 flex items-center gap-2">
-          <Server className="w-8 h-8 text-primary" />
-          Network Devices
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Monitor your MikroTik routers and network infrastructure
-        </p>
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl text-foreground mb-1 flex items-center gap-2">
+            <Server className="w-8 h-8 text-primary" />
+            Routers
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Register and monitor your network routers via Uptime Kuma
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Add Router
+        </button>
       </div>
 
-      {/* Info Banner */}
-      <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+      {/* Routers List */}
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        {routers.length === 0 ? (
+          <div className="p-12 text-center">
+            <Server className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-card-foreground mb-2">No routers registered</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Add your first router to start monitoring its uptime
+            </p>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Router
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {routers.map((router) => (
+              <div key={router.id} className="p-4 hover:bg-muted/30 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                      <Server className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-semibold text-card-foreground">{router.name}</h3>
+                        {getStatusBadge(router.status)}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1 font-mono">
+                          <Globe className="w-3 h-3" />
+                          {router.ip_address}
+                        </span>
+                        {router.location && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {router.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {router.uptime_kuma_url && (
+                      <a
+                        href={router.uptime_kuma_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 text-muted-foreground hover:text-primary hover:bg-muted rounded-lg transition-colors"
+                        title="View in Uptime Kuma"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    )}
+                    <button
+                      onClick={() => handleDeleteRouter(router.id)}
+                      className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                      title="Delete router"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Uptime Kuma Info */}
+      <div className="mt-6 bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <Globe className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-blue-500 mb-1">Uptime Kuma Integration Coming Soon</p>
+            <p className="text-sm font-medium text-blue-500 mb-1">Uptime Kuma Integration</p>
             <p className="text-xs text-muted-foreground">
-              This page will be enhanced with Uptime Kuma integration for comprehensive device monitoring, 
-              uptime tracking, and alerting capabilities.
+              For advanced monitoring, connect your routers to Uptime Kuma. Add the Uptime Kuma status page URL 
+              when registering a router to enable direct links to detailed monitoring dashboards.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Routers Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {routers.length === 0 ? (
-          <div className="col-span-2 bg-card border border-border rounded-lg p-8 text-center">
-            <Server className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">No routers configured yet</p>
-          </div>
-        ) : (
-          routers.map((router) => {
-            const tel = getLatestTelemetry(router.id);
-            const statusColor = getStatusColor(router.last_seen);
-            const memoryPercent = tel ? (tel.memory_used_mb / tel.memory_total_mb) * 100 : 0;
-
-            return (
-              <div key={router.id} className="bg-card border border-border rounded-lg p-6">
-                {/* Router Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                      <Server className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-card-foreground">{router.name}</h3>
-                      <p className="text-sm text-muted-foreground font-mono">{router.ip_address}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {router.is_active ? (
-                      <CheckCircle className={`w-5 h-5 ${statusColor}`} />
-                    ) : (
-                      <AlertCircle className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </div>
-                </div>
-
-                {/* Location */}
-                {router.location && (
-                  <p className="text-sm text-muted-foreground mb-4">📍 {router.location}</p>
-                )}
-
-                {/* Telemetry Data */}
-                {tel ? (
-                  <div className="space-y-4">
-                    {/* CPU Load */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Cpu className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">CPU Load</span>
-                        </div>
-                        <span className="text-sm font-semibold text-card-foreground">{tel.cpu_load}%</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            tel.cpu_load > 80 ? 'bg-destructive' : tel.cpu_load > 60 ? 'bg-yellow-500' : 'bg-primary'
-                          }`}
-                          style={{ width: `${Math.min(tel.cpu_load, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Memory Usage */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <HardDrive className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">Memory</span>
-                        </div>
-                        <span className="text-sm font-semibold text-card-foreground">
-                          {tel.memory_used_mb} / {tel.memory_total_mb} MB
-                        </span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            memoryPercent > 90 ? 'bg-destructive' : memoryPercent > 75 ? 'bg-yellow-500' : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${Math.min(memoryPercent, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Active Connections */}
-                    <div className="flex items-center justify-between pt-2 border-t border-border">
-                      <div className="flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Active Connections</span>
-                      </div>
-                      <span className="text-sm font-semibold text-card-foreground">
-                        {tel.active_connections}
-                      </span>
-                    </div>
-
-                    {/* Last Updated */}
-                    <div className="text-xs text-muted-foreground text-right">
-                      {tel.is_online ? (
-                        <span className="text-emerald-500">● Online</span>
-                      ) : (
-                        <span>Last seen: {tel.last_seen ? new Date(tel.last_seen).toLocaleString() : 'Never'}</span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-4">
-                    <Activity className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">No telemetry data available</p>
-                  </div>
-                )}
+      {/* Add Router Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-lg w-full max-w-md">
+            <div className="p-6 border-b border-border">
+              <h2 className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+                <Server className="w-5 h-5 text-primary" />
+                Add Router
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Register a new router for monitoring
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-2">
+                  Router Name *
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g., Main Office Router"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                />
               </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Future Integration Section */}
-      <div className="mt-8 bg-card border border-border rounded-lg p-6">
-        <h2 className="text-lg font-semibold text-card-foreground mb-4">Planned Features</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-              <CheckCircle className="w-4 h-4 text-primary" />
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-2">
+                  IP Address *
+                </label>
+                <input
+                  type="text"
+                  value={formData.ip_address}
+                  onChange={(e) => setFormData({ ...formData, ip_address: e.target.value })}
+                  placeholder="e.g., 192.168.1.1"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-2">
+                  Location (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  placeholder="e.g., Server Room A"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-2">
+                  Uptime Kuma URL (Optional)
+                </label>
+                <input
+                  type="url"
+                  value={formData.uptime_kuma_url}
+                  onChange={(e) => setFormData({ ...formData, uptime_kuma_url: e.target.value })}
+                  placeholder="e.g., https://uptime.example.com/status/router"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Link to the Uptime Kuma status page for this router
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-card-foreground">Uptime Kuma Integration</p>
-              <p className="text-xs text-muted-foreground">Real-time uptime monitoring and alerting</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Activity className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-card-foreground">Historical Metrics</p>
-              <p className="text-xs text-muted-foreground">Track performance trends over time</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-              <AlertCircle className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-card-foreground">Alert Configuration</p>
-              <p className="text-xs text-muted-foreground">Custom alerts for critical events</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Server className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-card-foreground">Multi-Device Support</p>
-              <p className="text-xs text-muted-foreground">Monitor all network infrastructure</p>
+            <div className="p-6 border-t border-border flex gap-3">
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setFormData({ name: '', ip_address: '', location: '', uptime_kuma_url: '' });
+                }}
+                className="flex-1 px-4 py-2 border border-border text-card-foreground rounded-lg hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddRouter}
+                disabled={!formData.name.trim() || !formData.ip_address.trim() || saving}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Adding...' : 'Add Router'}
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
