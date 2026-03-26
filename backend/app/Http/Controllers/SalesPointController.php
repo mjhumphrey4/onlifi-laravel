@@ -10,15 +10,21 @@ class SalesPointController extends Controller
 {
     public function index()
     {
-        $salesPoints = VoucherSalesPoint::withCount(['vouchers as total_vouchers'])
-            ->withSum('vouchers as total_revenue', 'price')
-            ->orderBy('name')
-            ->get();
+        try {
+            $salesPoints = VoucherSalesPoint::orderBy('name')->get();
 
-        return response()->json([
-            'sites' => $salesPoints,
-            'data' => $salesPoints,
-        ]);
+            return response()->json([
+                'sales_points' => $salesPoints,
+                'data' => $salesPoints,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to load sales points', ['error' => $e->getMessage()]);
+            return response()->json([
+                'sales_points' => [],
+                'data' => [],
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     public function store(Request $request)
@@ -54,9 +60,7 @@ class SalesPointController extends Controller
 
     public function show($id)
     {
-        $salesPoint = VoucherSalesPoint::withCount(['vouchers as total_vouchers'])
-            ->withSum('vouchers as total_revenue', 'price')
-            ->findOrFail($id);
+        $salesPoint = VoucherSalesPoint::findOrFail($id);
 
         return response()->json($salesPoint);
     }
