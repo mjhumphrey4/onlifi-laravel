@@ -121,11 +121,7 @@ class VoucherController extends Controller
 
     public function getTypes()
     {
-        $types = VoucherType::withCount(['vouchers as total_vouchers', 'vouchers as unused_count' => function ($query) {
-            $query->where('status', 'unused');
-        }, 'vouchers as used_count' => function ($query) {
-            $query->where('status', 'used');
-        }])->get();
+        $types = VoucherType::orderBy('type_name')->get();
         return response()->json(['types' => $types]);
     }
 
@@ -198,15 +194,6 @@ class VoucherController extends Controller
     public function destroyType($id)
     {
         $type = VoucherType::findOrFail($id);
-        
-        $voucherCount = $type->vouchers()->count();
-        if ($voucherCount > 0) {
-            return response()->json([
-                'error' => 'Cannot delete voucher type with existing vouchers',
-                'message' => "This type has {$voucherCount} vouchers associated with it",
-            ], 400);
-        }
-
         $type->delete();
 
         return response()->json([

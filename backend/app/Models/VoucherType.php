@@ -31,11 +31,6 @@ class VoucherType extends Model
         'updated_at' => 'datetime',
     ];
 
-    public function vouchers()
-    {
-        return $this->hasMany(Voucher::class, 'voucher_type_id');
-    }
-
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
