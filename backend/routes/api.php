@@ -17,6 +17,7 @@ use App\Http\Controllers\PlatformFeeController;
 use App\Http\Controllers\SalesPointController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\TenantAuthController;
+use App\Http\Controllers\TelemetryController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -26,7 +27,7 @@ Route::post('/tenant/login', [TenantAuthController::class, 'login']);
 Route::get('/system/settings/public', [SystemSettingController::class, 'publicSettings']);
 
 // Public telemetry endpoint for routers (authenticated via API token in request)
-Route::post('/telemetry', [MikrotikController::class, 'ingestTelemetry']);
+Route::post('/telemetry', [TelemetryController::class, 'receive']);
 
 Route::prefix('tenant/signup')->group(function () {
     Route::post('/', [TenantController::class, 'store']);

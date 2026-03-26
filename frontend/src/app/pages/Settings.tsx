@@ -30,7 +30,12 @@ export function Settings() {
 
   useEffect(() => {
     if (selectedSite) {
-      loadSiteToken(selectedSite.id);
+      // Use the token from the site object if available, otherwise fetch it
+      if (selectedSite.api_token) {
+        setSiteToken(selectedSite.api_token);
+      } else {
+        loadSiteToken(selectedSite.id);
+      }
     }
   }, [selectedSite]);
 
@@ -86,6 +91,10 @@ export function Settings() {
       if (response.ok) {
         const data = await response.json();
         setSiteToken(data.api_token || '');
+        // Update the selected site object with new token
+        setSelectedSite({ ...selectedSite, api_token: data.api_token });
+        // Reload sites list to update all site objects
+        loadSites();
       }
     } catch (error) {
       console.error('Failed to regenerate token:', error);
@@ -492,7 +501,8 @@ export function Settings() {
               <div className="flex gap-2">
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-background border border-border rounded-lg hover:bg-muted transition-colors"
+                  disabled={!selectedSite || !siteToken}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-background border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {copied === 'script' ? (
                     <>
@@ -508,7 +518,8 @@ export function Settings() {
                 </button>
                 <button
                   onClick={handleDownload}
-                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  disabled={!selectedSite || !siteToken}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
                   Download

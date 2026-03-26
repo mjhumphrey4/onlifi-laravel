@@ -19,9 +19,8 @@ class Site extends Model
         'is_active' => 'boolean',
     ];
 
-    protected $hidden = [
-        'api_token',
-    ];
+    // Don't hide api_token - it's needed for telemetry script generation
+    protected $hidden = [];
 
     protected static function boot()
     {
