@@ -33,18 +33,28 @@ export function Devices() {
     return () => clearInterval(interval);
   }, []);
 
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  };
+
   const loadData = async () => {
     try {
-      const [routersRes, telemetryRes] = await Promise.all([
-        fetch('/api/mikrotik_api.php?action=routers'),
-        fetch('/api/mikrotik_api.php?action=router_telemetry')
-      ]);
+      const headers = getAuthHeaders();
+      const routersRes = await fetch('/api/routers', { headers });
 
-      const routersData = await routersRes.json();
-      const telemetryData = await telemetryRes.json();
-
-      if (routersData.routers) setRouters(routersData.routers);
-      if (telemetryData.telemetry) setTelemetry(telemetryData.telemetry);
+      if (routersRes.ok) {
+        const routersData = await routersRes.json();
+        setRouters(Array.isArray(routersData) ? routersData : routersData.data || []);
+      }
+      
+      // Telemetry data would come from individual router endpoints or a dedicated telemetry endpoint
+      // For now, we'll leave telemetry empty until the backend endpoint is implemented
     } catch (error) {
       console.error('Failed to load devices:', error);
     } finally {

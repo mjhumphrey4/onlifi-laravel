@@ -133,4 +133,36 @@ class AnnouncementController extends Controller
 
         return response()->json($announcements);
     }
+
+    public function activeAnnouncements(Request $request)
+    {
+        // Get tenant from authenticated user or request
+        $tenant = app('tenant') ?? null;
+        $tenantId = $tenant ? $tenant->id : null;
+
+        $query = Announcement::active();
+
+        if ($tenantId) {
+            // Filter announcements for this specific tenant
+            $query->where(function ($q) use ($tenantId) {
+                $q->where('target', 'all')
+                  ->orWhere('target', 'active')
+                  ->orWhere(function ($q2) use ($tenantId) {
+                      $q2->where('target', 'specific')
+                         ->whereJsonContains('tenant_ids', $tenantId);
+                  });
+            });
+        } else {
+            // For non-tenant users (admins), show all active announcements
+            $query->where('target', 'all');
+        }
+
+        $announcements = $query->orderBy('created_at', 'desc')
+            ->limit(20)
+            ->get();
+
+        return response()->json([
+            'announcements' => $announcements,
+        ]);
+    }
 }

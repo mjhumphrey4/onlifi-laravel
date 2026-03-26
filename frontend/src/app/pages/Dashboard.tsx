@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, Wallet, RefreshCw } from 'lucide-react';
+import { DollarSign, TrendingUp, Wallet, RefreshCw, Users, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
 import { apiStats, apiTransactions } from '../utils/api';
@@ -23,6 +24,17 @@ interface TxRow {
   origin_site: string;
   voucher_code: string;
   external_ref: string;
+}
+
+interface Client {
+  id: number;
+  mac_address: string;
+  username: string;
+  ip_address: string;
+  total_sessions: number;
+  total_spent: number;
+  last_seen: string;
+  status: string;
 }
 
 const SITE_COLORS: Record<string, string> = {
@@ -50,17 +62,44 @@ export function Dashboard() {
   const { user, isAdmin } = useAuth();
   const [sites, setSites] = useState<Record<string, SiteStat>>({});
   const [txs, setTxs] = useState<TxRow[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  };
+
   const load = useCallback(async () => {
     try {
+      const headers = getAuthHeaders();
+      
+      // Fetch stats and transactions
       const [statsRes, txRes] = await Promise.all([
         apiStats(),
-        apiTransactions({ limit: 10 }),
+        apiTransactions({ limit: 20 }),
       ]);
       setSites(statsRes.sites ?? {});
       setTxs(txRes.transactions ?? []);
+
+      // Fetch clients (top 20)
+      try {
+        const clientsRes = await fetch('/api/clients?limit=20', { headers });
+        if (clientsRes.ok) {
+          const clientsData = await clientsRes.json();
+          setClients(clientsData.data || clientsData.clients || []);
+        }
+      } catch {
+        // Clients endpoint may not exist yet
+        setClients([]);
+      }
+
       setLastUpdated(new Date());
     } catch (e) {
       console.error(e);
@@ -140,52 +179,115 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* Recent transactions */}
-      <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg sm:text-xl text-card-foreground">Recent Transactions</h2>
-          <a href="/transactions" className="text-sm text-primary hover:text-primary/80 transition-colors">
-            View all →
-          </a>
+      {/* Clients and Recent Transactions - Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Clients */}
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold text-card-foreground">Top Clients</h2>
+            </div>
+            <Link to="/clients" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
+              View all <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {clients.length === 0 ? (
+              <div className="py-8 text-center">
+                <Users className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No clients yet</p>
+              </div>
+            ) : (
+              clients.slice(0, 20).map((client, i) => (
+                <div
+                  key={client.id || i}
+                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-semibold text-primary">
+                        {(client.username || client.mac_address || 'U').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-card-foreground">
+                        {client.username || client.mac_address || 'Unknown'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {client.ip_address || 'No IP'} • {client.total_sessions || 0} sessions
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-card-foreground">
+                      {fmt(client.total_spent || 0)}
+                    </p>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs ${
+                      client.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {client.status || 'offline'}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
-        <div className="overflow-x-auto -mx-4 sm:mx-0">
-          <div className="inline-block min-w-full align-middle">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  {['Voucher', 'Phone', 'Amount', 'Site', 'Status', 'Date'].map((h) => (
-                    <th key={h} className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {txs.length === 0 ? (
-                  <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">No transactions found.</td></tr>
-                ) : txs.map((tx, i) => (
-                  <tr key={`${tx.id}-${i}`} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                    <td className="py-3 px-2 sm:px-4 text-xs font-mono whitespace-nowrap">
-                      {tx.voucher_code
-                        ? <span className="text-primary font-semibold tracking-wider">{tx.voucher_code}</span>
-                        : <span className="text-muted-foreground">—</span>}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-card-foreground whitespace-nowrap">{tx.msisdn}</td>
-                    <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-card-foreground whitespace-nowrap font-semibold">
+        {/* Recent Transactions */}
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold text-card-foreground">Recent Transactions</h2>
+            </div>
+            <Link to="/transactions" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
+              View all <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {txs.length === 0 ? (
+              <div className="py-8 text-center">
+                <DollarSign className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No transactions found</p>
+              </div>
+            ) : (
+              txs.slice(0, 20).map((tx, i) => (
+                <div
+                  key={`${tx.id}-${i}`}
+                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      tx.status === 'success' ? 'bg-emerald-500/10' : 
+                      tx.status === 'pending' ? 'bg-yellow-500/10' : 'bg-destructive/10'
+                    }`}>
+                      <DollarSign className={`w-5 h-5 ${
+                        tx.status === 'success' ? 'text-emerald-500' : 
+                        tx.status === 'pending' ? 'text-yellow-500' : 'text-destructive'
+                      }`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-card-foreground">{tx.msisdn}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {tx.voucher_code || 'No voucher'} • {tx.origin_site || 'Unknown'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-card-foreground">
                       {fmt(parseFloat(tx.amount))}
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{tx.origin_site}</td>
-                    <td className="py-3 px-2 sm:px-4 whitespace-nowrap">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs capitalize ${statusStyle(tx.status)}`}>
-                        {tx.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                    </p>
+                    <p className="text-xs text-muted-foreground">
                       {new Date(tx.created_at).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

@@ -5,7 +5,9 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use App\Models\Tenant;
+use App\Models\TenantUser;
 use Illuminate\Support\Facades\Log;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class IdentifyTenant
 {
@@ -16,7 +18,7 @@ class IdentifyTenant
         if (!$tenant) {
             return response()->json([
                 'error' => 'Tenant not identified',
-                'message' => 'Please provide valid API credentials',
+                'message' => 'Please login or provide valid API credentials',
             ], 401);
         }
 
@@ -50,6 +52,19 @@ class IdentifyTenant
 
     protected function resolveTenant(Request $request): ?Tenant
     {
+        // 1. First, try to resolve from authenticated tenant user (Sanctum token)
+        $bearerToken = $request->bearerToken();
+        if ($bearerToken) {
+            $token = PersonalAccessToken::findToken($bearerToken);
+            if ($token && $token->tokenable_type === TenantUser::class) {
+                $tenantUser = $token->tokenable;
+                if ($tenantUser && $tenantUser->tenant) {
+                    return $tenantUser->tenant;
+                }
+            }
+        }
+
+        // 2. Try API key/secret authentication
         $apiKey = $request->header('X-API-Key') ?? $request->query('api_key');
         $apiSecret = $request->header('X-API-Secret') ?? $request->query('api_secret');
 
@@ -61,10 +76,11 @@ class IdentifyTenant
             }
         }
 
+        // 3. Try domain/subdomain resolution
         $domain = $request->getHost();
         $subdomain = explode('.', $domain)[0];
 
-        if ($subdomain && $subdomain !== 'www') {
+        if ($subdomain && $subdomain !== 'www' && $subdomain !== 'localhost') {
             $tenant = Tenant::where('slug', $subdomain)
                 ->orWhere('domain', $domain)
                 ->first();

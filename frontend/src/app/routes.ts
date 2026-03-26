@@ -11,6 +11,7 @@ import { Clients } from './pages/Clients';
 import { Devices } from './pages/Devices';
 import { Vouchers } from './pages/Vouchers';
 import { VoucherTypes } from './pages/VoucherTypes';
+import { VoucherTemplates } from './pages/VoucherTemplates';
 import { Settings } from './pages/Settings';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { path: 'devices', Component: Devices },
       { path: 'vouchers', Component: Vouchers },
       { path: 'voucher-types', Component: VoucherTypes },
+      { path: 'voucher-templates', Component: VoucherTemplates },
       { path: 'settings', Component: Settings },
       { path: 'users', Component: Users },
     ],

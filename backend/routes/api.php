@@ -90,6 +90,11 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/change-password', [TenantAuthController::class, 'changePassword']);
 });
 
+// Active announcements for all authenticated users
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/announcements/active', [AnnouncementController::class, 'activeAnnouncements']);
+});
+
 Route::middleware(['tenant'])->group(function () {
     // Tenant Dashboard
     Route::prefix('dashboard')->group(function () {
@@ -117,6 +122,17 @@ Route::middleware(['tenant'])->group(function () {
         Route::post('/generate-batch', [VoucherController::class, 'generateBatch']);
         Route::post('/validate', [VoucherController::class, 'validate']);
         Route::get('/{id}', [VoucherController::class, 'show']);
+    });
+
+    // Voucher Templates
+    Route::prefix('voucher-templates')->group(function () {
+        Route::get('/', [\App\Http\Controllers\VoucherTemplateController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\VoucherTemplateController::class, 'store']);
+        Route::get('/default', [\App\Http\Controllers\VoucherTemplateController::class, 'getDefault']);
+        Route::get('/{id}', [\App\Http\Controllers\VoucherTemplateController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\VoucherTemplateController::class, 'update']);
+        Route::delete('/{id}', [\App\Http\Controllers\VoucherTemplateController::class, 'destroy']);
+        Route::post('/{id}/set-default', [\App\Http\Controllers\VoucherTemplateController::class, 'setDefault']);
     });
 
     Route::prefix('routers')->group(function () {
