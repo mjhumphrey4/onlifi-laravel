@@ -96,6 +96,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 Route::middleware(['tenant'])->group(function () {
+    // Clients
+    Route::prefix('clients')->group(function () {
+        Route::get('/', [\App\Http\Controllers\ClientController::class, 'index']);
+        Route::get('/refresh', [\App\Http\Controllers\ClientController::class, 'refresh']);
+        Route::get('/{id}', [\App\Http\Controllers\ClientController::class, 'show']);
+    });
+
     // Tenant Dashboard
     Route::prefix('dashboard')->group(function () {
         Route::get('/stats', [TenantDashboardController::class, 'getRealtimeStats']);

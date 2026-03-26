@@ -1,7 +1,7 @@
 import { createBrowserRouter } from 'react-router';
 import { Layout } from './components/Layout';
 import { AdminLayout } from './components/AdminLayout';
-import { Dashboard } from './pages/DashboardEnhanced';
+import { Dashboard } from './pages/Dashboard';
 import { Transactions } from './pages/Transactions';
 import { Withdrawals } from './pages/Withdrawals';
 import { AnalyzePerformance } from './pages/AnalyzePerformance';

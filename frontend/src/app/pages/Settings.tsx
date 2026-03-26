@@ -14,13 +14,28 @@ export function Settings() {
     generateApiToken();
   }, []);
 
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  };
+
   const loadRouters = async () => {
     try {
-      const response = await fetch('/api/mikrotik_api.php?action=routers');
-      const data = await response.json();
-      if (data.routers && data.routers.length > 0) {
-        setRouters(data.routers);
-        setSelectedRouter(data.routers[0].name);
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/routers', { headers });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const routerList = data.routers || data.data || data || [];
+        if (routerList.length > 0) {
+          setRouters(routerList);
+          setSelectedRouter(routerList[0].name);
+        }
       }
     } catch (error) {
       console.error('Failed to load routers:', error);

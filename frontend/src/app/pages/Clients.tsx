@@ -25,17 +25,27 @@ export function Clients() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  };
+
   const loadClients = async (refresh = false) => {
     try {
       if (refresh) setRefreshing(true);
       else setLoading(true);
 
-      const endpoint = refresh ? '/api/mikrotik_api.php?action=clients_refresh' : '/api/mikrotik_api.php?action=clients';
-      const response = await fetch(endpoint);
-      const data = await response.json();
-
-      if (data.clients) {
-        setClients(data.clients);
+      const headers = getAuthHeaders();
+      const response = await fetch('/api/clients', { headers });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setClients(data.clients || data.data || []);
         setLastUpdated(new Date());
       }
     } catch (error) {
