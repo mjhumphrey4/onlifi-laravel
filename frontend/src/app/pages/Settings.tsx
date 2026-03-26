@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { Download, Server, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
+// API base URL for telemetry endpoint
+const API_BASE_URL = 'http://192.168.0.180:8000';
+
 export function Settings() {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
@@ -55,7 +58,7 @@ export function Settings() {
 # API Token: ${apiToken || 'GENERATING...'}
 
 #---------- CONFIGURATION ----------
-:local dashboardUrl "${window.location.origin}/api/telemetry"
+:local dashboardUrl "${API_BASE_URL}/api/telemetry"
 :local routerName "${selectedRouter || '[system identity get name]'}"
 :local apiToken "${apiToken}"
 :local schedulerName "onlifi-telemetry-scheduler"

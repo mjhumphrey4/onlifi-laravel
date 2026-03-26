@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, RefreshCw, Users, ArrowRight, Server, Wifi, Activity } from 'lucide-react';
+import { DollarSign, TrendingUp, RefreshCw, Users, ArrowRight, Server, Wifi, Activity, Cpu, HardDrive, ArrowUp, ArrowDown } from 'lucide-react';
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
@@ -31,6 +31,10 @@ interface DeviceStats {
   online_routers: number;
   total_clients: number;
   active_connections: number;
+  avg_cpu: number;
+  avg_memory: number;
+  bandwidth_up: number;
+  bandwidth_down: number;
 }
 
 interface Client {
@@ -72,7 +76,7 @@ export function Dashboard() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [deviceStats, setDeviceStats] = useState<DeviceStats>({ total_routers: 0, online_routers: 0, total_clients: 0, active_connections: 0 });
+  const [deviceStats, setDeviceStats] = useState<DeviceStats>({ total_routers: 0, online_routers: 0, total_clients: 0, active_connections: 0, avg_cpu: 0, avg_memory: 0, bandwidth_up: 0, bandwidth_down: 0 });
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
@@ -119,11 +123,25 @@ export function Dashboard() {
             return diff < 600000; // 10 minutes
           });
           const totalConnections = routers.reduce((sum: number, r: any) => sum + (r.last_active_connections || 0), 0);
+          // Calculate averages from router telemetry
+          const avgCpu = routers.length > 0 
+            ? routers.reduce((sum: number, r: any) => sum + (r.last_cpu_load || 0), 0) / routers.length 
+            : 0;
+          const avgMemory = routers.length > 0 
+            ? routers.reduce((sum: number, r: any) => sum + (r.last_memory_percent || 0), 0) / routers.length 
+            : 0;
+          const totalBwUp = routers.reduce((sum: number, r: any) => sum + (r.last_bandwidth_up || 0), 0);
+          const totalBwDown = routers.reduce((sum: number, r: any) => sum + (r.last_bandwidth_down || 0), 0);
+          
           setDeviceStats({
             total_routers: routers.length,
             online_routers: onlineRouters.length,
             total_clients: clients.length,
             active_connections: totalConnections,
+            avg_cpu: Math.round(avgCpu),
+            avg_memory: Math.round(avgMemory),
+            bandwidth_up: totalBwUp,
+            bandwidth_down: totalBwDown,
           });
         }
       } catch {
@@ -169,45 +187,48 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Device Stats Widget */}
-      <div className="bg-card border border-border rounded-lg p-4 mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <Server className="w-5 h-5 text-primary" />
-          <h2 className="text-sm font-semibold text-card-foreground">Network Status</h2>
+      {/* Network Status - Compact Widget */}
+      <div className="bg-card border border-border rounded-lg p-3 mb-6">
+        <div className="flex items-center flex-wrap gap-x-6 gap-y-2">
+          <div className="flex items-center gap-2">
+            <Server className="w-4 h-4 text-primary" />
+            <span className="text-xs text-muted-foreground">Routers:</span>
+            <span className="text-sm font-semibold text-emerald-500">{deviceStats.online_routers}</span>
+            <span className="text-xs text-muted-foreground">/ {deviceStats.total_routers}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Cpu className="w-4 h-4 text-orange-500" />
+            <span className="text-xs text-muted-foreground">CPU:</span>
+            <span className={`text-sm font-semibold ${deviceStats.avg_cpu > 80 ? 'text-red-500' : deviceStats.avg_cpu > 50 ? 'text-yellow-500' : 'text-emerald-500'}`}>
+              {deviceStats.avg_cpu}%
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <HardDrive className="w-4 h-4 text-blue-500" />
+            <span className="text-xs text-muted-foreground">Memory:</span>
+            <span className={`text-sm font-semibold ${deviceStats.avg_memory > 90 ? 'text-red-500' : deviceStats.avg_memory > 70 ? 'text-yellow-500' : 'text-emerald-500'}`}>
+              {deviceStats.avg_memory}%
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <ArrowDown className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs text-muted-foreground">Down:</span>
+            <span className="text-sm font-semibold text-card-foreground">{deviceStats.bandwidth_down} Kbps</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <ArrowUp className="w-4 h-4 text-blue-500" />
+            <span className="text-xs text-muted-foreground">Up:</span>
+            <span className="text-sm font-semibold text-card-foreground">{deviceStats.bandwidth_up} Kbps</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-purple-500" />
+            <span className="text-xs text-muted-foreground">Connections:</span>
+            <span className="text-sm font-semibold text-purple-500">{deviceStats.active_connections}</span>
+          </div>
           <span className="ml-auto flex items-center gap-1 text-xs text-emerald-500">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
             Live
           </span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-muted/30 rounded-lg p-3 text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Server className="w-4 h-4 text-primary" />
-              <span className="text-xl font-bold text-card-foreground">{deviceStats.total_routers}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Total Routers</p>
-          </div>
-          <div className="bg-emerald-500/10 rounded-lg p-3 text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Wifi className="w-4 h-4 text-emerald-500" />
-              <span className="text-xl font-bold text-emerald-500">{deviceStats.online_routers}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Online</p>
-          </div>
-          <div className="bg-blue-500/10 rounded-lg p-3 text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Users className="w-4 h-4 text-blue-500" />
-              <span className="text-xl font-bold text-blue-500">{deviceStats.total_clients}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Clients</p>
-          </div>
-          <div className="bg-purple-500/10 rounded-lg p-3 text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <Activity className="w-4 h-4 text-purple-500" />
-              <span className="text-xl font-bold text-purple-500">{deviceStats.active_connections}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Active Connections</p>
-          </div>
         </div>
       </div>
 

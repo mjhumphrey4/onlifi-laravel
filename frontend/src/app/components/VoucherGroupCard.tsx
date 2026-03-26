@@ -1,4 +1,4 @@
-import { Package, Clock, DollarSign, Users, TrendingUp, Download, Eye } from 'lucide-react';
+import { Package, Clock, DollarSign, Users, TrendingUp, Download, Eye, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { VoucherListDialog } from './VoucherListDialog';
 
@@ -21,9 +21,11 @@ interface VoucherGroup {
 interface VoucherGroupCardProps {
   group: VoucherGroup;
   onSelect?: () => void;
+  onDelete?: (id: number) => void;
+  isDeleting?: boolean;
 }
 
-export function VoucherGroupCard({ group }: VoucherGroupCardProps) {
+export function VoucherGroupCard({ group, onDelete, isDeleting }: VoucherGroupCardProps) {
   const [showVoucherList, setShowVoucherList] = useState(false);
 
   const usagePercent = group.total_vouchers > 0 
@@ -178,6 +180,17 @@ export function VoucherGroupCard({ group }: VoucherGroupCardProps) {
           <Eye className="w-4 h-4" />
           View All
         </button>
+
+        {onDelete && (
+          <button
+            onClick={() => onDelete(group.id)}
+            disabled={isDeleting}
+            className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-destructive/10 hover:bg-destructive hover:text-white text-destructive rounded-lg transition-colors disabled:opacity-50"
+            title="Delete group"
+          >
+            <Trash2 className={`w-4 h-4 ${isDeleting ? 'animate-spin' : ''}`} />
+          </button>
+        )}
       </div>
 
       {/* Voucher List Dialog */}
