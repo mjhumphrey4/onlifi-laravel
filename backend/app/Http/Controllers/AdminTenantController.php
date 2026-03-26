@@ -35,32 +35,41 @@ class AdminTenantController extends Controller
             ], 400);
         }
 
+        $admin = $request->user();
+        $dbProvisioningWarning = null;
+
+        // Try to provision database first, before marking as approved
         try {
-            $admin = $request->user();
-
-            $tenant->update([
-                'status' => 'approved',
-                'is_active' => true,
-                'approved_at' => now(),
-                'approved_by' => $admin->id,
-                'trial_ends_at' => now()->addDays(
-                    \App\Models\SystemSetting::get('default_trial_days', 30)
-                ),
-            ]);
-
             $tenant->provisionDatabase();
             $tenant->runMigrations();
-
-            return response()->json([
-                'message' => 'Tenant approved successfully',
-                'tenant' => $tenant->fresh(),
-            ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Approval failed',
-                'message' => $e->getMessage(),
-            ], 500);
+            // Log the error but continue with approval
+            \Log::warning("Database provisioning failed for tenant {$tenant->id}: " . $e->getMessage());
+            $dbProvisioningWarning = "Database provisioning failed: " . $e->getMessage() . 
+                ". The tenant has been approved but may need manual database setup.";
         }
+
+        // Now mark as approved
+        $tenant->update([
+            'status' => 'approved',
+            'is_active' => true,
+            'approved_at' => now(),
+            'approved_by' => $admin->id,
+            'trial_ends_at' => now()->addDays(
+                \App\Models\SystemSetting::get('default_trial_days', 30)
+            ),
+        ]);
+
+        $response = [
+            'message' => 'Tenant approved successfully',
+            'tenant' => $tenant->fresh()->load('users'),
+        ];
+
+        if ($dbProvisioningWarning) {
+            $response['warning'] = $dbProvisioningWarning;
+        }
+
+        return response()->json($response);
     }
 
     public function reject(Request $request, Tenant $tenant)

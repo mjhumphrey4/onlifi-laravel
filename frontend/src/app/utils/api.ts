@@ -119,6 +119,16 @@ export const getPlatformFeeRecords = () => get('/super-admin/platform-fees/recor
 export const getTenantBalances = () => get('/super-admin/platform-fees/tenant-balances');
 
 // ============ TENANT AUTH ============
+export const tenantLogin = (email: string, password: string) =>
+  post('/tenant/login', { email, password });
+
+export const tenantLogout = () => post('/tenant/logout');
+
+export const tenantMe = () => get('/tenant/me');
+
+export const tenantChangePassword = (current_password: string, new_password: string, new_password_confirmation: string) =>
+  post('/tenant/change-password', { current_password, new_password, new_password_confirmation });
+
 export const tenantSignup = (data: Record<string, unknown>) => post('/tenant/signup', data);
 
 // ============ TENANT DASHBOARD (requires tenant middleware) ============

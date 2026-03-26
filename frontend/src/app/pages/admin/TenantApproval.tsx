@@ -88,7 +88,15 @@ export default function TenantApproval() {
         throw new Error(data.message || 'Approval failed');
       }
 
-      setMessage({ type: 'success', text: `${tenant.name} has been approved successfully!` });
+      // Check for warnings (e.g., database provisioning issues)
+      if (data.warning) {
+        setMessage({ 
+          type: 'success', 
+          text: `${tenant.name} has been approved. Warning: ${data.warning}` 
+        });
+      } else {
+        setMessage({ type: 'success', text: `${tenant.name} has been approved successfully!` });
+      }
       fetchPendingTenants();
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Failed to approve tenant' });

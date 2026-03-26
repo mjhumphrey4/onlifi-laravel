@@ -15,8 +15,12 @@ use App\Http\Controllers\SystemSettingController;
 use App\Http\Controllers\TenantDashboardController;
 use App\Http\Controllers\PlatformFeeController;
 use App\Http\Controllers\SalesPointController;
+use App\Http\Controllers\TenantAuthController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
+
+// Tenant Authentication Routes
+Route::post('/tenant/login', [TenantAuthController::class, 'login']);
 
 Route::get('/system/settings/public', [SystemSettingController::class, 'publicSettings']);
 
@@ -77,6 +81,13 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
         Route::get('/records', [PlatformFeeController::class, 'getFeeRecords']);
         Route::get('/tenant-balances', [PlatformFeeController::class, 'getTenantBalances']);
     });
+});
+
+// Tenant authenticated routes
+Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
+    Route::post('/logout', [TenantAuthController::class, 'logout']);
+    Route::get('/me', [TenantAuthController::class, 'me']);
+    Route::post('/change-password', [TenantAuthController::class, 'changePassword']);
 });
 
 Route::middleware(['tenant'])->group(function () {

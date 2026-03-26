@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { adminMe, adminLogin, adminLogout } from '../utils/api';
+import { adminMe, adminLogin, adminLogout, tenantLogin, tenantLogout, tenantMe } from '../utils/api';
 
 export interface AuthUser {
   id: number;
@@ -15,6 +15,7 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginAsTenant: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   isAdmin: () => boolean;
   isTenant: () => boolean;
@@ -32,9 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkAuth = async () => {
-    const token = localStorage.getItem('admin_token') || localStorage.getItem('tenant_token');
+    const adminToken = localStorage.getItem('admin_token');
+    const tenantToken = localStorage.getItem('tenant_token');
     
-    if (!token) {
+    if (!adminToken && !tenantToken) {
       setUser(null);
       setLoading(false);
       return;
@@ -42,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       // Try admin auth first
-      if (localStorage.getItem('admin_token')) {
+      if (adminToken) {
         const data = await adminMe();
         setUser({
           id: data.admin.id,
@@ -51,8 +53,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email: data.admin.email,
           role: 'super_admin',
         });
+      } else if (tenantToken) {
+        // Try tenant auth
+        const data = await tenantMe();
+        setUser({
+          id: data.user.id,
+          username: data.user.email,
+          name: data.user.name,
+          email: data.user.email,
+          role: 'tenant',
+          tenant_id: data.user.tenant_id,
+          tenant_name: data.user.tenant_name,
+        });
       }
-      // TODO: Add tenant auth check when tenant login is implemented
     } catch (error) {
       // Token invalid, clear it
       localStorage.removeItem('admin_token');
@@ -64,30 +77,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const data = await adminLogin(email, password);
+    // Try tenant login first (most common use case)
+    try {
+      const data = await tenantLogin(email, password);
+      localStorage.setItem('tenant_token', data.token);
+      localStorage.setItem('tenant_user', JSON.stringify(data.user));
+      
+      setUser({
+        id: data.user.id,
+        username: data.user.email,
+        name: data.user.name,
+        email: data.user.email,
+        role: 'tenant',
+        tenant_id: data.user.tenant_id,
+        tenant_name: data.user.tenant_name,
+      });
+    } catch (tenantError) {
+      // If tenant login fails, try admin login
+      try {
+        const data = await adminLogin(email, password);
+        localStorage.setItem('admin_token', data.token);
+        localStorage.setItem('admin_user', JSON.stringify(data.admin));
 
-    // Store token
-    localStorage.setItem('admin_token', data.token);
-    localStorage.setItem('admin_user', JSON.stringify(data.admin));
+        setUser({
+          id: data.admin.id,
+          username: data.admin.email,
+          name: data.admin.name,
+          email: data.admin.email,
+          role: 'super_admin',
+        });
+      } catch (adminError) {
+        // Both failed, throw the tenant error (more relevant for main login)
+        throw tenantError;
+      }
+    }
+  };
 
+  const loginAsTenant = async (email: string, password: string) => {
+    const data = await tenantLogin(email, password);
+    localStorage.setItem('tenant_token', data.token);
+    localStorage.setItem('tenant_user', JSON.stringify(data.user));
+    
     setUser({
-      id: data.admin.id,
-      username: data.admin.email,
-      name: data.admin.name,
-      email: data.admin.email,
-      role: 'super_admin',
+      id: data.user.id,
+      username: data.user.email,
+      name: data.user.name,
+      email: data.user.email,
+      role: 'tenant',
+      tenant_id: data.user.tenant_id,
+      tenant_name: data.user.tenant_name,
     });
   };
 
   const logout = async () => {
     try {
-      await adminLogout();
+      if (localStorage.getItem('admin_token')) {
+        await adminLogout();
+      } else if (localStorage.getItem('tenant_token')) {
+        await tenantLogout();
+      }
     } catch (error) {
       // Ignore logout errors
     }
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
     localStorage.removeItem('tenant_token');
+    localStorage.removeItem('tenant_user');
     setUser(null);
   };
 
@@ -99,12 +154,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user?.role === 'super_admin') {
       return ['Default Site'];
     }
-    // TODO: Fetch actual sites from user data when tenant auth is implemented
     return user?.tenant_name ? [user.tenant_name] : ['Default Site'];
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, isTenant, userSites }}>
+    <AuthContext.Provider value={{ user, loading, login, loginAsTenant, logout, isAdmin, isTenant, userSites }}>
       {children}
     </AuthContext.Provider>
   );

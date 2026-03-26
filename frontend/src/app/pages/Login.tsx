@@ -18,7 +18,13 @@ export function Login() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      navigate('/admin/dashboard');
+      // Check if logged in as admin or tenant and redirect accordingly
+      const adminToken = localStorage.getItem('admin_token');
+      if (adminToken) {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/'); // Tenant dashboard
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
