@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('router_telemetry', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('router_id')->constrained('mikrotik_routers')->cascadeOnDelete();
-            $table->foreignId('site_id')->constrained('sites')->cascadeOnDelete();
+            $table->unsignedBigInteger('router_id')->nullable();
+            $table->unsignedBigInteger('site_id')->nullable();
             $table->string('router_identity', 100);
             $table->string('router_version', 50)->nullable();
             $table->string('router_board', 100)->nullable();
@@ -30,6 +30,19 @@ return new class extends Migration
             $table->index(['router_id', 'created_at']);
             $table->index(['site_id', 'created_at']);
         });
+
+        // Add foreign keys only if the referenced tables exist
+        if (Schema::hasTable('mikrotik_routers')) {
+            Schema::table('router_telemetry', function (Blueprint $table) {
+                $table->foreign('router_id')->references('id')->on('mikrotik_routers')->cascadeOnDelete();
+            });
+        }
+
+        if (Schema::hasTable('sites')) {
+            Schema::table('router_telemetry', function (Blueprint $table) {
+                $table->foreign('site_id')->references('id')->on('sites')->cascadeOnDelete();
+            });
+        }
     }
 
     public function down(): void
