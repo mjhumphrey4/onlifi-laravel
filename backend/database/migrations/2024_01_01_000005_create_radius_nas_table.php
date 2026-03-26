@@ -17,6 +17,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::connection('central')->hasTable('nas')) {
+            return;
+        }
+        
         Schema::connection('central')->create('nas', function (Blueprint $table) {
             $table->id();
             $table->string('nasname', 128);  // Can be IP or hostname (for FreeRADIUS compatibility)

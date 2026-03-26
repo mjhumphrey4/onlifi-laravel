@@ -19,6 +19,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::connection('central')->hasTable('platform_fees')) {
+            return;
+        }
+        
         Schema::connection('central')->create('platform_fees', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained('tenants')->onDelete('cascade');

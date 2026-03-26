@@ -55,7 +55,7 @@ export function Settings() {
 # API Token: ${apiToken || 'GENERATING...'}
 
 #---------- CONFIGURATION ----------
-:local dashboardUrl "http://192.168.0.180/api/telemetry_ingest.php"
+:local dashboardUrl "http://192.168.0.180/api/telemetry"
 :local apiToken "${apiToken}"
 :local schedulerName "onlifi-telemetry-scheduler"
 

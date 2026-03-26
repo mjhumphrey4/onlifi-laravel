@@ -80,8 +80,17 @@ class Tenant extends Model
 
     public function createDatabase()
     {
-        // Use the central/admin connection which should have CREATE DATABASE privileges
-        // This connection should be configured with root or admin MySQL credentials
+        // Option 1: Try to use a separate database per tenant (requires CREATE DATABASE privileges)
+        // Option 2: Fall back to using the central database (shared database approach)
+        
+        $useSeparateDatabase = config('tenancy.use_separate_databases', false);
+        
+        if (!$useSeparateDatabase) {
+            // Use shared database approach - all tenants use central database
+            return $this->useCentralDatabase();
+        }
+        
+        // Try to create separate database
         $connection = DB::connection('central');
         
         try {
@@ -91,15 +100,26 @@ class Tenant extends Model
             // Create user and grant privileges (skip if using same credentials as central)
             if ($this->database_username !== config('database.connections.central.username')) {
                 $host = $this->database_host === 'localhost' ? 'localhost' : '%';
-                $connection->statement("CREATE USER IF NOT EXISTS '{$this->database_username}'@'{$host}' IDENTIFIED BY '{$this->database_password}'");
+                
+                // Try to create user - may fail if user exists
+                try {
+                    $connection->statement("CREATE USER IF NOT EXISTS '{$this->database_username}'@'{$host}' IDENTIFIED BY '{$this->database_password}'");
+                } catch (\Exception $e) {
+                    // User might already exist, try to alter password instead
+                    try {
+                        $connection->statement("ALTER USER '{$this->database_username}'@'{$host}' IDENTIFIED BY '{$this->database_password}'");
+                    } catch (\Exception $e2) {
+                        \Log::warning("Could not create/alter user: " . $e2->getMessage());
+                    }
+                }
+                
                 $connection->statement("GRANT ALL PRIVILEGES ON `{$this->database_name}`.* TO '{$this->database_username}'@'{$host}'");
                 $connection->statement("FLUSH PRIVILEGES");
             }
         } catch (\Exception $e) {
-            // If central connection doesn't have privileges, log the error with helpful message
-            \Log::error("Database provisioning failed: " . $e->getMessage());
-            \Log::info("Ensure the central database connection has CREATE DATABASE privileges, or create the database manually: {$this->database_name}");
-            throw new \Exception("Database provisioning failed. Please ensure the database user has CREATE DATABASE privileges or create the database '{$this->database_name}' manually.");
+            \Log::warning("Separate database provisioning failed, falling back to shared database: " . $e->getMessage());
+            // Fall back to shared database approach
+            return $this->useCentralDatabase();
         }
     }
 
@@ -110,14 +130,16 @@ class Tenant extends Model
 
     public function useCentralDatabase()
     {
-        // Alternative: Use the central database with table prefixes instead of separate databases
-        // This avoids the need for CREATE DATABASE privileges
+        // Use the central database - all tenants share the same database
+        // This is simpler and doesn't require CREATE DATABASE privileges
         $this->database_name = config('database.connections.central.database');
         $this->database_host = config('database.connections.central.host');
         $this->database_port = config('database.connections.central.port');
         $this->database_username = config('database.connections.central.username');
         $this->database_password = config('database.connections.central.password');
         $this->save();
+        
+        \Log::info("Tenant {$this->name} configured to use shared central database");
     }
 
     public function runMigrations()

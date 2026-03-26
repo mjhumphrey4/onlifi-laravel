@@ -8,9 +8,20 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('transactions')) {
+            // Add tenant_id if missing
+            if (!Schema::hasColumn('transactions', 'tenant_id')) {
+                Schema::table('transactions', function (Blueprint $table) {
+                    $table->unsignedBigInteger('tenant_id')->after('id')->index();
+                });
+            }
+            return;
+        }
+        
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
-            $table->string('external_ref', 100)->unique();
+            $table->unsignedBigInteger('tenant_id')->index();
+            $table->string('external_ref', 100);
             $table->string('transaction_ref', 100)->nullable()->index();
             $table->string('msisdn', 20);
             $table->decimal('amount', 10, 2);

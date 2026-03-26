@@ -8,8 +8,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::connection('tenant')->create('mikrotik_routers', function (Blueprint $table) {
+        if (Schema::hasTable('mikrotik_routers')) {
+            if (!Schema::hasColumn('mikrotik_routers', 'tenant_id')) {
+                Schema::table('mikrotik_routers', function (Blueprint $table) {
+                    $table->unsignedBigInteger('tenant_id')->after('id')->index();
+                });
+            }
+            return;
+        }
+        
+        Schema::create('mikrotik_routers', function (Blueprint $table) {
             $table->id();
+            $table->unsignedBigInteger('tenant_id')->index();
             $table->string('name', 100);
             $table->string('ip_address', 15)->unique();
             $table->integer('api_port')->default(8728);
@@ -24,6 +34,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::connection('tenant')->dropIfExists('mikrotik_routers');
+        Schema::dropIfExists('mikrotik_routers');
     }
 };

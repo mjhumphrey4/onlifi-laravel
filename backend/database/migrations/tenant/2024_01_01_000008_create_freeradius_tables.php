@@ -8,7 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::connection('tenant')->create('radcheck', function (Blueprint $table) {
+        // Skip if tables already exist (shared database approach)
+        if (Schema::hasTable('radcheck')) {
+            return;
+        }
+        
+        Schema::create('radcheck', function (Blueprint $table) {
             $table->id();
             $table->string('username', 64)->index();
             $table->string('attribute', 64);
@@ -17,7 +22,7 @@ return new class extends Migration
             $table->index(['username', 'attribute']);
         });
 
-        Schema::connection('tenant')->create('radreply', function (Blueprint $table) {
+        Schema::create('radreply', function (Blueprint $table) {
             $table->id();
             $table->string('username', 64)->index();
             $table->string('attribute', 64);
@@ -26,7 +31,7 @@ return new class extends Migration
             $table->index(['username', 'attribute']);
         });
 
-        Schema::connection('tenant')->create('radgroupcheck', function (Blueprint $table) {
+        Schema::create('radgroupcheck', function (Blueprint $table) {
             $table->id();
             $table->string('groupname', 64)->index();
             $table->string('attribute', 64);
@@ -34,7 +39,7 @@ return new class extends Migration
             $table->string('value', 253);
         });
 
-        Schema::connection('tenant')->create('radgroupreply', function (Blueprint $table) {
+        Schema::create('radgroupreply', function (Blueprint $table) {
             $table->id();
             $table->string('groupname', 64)->index();
             $table->string('attribute', 64);
@@ -42,13 +47,13 @@ return new class extends Migration
             $table->string('value', 253);
         });
 
-        Schema::connection('tenant')->create('radusergroup', function (Blueprint $table) {
+        Schema::create('radusergroup', function (Blueprint $table) {
             $table->string('username', 64)->index();
             $table->string('groupname', 64);
             $table->integer('priority')->default(1);
         });
 
-        Schema::connection('tenant')->create('radacct', function (Blueprint $table) {
+        Schema::create('radacct', function (Blueprint $table) {
             $table->bigIncrements('radacctid');
             $table->string('acctsessionid', 64)->index();
             $table->string('acctuniqueid', 32)->unique();
@@ -76,7 +81,7 @@ return new class extends Migration
             $table->string('framedipaddress', 15)->index();
         });
 
-        Schema::connection('tenant')->create('radpostauth', function (Blueprint $table) {
+        Schema::create('radpostauth', function (Blueprint $table) {
             $table->id();
             $table->string('username', 64);
             $table->string('pass', 64);
@@ -87,12 +92,12 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::connection('tenant')->dropIfExists('radpostauth');
-        Schema::connection('tenant')->dropIfExists('radacct');
-        Schema::connection('tenant')->dropIfExists('radusergroup');
-        Schema::connection('tenant')->dropIfExists('radgroupreply');
-        Schema::connection('tenant')->dropIfExists('radgroupcheck');
-        Schema::connection('tenant')->dropIfExists('radreply');
-        Schema::connection('tenant')->dropIfExists('radcheck');
+        Schema::dropIfExists('radpostauth');
+        Schema::dropIfExists('radacct');
+        Schema::dropIfExists('radusergroup');
+        Schema::dropIfExists('radgroupreply');
+        Schema::dropIfExists('radgroupcheck');
+        Schema::dropIfExists('radreply');
+        Schema::dropIfExists('radcheck');
     }
 };

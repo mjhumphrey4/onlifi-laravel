@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('voucher_templates')) {
+            return;
+        }
+        
         Schema::create('voucher_templates', function (Blueprint $table) {
             $table->id();
             $table->foreignId('tenant_id')->constrained('tenants')->onDelete('cascade');

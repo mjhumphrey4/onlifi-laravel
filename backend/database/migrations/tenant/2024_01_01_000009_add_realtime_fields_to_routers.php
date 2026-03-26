@@ -8,7 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::connection('tenant')->table('mikrotik_routers', function (Blueprint $table) {
+        if (!Schema::hasTable('mikrotik_routers')) {
+            return;
+        }
+        
+        if (Schema::hasColumn('mikrotik_routers', 'last_cpu_load')) {
+            return;
+        }
+        
+        Schema::table('mikrotik_routers', function (Blueprint $table) {
             $table->decimal('last_cpu_load', 5, 2)->nullable()->after('last_seen');
             $table->integer('last_memory_used_mb')->nullable()->after('last_cpu_load');
             $table->integer('memory_total_mb')->nullable()->after('last_memory_used_mb');
@@ -18,7 +26,11 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::connection('tenant')->table('mikrotik_routers', function (Blueprint $table) {
+        if (!Schema::hasTable('mikrotik_routers')) {
+            return;
+        }
+        
+        Schema::table('mikrotik_routers', function (Blueprint $table) {
             $table->dropColumn([
                 'last_cpu_load',
                 'last_memory_used_mb',
