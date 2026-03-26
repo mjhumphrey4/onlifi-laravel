@@ -33,19 +33,35 @@ interface Announcement {
   is_read?: boolean;
 }
 
-const menuItems = [
+interface MenuItem {
+  path: string;
+  label: string;
+  icon: any;
+  adminOnly: boolean;
+  children?: MenuItem[];
+}
+
+const menuItems: MenuItem[] = [
   { path: '/',               label: 'Dashboard',          icon: LayoutDashboard, adminOnly: false },
   { path: '/clients',        label: 'Clients',            icon: Users, adminOnly: false },
   { path: '/devices',        label: 'Devices',            icon: Server, adminOnly: false },
-  { path: '/vouchers',       label: 'Vouchers',           icon: Ticket, adminOnly: false },
-  { path: '/voucher-types',  label: 'Voucher Types',      icon: Clock, adminOnly: false },
-  { path: '/voucher-templates', label: 'Voucher Templates', icon: Ticket, adminOnly: false },
+  { 
+    path: '/vouchers',       
+    label: 'Manage Vouchers',           
+    icon: Ticket, 
+    adminOnly: false,
+    children: [
+      { path: '/vouchers',       label: 'Vouchers',           icon: Ticket, adminOnly: false },
+      { path: '/voucher-types',  label: 'Voucher Types',      icon: Clock, adminOnly: false },
+      { path: '/voucher-templates', label: 'Templates', icon: Ticket, adminOnly: false },
+      { path: '/voucher-stock',  label: 'Stock',      icon: Package, adminOnly: false },
+      { path: '/import-vouchers', label: 'Import',    icon: Upload, adminOnly: false },
+    ]
+  },
   { path: '/users',          label: 'User Management',    icon: Users, adminOnly: true },
   { path: '/transactions',   label: 'Transactions',       icon: ArrowLeftRight, adminOnly: false },
   { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false },
   { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false },
-  { path: '/voucher-stock',  label: 'Voucher Stock',      icon: Package, adminOnly: false },
-  { path: '/import-vouchers', label: 'Import Vouchers',    icon: Upload, adminOnly: false },
   { path: '/settings',       label: 'Settings',           icon: SettingsIcon, adminOnly: false },
 ];
 
@@ -289,12 +305,58 @@ export function Layout() {
               .filter(item => !item.adminOnly || user?.role === 'super_admin')
               .map((item) => {
                 const Icon = item.icon;
-                const hasSubmenu = false; // Submenus not currently used
+                const hasChildren = item.children && item.children.length > 0;
                 const isExpanded = expandedMenus[item.path] || false;
-                const isActive =
-                  item.path === '/'
+                const isActive = hasChildren
+                  ? item.children!.some(child => location.pathname === child.path || location.pathname.startsWith(child.path + '/'))
+                  : item.path === '/'
                     ? location.pathname === '/'
                     : location.pathname.startsWith(item.path);
+                
+                if (hasChildren) {
+                  return (
+                    <li key={item.path}>
+                      <button
+                        onClick={() => setExpandedMenus(prev => ({ ...prev, [item.path]: !prev[item.path] }))}
+                        className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-5 h-5 flex-shrink-0" />
+                          <span className="text-sm">{item.label}</span>
+                        </div>
+                        <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                      </button>
+                      {isExpanded && (
+                        <ul className="mt-1 ml-4 pl-4 border-l border-sidebar-border space-y-1">
+                          {item.children!.map((child) => {
+                            const ChildIcon = child.icon;
+                            const isChildActive = location.pathname === child.path || location.pathname.startsWith(child.path + '/');
+                            return (
+                              <li key={child.path}>
+                                <Link
+                                  to={child.path}
+                                  onClick={closeMobileMenu}
+                                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm ${
+                                    isChildActive
+                                      ? 'bg-primary text-primary-foreground'
+                                      : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                                  }`}
+                                >
+                                  <ChildIcon className="w-4 h-4 flex-shrink-0" />
+                                  <span>{child.label}</span>
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                }
                 
                 return (
                   <li key={item.path}>

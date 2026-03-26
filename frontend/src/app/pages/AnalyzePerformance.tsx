@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Calendar, RefreshCw, Smartphone, Ticket } from 'lucide-react';
+import { TrendingUp, Calendar, RefreshCw, Smartphone, Ticket, Trophy, Users, Medal } from 'lucide-react';
 import { apiPerformance } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,6 +10,13 @@ interface DayData {
   day_num: number;
   amount: number;
   transactions: number;
+}
+
+interface SalesPointStats {
+  name: string;
+  total_vouchers: number;
+  used: number;
+  revenue: number;
 }
 
 function fmt(n: number) { return 'UGX ' + Math.round(n).toLocaleString(); }
@@ -33,6 +40,7 @@ export function AnalyzePerformance() {
   const [selectedSite, setSelectedSite] = useState(sites[0] ?? '');
   const [data, setData] = useState<DayData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [topSalesPoints, setTopSalesPoints] = useState<SalesPointStats[]>([]);
 
   const load = useCallback(async (site: string, mode: 'week' | 'month') => {
     if (!site) return;
@@ -45,7 +53,28 @@ export function AnalyzePerformance() {
     finally { setLoading(false); }
   }, []);
 
+  const loadSalesPoints = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/vouchers/statistics', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const salesPoints = data.by_sales_point || [];
+        // Sort by revenue descending and take top 5
+        const sorted = [...salesPoints].sort((a: SalesPointStats, b: SalesPointStats) => b.revenue - a.revenue).slice(0, 5);
+        setTopSalesPoints(sorted);
+      }
+    } catch (e) { console.error(e); }
+  }, []);
+
   useEffect(() => { load(selectedSite, viewMode); }, [selectedSite, viewMode, load]);
+  useEffect(() => { loadSalesPoints(); }, [loadSalesPoints]);
 
   const stats = useMemo(() => {
     const total = data.reduce((s, d) => s + d.amount, 0);
@@ -249,6 +278,65 @@ export function AnalyzePerformance() {
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* Top Sales Points Widget */}
+      {topSalesPoints.length > 0 && (
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 bg-yellow-500/10 rounded-lg flex items-center justify-center">
+              <Trophy className="w-5 h-5 text-yellow-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-card-foreground">Top Sales Points</h2>
+              <p className="text-xs text-muted-foreground">Ranked by revenue performance</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {topSalesPoints.map((point, index) => {
+              const maxRevenue = topSalesPoints[0]?.revenue || 1;
+              const percentage = (point.revenue / maxRevenue) * 100;
+              const medalColors = ['text-yellow-500', 'text-slate-400', 'text-orange-600'];
+              const bgColors = ['bg-yellow-500/10', 'bg-slate-400/10', 'bg-orange-600/10'];
+              
+              return (
+                <div key={point.name} className="relative">
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${index < 3 ? bgColors[index] : 'bg-muted'}`}>
+                      {index < 3 ? (
+                        <Medal className={`w-4 h-4 ${medalColors[index]}`} />
+                      ) : (
+                        <span className="text-sm font-bold text-muted-foreground">{index + 1}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="font-medium text-card-foreground truncate">{point.name}</h3>
+                        <span className="text-sm font-bold text-primary ml-2">{fmt(point.revenue)}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Ticket className="w-3 h-3" />
+                          {point.total_vouchers} vouchers
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {point.used} used
+                        </span>
+                      </div>
+                      <div className="mt-2 w-full bg-muted rounded-full h-1.5">
+                        <div 
+                          className="bg-primary h-1.5 rounded-full transition-all"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Calendar grid */}
       <div className="bg-card border border-border rounded-lg p-4 sm:p-6">

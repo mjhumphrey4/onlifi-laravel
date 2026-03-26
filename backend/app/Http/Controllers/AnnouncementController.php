@@ -136,9 +136,16 @@ class AnnouncementController extends Controller
 
     public function activeAnnouncements(Request $request)
     {
-        // Get tenant from authenticated user or request
-        $tenant = app('tenant') ?? null;
-        $tenantId = $tenant ? $tenant->id : null;
+        // Get tenant from authenticated user
+        $user = $request->user();
+        $tenantId = null;
+        
+        // Check if user has a tenant_id (tenant user) or get from tenant context
+        if ($user && isset($user->tenant_id)) {
+            $tenantId = $user->tenant_id;
+        } elseif (app()->bound('tenant') && app('tenant')) {
+            $tenantId = app('tenant')->id;
+        }
 
         $query = Announcement::active();
 
@@ -149,12 +156,13 @@ class AnnouncementController extends Controller
                   ->orWhere('target', 'active')
                   ->orWhere(function ($q2) use ($tenantId) {
                       $q2->where('target', 'specific')
-                         ->whereJsonContains('tenant_ids', $tenantId);
+                         ->whereJsonContains('tenant_ids', (int) $tenantId)
+                         ->orWhereJsonContains('tenant_ids', (string) $tenantId);
                   });
             });
         } else {
             // For non-tenant users (admins), show all active announcements
-            $query->where('target', 'all');
+            // Admins see all announcements regardless of target
         }
 
         $announcements = $query->orderBy('created_at', 'desc')

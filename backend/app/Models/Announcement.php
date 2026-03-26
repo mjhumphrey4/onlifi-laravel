@@ -52,9 +52,13 @@ class Announcement extends Model
     {
         return $query->where(function ($q) use ($tenantId) {
             $q->where('target', 'all')
+                ->orWhere('target', 'active')
                 ->orWhere(function ($subQ) use ($tenantId) {
                     $subQ->where('target', 'specific')
-                        ->whereJsonContains('tenant_ids', $tenantId);
+                        ->where(function ($jsonQ) use ($tenantId) {
+                            $jsonQ->whereJsonContains('tenant_ids', (int) $tenantId)
+                                  ->orWhereJsonContains('tenant_ids', (string) $tenantId);
+                        });
                 });
         });
     }

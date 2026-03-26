@@ -17,6 +17,9 @@ import {
   ChevronRight,
   Key,
   Mail,
+  Database,
+  Copy,
+  Check,
 } from 'lucide-react';
 
 interface Tenant {
@@ -44,7 +47,9 @@ export default function TenantList() {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [showRadiusModal, setShowRadiusModal] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   useEffect(() => {
     fetchTenants();
@@ -134,6 +139,31 @@ export default function TenantList() {
       console.error('Error deleting tenant:', error);
     }
     setActionMenuOpen(null);
+  };
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const getRadiusInfo = (tenant: Tenant) => {
+    const dbName = tenant.database || `tenant_${tenant.slug}`;
+    return {
+      server: '192.168.0.180',
+      port: '3306',
+      database: dbName,
+      table_radcheck: 'radcheck',
+      table_radreply: 'radreply',
+      table_radgroupcheck: 'radgroupcheck',
+      table_radgroupreply: 'radgroupreply',
+      table_radusergroup: 'radusergroup',
+      table_radacct: 'radacct',
+      table_radpostauth: 'radpostauth',
+      nas_table: 'nas',
+      username_field: 'voucher_code',
+      password_field: 'password',
+    };
   };
 
   const handleResetPassword = async (newPassword: string) => {
@@ -311,6 +341,16 @@ export default function TenantList() {
                             >
                               <Key className="w-4 h-4" /> Reset Password
                             </button>
+                            <button
+                              onClick={() => {
+                                setSelectedTenant(tenant);
+                                setShowRadiusModal(true);
+                                setActionMenuOpen(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-indigo-400 hover:bg-slate-600 transition-colors"
+                            >
+                              <Database className="w-4 h-4" /> RADIUS Info
+                            </button>
                             {tenant.is_active ? (
                               <button
                                 onClick={() => handleSuspend(tenant)}
@@ -394,6 +434,20 @@ export default function TenantList() {
             setSelectedTenant(null);
           }}
           onReset={handleResetPassword}
+        />
+      )}
+
+      {/* RADIUS Info Modal */}
+      {showRadiusModal && selectedTenant && (
+        <RadiusInfoModal
+          tenant={selectedTenant}
+          onClose={() => {
+            setShowRadiusModal(false);
+            setSelectedTenant(null);
+          }}
+          radiusInfo={getRadiusInfo(selectedTenant)}
+          copyToClipboard={copyToClipboard}
+          copiedField={copiedField}
         />
       )}
     </div>
@@ -560,6 +614,117 @@ function ResetPasswordModal({ tenant, onClose, onReset }: { tenant: Tenant; onCl
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function RadiusInfoModal({ 
+  tenant, 
+  onClose, 
+  radiusInfo, 
+  copyToClipboard, 
+  copiedField 
+}: { 
+  tenant: Tenant; 
+  onClose: () => void; 
+  radiusInfo: Record<string, string>; 
+  copyToClipboard: (text: string, field: string) => void;
+  copiedField: string | null;
+}) {
+  const CopyButton = ({ value, field }: { value: string; field: string }) => (
+    <button
+      onClick={() => copyToClipboard(value, field)}
+      className="p-1.5 hover:bg-slate-600 rounded transition-colors"
+      title="Copy to clipboard"
+    >
+      {copiedField === field ? (
+        <Check className="w-4 h-4 text-green-400" />
+      ) : (
+        <Copy className="w-4 h-4 text-slate-400" />
+      )}
+    </button>
+  );
+
+  const InfoRow = ({ label, value, field }: { label: string; value: string; field: string }) => (
+    <div className="flex items-center justify-between py-2 border-b border-slate-700 last:border-0">
+      <span className="text-sm text-slate-400">{label}</span>
+      <div className="flex items-center gap-2">
+        <code className="text-sm font-mono bg-slate-700 px-2 py-1 rounded text-indigo-300">{value}</code>
+        <CopyButton value={value} field={field} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-2xl w-full max-w-lg border border-slate-700 max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-slate-700 flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">
+            <Database className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white">RADIUS Configuration</h2>
+            <p className="text-sm text-slate-400">FreeRADIUS settings for {tenant.name}</p>
+          </div>
+        </div>
+        
+        <div className="p-6 overflow-y-auto space-y-6">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
+              Database Connection
+            </h3>
+            <div className="bg-slate-900/50 rounded-xl p-4">
+              <InfoRow label="Server" value={radiusInfo.server} field="server" />
+              <InfoRow label="Port" value={radiusInfo.port} field="port" />
+              <InfoRow label="Database" value={radiusInfo.database} field="database" />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+              RADIUS Tables
+            </h3>
+            <div className="bg-slate-900/50 rounded-xl p-4">
+              <InfoRow label="radcheck" value={radiusInfo.table_radcheck} field="radcheck" />
+              <InfoRow label="radreply" value={radiusInfo.table_radreply} field="radreply" />
+              <InfoRow label="radgroupcheck" value={radiusInfo.table_radgroupcheck} field="radgroupcheck" />
+              <InfoRow label="radgroupreply" value={radiusInfo.table_radgroupreply} field="radgroupreply" />
+              <InfoRow label="radusergroup" value={radiusInfo.table_radusergroup} field="radusergroup" />
+              <InfoRow label="radacct" value={radiusInfo.table_radacct} field="radacct" />
+              <InfoRow label="radpostauth" value={radiusInfo.table_radpostauth} field="radpostauth" />
+              <InfoRow label="NAS Table" value={radiusInfo.nas_table} field="nas" />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+              Authentication Fields
+            </h3>
+            <div className="bg-slate-900/50 rounded-xl p-4">
+              <InfoRow label="Username Field" value={radiusInfo.username_field} field="username" />
+              <InfoRow label="Password Field" value={radiusInfo.password_field} field="password" />
+            </div>
+          </div>
+
+          <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4">
+            <p className="text-sm text-indigo-300">
+              <strong>Note:</strong> Use these settings in your FreeRADIUS <code className="bg-slate-700 px-1 rounded">sql.conf</code> to authenticate users from this tenant's database.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-slate-700">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
