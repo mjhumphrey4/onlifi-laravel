@@ -104,6 +104,9 @@ class Tenant extends Model
             // Save the updated credentials
             $this->save();
             
+            // Configure the tenant connection immediately after creating the database
+            $this->configure();
+            
             return true;
         } catch (\Exception $e) {
             \Log::error("Database provisioning failed for tenant {$this->name}: " . $e->getMessage());
@@ -118,13 +121,18 @@ class Tenant extends Model
 
     public function runMigrations()
     {
+        // Ensure tenant connection is configured
         $this->configure();
+        
+        \Log::info("Running migrations for tenant {$this->name} on database {$this->database_name}");
         
         \Artisan::call('migrate', [
             '--database' => 'tenant',
             '--path' => 'database/migrations/tenant',
             '--force' => true,
         ]);
+        
+        \Log::info("Migrations completed for tenant {$this->name}");
     }
 
     public static function generateApiKey(): string

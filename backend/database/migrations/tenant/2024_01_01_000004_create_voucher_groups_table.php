@@ -10,6 +10,10 @@ return new class extends Migration
     
     public function up(): void
     {
+        if (Schema::connection('tenant')->hasTable('voucher_groups')) {
+            return;
+        }
+        
         Schema::create('voucher_groups', function (Blueprint $table) {
             $table->id();
             $table->string('group_name', 100);

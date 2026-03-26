@@ -10,6 +10,10 @@ return new class extends Migration
     
     public function up(): void
     {
+        if (Schema::connection('tenant')->hasTable('router_telemetry')) {
+            return;
+        }
+        
         Schema::create('router_telemetry', function (Blueprint $table) {
             $table->id();
             $table->foreignId('router_id')->constrained('mikrotik_routers')->cascadeOnDelete();

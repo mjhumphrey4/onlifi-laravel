@@ -10,6 +10,10 @@ return new class extends Migration
     
     public function up(): void
     {
+        if (Schema::connection('tenant')->hasTable('mikrotik_routers')) {
+            return;
+        }
+        
         Schema::create('mikrotik_routers', function (Blueprint $table) {
             $table->id();
             $table->string('name', 100);

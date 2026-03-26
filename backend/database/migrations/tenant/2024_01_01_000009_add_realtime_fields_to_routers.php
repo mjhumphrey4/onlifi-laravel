@@ -10,6 +10,10 @@ return new class extends Migration
     
     public function up(): void
     {
+        if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'last_cpu_load')) {
+            return;
+        }
+        
         Schema::table('mikrotik_routers', function (Blueprint $table) {
             $table->decimal('last_cpu_load', 5, 2)->nullable()->after('last_seen');
             $table->integer('last_memory_used_mb')->nullable()->after('last_cpu_load');

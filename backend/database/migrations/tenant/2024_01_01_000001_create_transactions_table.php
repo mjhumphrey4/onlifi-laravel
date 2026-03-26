@@ -10,6 +10,10 @@ return new class extends Migration
     
     public function up(): void
     {
+        if (Schema::connection('tenant')->hasTable('transactions')) {
+            return;
+        }
+        
         Schema::create('transactions', function (Blueprint $table) {
             $table->id();
             $table->string('external_ref', 100);

@@ -10,6 +10,10 @@ return new class extends Migration
     
     public function up(): void
     {
+        if (Schema::connection('tenant')->hasTable('radcheck')) {
+            return;
+        }
+        
         Schema::create('radcheck', function (Blueprint $table) {
             $table->id();
             $table->string('username', 64)->index();
