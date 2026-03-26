@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router';
-import { Zap, Eye, EyeOff, UserPlus, Shield } from 'lucide-react';
+import { Zap, Eye, EyeOff, UserPlus } from 'lucide-react';
 
 export function Login() {
   const { login } = useAuth();
@@ -113,16 +113,6 @@ export function Login() {
             </Link>
           </div>
 
-          {/* Admin Login Link */}
-          <div className="mt-4 text-center">
-            <Link
-              to="/admin/login"
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Shield className="w-4 h-4" />
-              Super Admin Login
-            </Link>
-          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">

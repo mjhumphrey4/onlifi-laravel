@@ -11,15 +11,14 @@ interface Router {
 }
 
 interface Telemetry {
-  id: number;
   router_id: number;
   router_name: string;
-  ip_address: string;
   cpu_load: number;
   memory_used_mb: number;
   memory_total_mb: number;
-  uptime_seconds: number;
-  recorded_at: string;
+  active_connections: number;
+  last_seen: string | null;
+  is_online: boolean;
 }
 
 export function Devices() {
@@ -50,11 +49,26 @@ export function Devices() {
 
       if (routersRes.ok) {
         const routersData = await routersRes.json();
-        setRouters(Array.isArray(routersData) ? routersData : routersData.data || []);
+        const routersList = Array.isArray(routersData) ? routersData : routersData.data || [];
+        setRouters(routersList);
+        
+        // Fetch telemetry for each router
+        const telemetryPromises = routersList.map(async (router: Router) => {
+          try {
+            const telRes = await fetch(`/api/routers/${router.id}/telemetry/latest`, { headers });
+            if (telRes.ok) {
+              const telData = await telRes.json();
+              return telData;
+            }
+          } catch {
+            // Telemetry not available for this router
+          }
+          return null;
+        });
+        
+        const telemetryResults = await Promise.all(telemetryPromises);
+        setTelemetry(telemetryResults.filter(t => t !== null));
       }
-      
-      // Telemetry data would come from individual router endpoints or a dedicated telemetry endpoint
-      // For now, we'll leave telemetry empty until the backend endpoint is implemented
     } catch (error) {
       console.error('Failed to load devices:', error);
     } finally {
@@ -202,20 +216,24 @@ export function Devices() {
                       </div>
                     </div>
 
-                    {/* Uptime */}
+                    {/* Active Connections */}
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Uptime</span>
+                        <Activity className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Active Connections</span>
                       </div>
                       <span className="text-sm font-semibold text-card-foreground">
-                        {formatUptime(tel.uptime_seconds)}
+                        {tel.active_connections}
                       </span>
                     </div>
 
                     {/* Last Updated */}
                     <div className="text-xs text-muted-foreground text-right">
-                      Updated {new Date(tel.recorded_at).toLocaleString()}
+                      {tel.is_online ? (
+                        <span className="text-emerald-500">● Online</span>
+                      ) : (
+                        <span>Last seen: {tel.last_seen ? new Date(tel.last_seen).toLocaleString() : 'Never'}</span>
+                      )}
                     </div>
                   </div>
                 ) : (

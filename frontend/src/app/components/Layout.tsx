@@ -20,6 +20,7 @@ import {
   Clock,
   Settings as SettingsIcon,
   Bell,
+  Plus,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -59,9 +60,82 @@ export function Layout() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  
-  // Placeholder sites - will be populated dynamically later
-  const availableSites = ['Main Site', 'Branch Office', 'Remote Location'];
+  const [showAddSiteModal, setShowAddSiteModal] = useState(false);
+  const [newSiteName, setNewSiteName] = useState('');
+  const [newSiteLocation, setNewSiteLocation] = useState('');
+  const [savingSite, setSavingSite] = useState(false);
+  const [availableSites, setAvailableSites] = useState<string[]>(['Main Site']);
+
+  // Fetch sites on mount
+  useEffect(() => {
+    const fetchSites = async () => {
+      try {
+        const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+        if (!token) return;
+        
+        const response = await fetch('/api/sites', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const sites = data.sites || data.data || data || [];
+          if (Array.isArray(sites) && sites.length > 0) {
+            setAvailableSites(sites.map((s: any) => s.name || s));
+            if (!sites.find((s: any) => (s.name || s) === selectedSite)) {
+              setSelectedSite(sites[0]?.name || sites[0] || 'Main Site');
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch sites:', error);
+      }
+    };
+
+    fetchSites();
+  }, []);
+
+  const handleAddSite = async () => {
+    if (!newSiteName.trim()) return;
+    
+    setSavingSite(true);
+    try {
+      const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+      const response = await fetch('/api/sites', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newSiteName.trim(),
+          location: newSiteLocation.trim() || null,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const siteName = data.site?.name || newSiteName.trim();
+        setAvailableSites(prev => [...prev, siteName]);
+        setSelectedSite(siteName);
+        setShowAddSiteModal(false);
+        setNewSiteName('');
+        setNewSiteLocation('');
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Failed to create site');
+      }
+    } catch (error) {
+      console.error('Failed to create site:', error);
+      alert('Failed to create site');
+    } finally {
+      setSavingSite(false);
+    }
+  };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -193,6 +267,17 @@ export function Layout() {
                     {site}
                   </button>
                 ))}
+                {/* Add New Site Option */}
+                <button
+                  onClick={() => {
+                    setIsSiteDropdownOpen(false);
+                    setShowAddSiteModal(true);
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm transition-colors text-primary hover:bg-muted border-t border-border flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add New Site
+                </button>
               </div>
             )}
           </div>
@@ -361,6 +446,68 @@ export function Layout() {
 
         <Outlet />
       </main>
+
+      {/* Add New Site Modal */}
+      {showAddSiteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-lg w-full max-w-md">
+            <div className="p-6 border-b border-border">
+              <h2 className="text-xl font-semibold text-card-foreground flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-primary" />
+                Add New Site
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Create a new site to manage separately
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-2">
+                  Site Name *
+                </label>
+                <input
+                  type="text"
+                  value={newSiteName}
+                  onChange={(e) => setNewSiteName(e.target.value)}
+                  placeholder="e.g., Branch Office, Remote Location"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-2">
+                  Location (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={newSiteLocation}
+                  onChange={(e) => setNewSiteLocation(e.target.value)}
+                  placeholder="e.g., 123 Main Street, City"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-border flex gap-3">
+              <button
+                onClick={() => {
+                  setShowAddSiteModal(false);
+                  setNewSiteName('');
+                  setNewSiteLocation('');
+                }}
+                className="flex-1 px-4 py-2 border border-border text-card-foreground rounded-lg hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddSite}
+                disabled={!newSiteName.trim() || savingSite}
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {savingSite ? 'Creating...' : 'Create Site'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -16,9 +16,35 @@ class TenantController extends Controller
         $this->tenantService = $tenantService;
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $tenants = Tenant::with('users')->paginate(20);
+        $query = Tenant::with('users');
+        
+        if ($request->has('status') && $request->status !== 'all') {
+            $query->where('status', $request->status);
+        }
+        
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('slug', 'like', "%{$search}%")
+                  ->orWhere('domain', 'like', "%{$search}%")
+                  ->orWhereHas('users', function ($uq) use ($search) {
+                      $uq->where('email', 'like', "%{$search}%");
+                  });
+            });
+        }
+        
+        $tenants = $query->orderBy('created_at', 'desc')->paginate(20);
+        
+        // Add computed fields for frontend
+        $tenants->getCollection()->transform(function ($tenant) {
+            $tenant->primary_email = $tenant->users->first()?->email;
+            $tenant->database = $tenant->database_name;
+            return $tenant;
+        });
+        
         return response()->json($tenants);
     }
 

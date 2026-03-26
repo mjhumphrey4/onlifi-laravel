@@ -150,6 +150,7 @@ Route::middleware(['tenant'])->group(function () {
         Route::delete('/{id}', [MikrotikController::class, 'destroy']);
         Route::post('/{id}/test-connection', [MikrotikController::class, 'testConnection']);
         Route::get('/{id}/active-users', [MikrotikController::class, 'getActiveUsers']);
+        Route::get('/{id}/telemetry/latest', [MikrotikController::class, 'getRealtimeStats']);
         Route::post('/{id}/collect-telemetry', [MikrotikController::class, 'collectTelemetry']);
         Route::post('/telemetry/ingest', [MikrotikController::class, 'ingestTelemetry']);
     });

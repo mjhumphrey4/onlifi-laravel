@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, Wallet, RefreshCw, Users, ArrowRight } from 'lucide-react';
+import { DollarSign, TrendingUp, Wallet, RefreshCw, Users, ArrowRight, Calendar, Ticket, Clock } from 'lucide-react';
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +24,26 @@ interface TxRow {
   origin_site: string;
   voucher_code: string;
   external_ref: string;
+}
+
+interface TodayStats {
+  mobile_money: {
+    total_transactions: number;
+    successful_transactions: number;
+    failed_transactions: number;
+    total_amount: number;
+    average_amount: number;
+  };
+  vouchers: {
+    total_used: number;
+    total_created: number;
+    revenue: number;
+  };
+  hourly_breakdown: Array<{
+    hour: number;
+    transactions: number;
+    amount: number;
+  }>;
 }
 
 interface Client {
@@ -65,6 +85,8 @@ export function Dashboard() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'today'>('overview');
+  const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
@@ -100,6 +122,44 @@ export function Dashboard() {
         setClients([]);
       }
 
+      // Fetch today's stats
+      try {
+        const todayRes = await fetch('/api/dashboard/today', { headers });
+        if (todayRes.ok) {
+          const todayData = await todayRes.json();
+          setTodayStats(todayData);
+        } else {
+          // Calculate from existing data if endpoint doesn't exist
+          const todayTxs = txRes.transactions?.filter((tx: TxRow) => {
+            const txDate = new Date(tx.created_at);
+            const today = new Date();
+            return txDate.toDateString() === today.toDateString();
+          }) || [];
+          
+          const successTxs = todayTxs.filter((tx: TxRow) => tx.status === 'success');
+          const failedTxs = todayTxs.filter((tx: TxRow) => tx.status === 'failed');
+          const totalAmount = successTxs.reduce((sum: number, tx: TxRow) => sum + parseFloat(tx.amount), 0);
+          
+          setTodayStats({
+            mobile_money: {
+              total_transactions: todayTxs.length,
+              successful_transactions: successTxs.length,
+              failed_transactions: failedTxs.length,
+              total_amount: totalAmount,
+              average_amount: successTxs.length > 0 ? totalAmount / successTxs.length : 0,
+            },
+            vouchers: {
+              total_used: 0,
+              total_created: 0,
+              revenue: 0,
+            },
+            hourly_breakdown: [],
+          });
+        }
+      } catch {
+        setTodayStats(null);
+      }
+
       setLastUpdated(new Date());
     } catch (e) {
       console.error(e);
@@ -132,7 +192,7 @@ export function Dashboard() {
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-2xl sm:text-3xl text-foreground mb-1">Welcome back, {user?.name}!</h1>
-          <p className="text-sm text-muted-foreground">Here's what's happening with your WIFI Network today (Mobile Money Only).</p>
+          <p className="text-sm text-muted-foreground">Here's what's happening with your WIFI Network.</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RefreshCw className="w-3 h-3" />
@@ -140,7 +200,129 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Summary stats */}
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-6 border-b border-border">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'overview'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" />
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab('today')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'today'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          Today
+        </button>
+      </div>
+
+      {activeTab === 'today' && todayStats && (
+        <div className="space-y-6 mb-6">
+          {/* Today's Performance Header */}
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">
+              Today's Performance - {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </h2>
+          </div>
+
+          {/* Mobile Money Stats */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <DollarSign className="w-5 h-5 text-emerald-500" />
+              <h3 className="text-md font-semibold text-card-foreground">Mobile Money</h3>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+              <div className="bg-muted/30 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">{todayStats.mobile_money.total_transactions}</p>
+                <p className="text-xs text-muted-foreground">Total Transactions</p>
+              </div>
+              <div className="bg-emerald-500/10 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-emerald-500">{todayStats.mobile_money.successful_transactions}</p>
+                <p className="text-xs text-muted-foreground">Successful</p>
+              </div>
+              <div className="bg-red-500/10 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-red-500">{todayStats.mobile_money.failed_transactions}</p>
+                <p className="text-xs text-muted-foreground">Failed</p>
+              </div>
+              <div className="bg-primary/10 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-primary">{fmt(todayStats.mobile_money.total_amount)}</p>
+                <p className="text-xs text-muted-foreground">Total Revenue</p>
+              </div>
+              <div className="bg-muted/30 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-card-foreground">{fmt(todayStats.mobile_money.average_amount)}</p>
+                <p className="text-xs text-muted-foreground">Avg. Transaction</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Voucher Stats */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Ticket className="w-5 h-5 text-purple-500" />
+              <h3 className="text-md font-semibold text-card-foreground">Vouchers</h3>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-purple-500/10 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-purple-500">{todayStats.vouchers.total_used}</p>
+                <p className="text-xs text-muted-foreground">Used Today</p>
+              </div>
+              <div className="bg-blue-500/10 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-blue-500">{todayStats.vouchers.total_created}</p>
+                <p className="text-xs text-muted-foreground">Created Today</p>
+              </div>
+              <div className="bg-primary/10 rounded-lg p-4 text-center">
+                <p className="text-2xl font-bold text-primary">{fmt(todayStats.vouchers.revenue)}</p>
+                <p className="text-xs text-muted-foreground">Voucher Revenue</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Success Rate */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-5 h-5 text-primary" />
+              <h3 className="text-md font-semibold text-card-foreground">Success Rate</h3>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Transaction Success Rate</span>
+                  <span className="text-sm font-semibold text-card-foreground">
+                    {todayStats.mobile_money.total_transactions > 0
+                      ? ((todayStats.mobile_money.successful_transactions / todayStats.mobile_money.total_transactions) * 100).toFixed(1)
+                      : 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-3">
+                  <div
+                    className="bg-emerald-500 h-3 rounded-full transition-all"
+                    style={{
+                      width: `${todayStats.mobile_money.total_transactions > 0
+                        ? (todayStats.mobile_money.successful_transactions / todayStats.mobile_money.total_transactions) * 100
+                        : 0}%`
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'overview' && (
+        <>
+          {/* Summary stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <StatsCard title="Today's Earnings"  value={fmt(todayEarnings)}  icon={DollarSign} trend={{ value: 'Live data', isPositive: true }} />
         <StatsCard title="Total Earnings"    value={fmt(totalEarnings)}  icon={TrendingUp} />
@@ -291,6 +473,8 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

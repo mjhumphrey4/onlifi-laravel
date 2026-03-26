@@ -29,6 +29,8 @@ interface Tenant {
   created_at: string;
   trial_ends_at: string | null;
   users?: { id: number; name: string; email: string }[];
+  primary_email?: string;
+  database?: string;
 }
 
 export default function TenantList() {
@@ -232,10 +234,10 @@ export default function TenantList() {
             <thead>
               <tr className="border-b border-slate-700">
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Tenant</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Domain</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Email</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Database</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Status</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Created</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Trial Ends</th>
                 <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Actions</th>
               </tr>
             </thead>
@@ -263,13 +265,20 @@ export default function TenantList() {
                         <p className="text-sm text-slate-400">{tenant.slug}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-slate-300">{tenant.domain || '-'}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-slate-500" />
+                        <span className="text-slate-300 text-sm">{tenant.primary_email || tenant.users?.[0]?.email || '-'}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-xs font-mono bg-slate-700 px-2 py-1 rounded text-slate-300">
+                        {tenant.database || '-'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4">{getStatusBadge(tenant.status, tenant.is_active)}</td>
                     <td className="px-6 py-4 text-slate-300">
                       {new Date(tenant.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-slate-300">
-                      {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleDateString() : '-'}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2 relative">

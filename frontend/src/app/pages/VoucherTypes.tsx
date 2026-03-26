@@ -24,7 +24,8 @@ export function VoucherTypes() {
   const [editingType, setEditingType] = useState<VoucherType | null>(null);
   const [formData, setFormData] = useState({
     type_name: '',
-    duration_hours: 1,
+    duration_value: 1,
+    duration_unit: 'hours' as 'hours' | 'days',
     base_amount: '',
     description: '',
     data_limit_mb: '',
@@ -51,11 +52,18 @@ export function VoucherTypes() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Convert duration to hours for backend/FreeRADIUS
+    const durationHours = formData.duration_unit === 'days' 
+      ? formData.duration_value * 24 
+      : formData.duration_value;
+    
     const payload = {
-      ...formData,
+      type_name: formData.type_name,
+      duration_hours: durationHours,
       base_amount: formData.base_amount ? parseFloat(formData.base_amount) : 0,
+      description: formData.description,
       data_limit_mb: formData.data_limit_mb ? parseInt(formData.data_limit_mb) : null,
-      speed_limit_kbps: formData.speed_limit_mbps ? parseInt(formData.speed_limit_mbps) * 1024 : null,
+      speed_limit_kbps: formData.speed_limit_mbps ? parseFloat(formData.speed_limit_mbps) * 1024 : null,
       ...(editingType && { id: editingType.id })
     };
 
@@ -84,9 +92,12 @@ export function VoucherTypes() {
 
   const handleEdit = (type: VoucherType) => {
     setEditingType(type);
+    // Determine if duration should be shown in days or hours
+    const isDays = type.duration_hours >= 24 && type.duration_hours % 24 === 0;
     setFormData({
       type_name: type.type_name,
-      duration_hours: type.duration_hours,
+      duration_value: isDays ? type.duration_hours / 24 : type.duration_hours,
+      duration_unit: isDays ? 'days' : 'hours',
       base_amount: type.base_amount.toString(),
       description: type.description || '',
       data_limit_mb: type.data_limit_mb?.toString() || '',
@@ -116,7 +127,8 @@ export function VoucherTypes() {
   const resetForm = () => {
     setFormData({
       type_name: '',
-      duration_hours: 1,
+      duration_value: 1,
+      duration_unit: 'hours',
       base_amount: '',
       description: '',
       data_limit_mb: '',
@@ -197,7 +209,11 @@ export function VoucherTypes() {
               <div className="flex items-center gap-2 text-sm">
                 <Clock className="w-4 h-4 text-primary" />
                 <span className="text-muted-foreground">Duration:</span>
-                <span className="font-medium text-card-foreground">{type.duration_hours}h</span>
+                <span className="font-medium text-card-foreground">
+                  {type.duration_hours >= 24 && type.duration_hours % 24 === 0
+                    ? `${type.duration_hours / 24} day${type.duration_hours / 24 > 1 ? 's' : ''}`
+                    : `${type.duration_hours}h`}
+                </span>
               </div>
 
               <div className="flex items-center gap-2 text-sm">
@@ -285,16 +301,31 @@ export function VoucherTypes() {
 
               <div>
                 <label className="block text-sm font-medium text-card-foreground mb-2">
-                  Duration (Hours) *
+                  Duration *
                 </label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={formData.duration_hours}
-                  onChange={(e) => setFormData({ ...formData, duration_hours: parseInt(e.target.value) || 1 })}
-                  className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={formData.duration_value}
+                    onChange={(e) => setFormData({ ...formData, duration_value: parseInt(e.target.value) || 1 })}
+                    className="flex-1 px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <select
+                    value={formData.duration_unit}
+                    onChange={(e) => setFormData({ ...formData, duration_unit: e.target.value as 'hours' | 'days' })}
+                    className="px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                  </select>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.duration_unit === 'days' 
+                    ? `${formData.duration_value * 24} hours total`
+                    : `${formData.duration_value} hours`}
+                </p>
               </div>
 
               <div>
