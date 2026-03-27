@@ -53,6 +53,8 @@ class TelemetryController extends Controller
         try {
             $siteId = $request->query('site_id');
             
+            Log::info('Fetching telemetry stats', ['site_id' => $siteId]);
+            
             // Get latest telemetry for each router
             $query = DB::table('router_telemetry')
                 ->select([
@@ -68,50 +70,90 @@ class TelemetryController extends Controller
             
             $latestIds = $query->pluck('latest_id');
             
+            Log::info('Found telemetry records', ['count' => $latestIds->count(), 'ids' => $latestIds->toArray()]);
+            
+            if ($latestIds->isEmpty()) {
+                // No telemetry data found - return empty but valid response
+                return response()->json([
+                    'total_active_users' => 0,
+                    'total_routers' => 0,
+                    'online_routers' => 0,
+                    'avg_cpu' => 0,
+                    'avg_memory' => 0,
+                    'routers' => [],
+                    'timestamp' => now()->toIso8601String(),
+                    'debug' => 'No telemetry records found'
+                ]);
+            }
+            
             $routers = DB::table('router_telemetry')
                 ->whereIn('id', $latestIds)
                 ->get();
             
             $totalRouters = $routers->count();
             $onlineRouters = $routers->filter(function($r) {
-                return $r->created_at && now()->diffInMinutes($r->created_at) < 10;
+                if (!$r->created_at) return false;
+                try {
+                    $createdAt = \Carbon\Carbon::parse($r->created_at);
+                    return $createdAt->diffInMinutes(now()) < 10;
+                } catch (\Exception $e) {
+                    return false;
+                }
             })->count();
             
-            $totalActiveUsers = $routers->sum('active_connections');
-            $avgCpu = $routers->avg('cpu_load');
-            $avgMemory = $routers->avg(function($r) {
-                return $r->memory_total_mb > 0 ? ($r->memory_used_mb / $r->memory_total_mb) * 100 : 0;
-            });
+            $totalActiveUsers = $routers->sum('active_connections') ?? 0;
+            $avgCpu = $routers->avg('cpu_load') ?? 0;
+            $avgMemory = 0;
+            if ($routers->count() > 0) {
+                $memoryPercentages = $routers->map(function($r) {
+                    return $r->memory_total_mb > 0 ? ($r->memory_used_mb / $r->memory_total_mb) * 100 : 0;
+                });
+                $avgMemory = $memoryPercentages->avg() ?? 0;
+            }
             
             $routerStats = $routers->map(function($r) {
-                $isOnline = $r->created_at && now()->diffInMinutes($r->created_at) < 10;
+                $isOnline = false;
+                if ($r->created_at) {
+                    try {
+                        $createdAt = \Carbon\Carbon::parse($r->created_at);
+                        $isOnline = $createdAt->diffInMinutes(now()) < 10;
+                    } catch (\Exception $e) {
+                        $isOnline = false;
+                    }
+                }
                 return [
                     'id' => $r->id,
-                    'name' => $r->router_identity,
+                    'name' => $r->router_identity ?? 'Unknown',
                     'location' => 'N/A',
-                    'cpu_load' => $r->cpu_load,
-                    'memory_used_mb' => $r->memory_used_mb,
-                    'memory_total_mb' => $r->memory_total_mb,
-                    'active_users' => $r->active_connections,
+                    'cpu_load' => $r->cpu_load ?? 0,
+                    'memory_used_mb' => $r->memory_used_mb ?? 0,
+                    'memory_total_mb' => $r->memory_total_mb ?? 0,
+                    'active_users' => $r->active_connections ?? 0,
                     'last_seen' => $r->created_at,
                     'is_online' => $isOnline,
-                    'uptime_seconds' => $r->uptime_seconds,
-                    'bandwidth_download_kbps' => $r->bandwidth_download_kbps,
-                    'bandwidth_upload_kbps' => $r->bandwidth_upload_kbps,
+                    'uptime_seconds' => $r->uptime_seconds ?? 0,
+                    'bandwidth_download_kbps' => $r->bandwidth_download_kbps ?? 0,
+                    'bandwidth_upload_kbps' => $r->bandwidth_upload_kbps ?? 0,
                 ];
             })->values();
+            
+            Log::info('Telemetry stats prepared', [
+                'total_routers' => $totalRouters,
+                'online_routers' => $onlineRouters,
+                'total_active_users' => $totalActiveUsers,
+            ]);
             
             return response()->json([
                 'total_active_users' => $totalActiveUsers,
                 'total_routers' => $totalRouters,
                 'online_routers' => $onlineRouters,
-                'avg_cpu' => round($avgCpu, 2),
-                'avg_memory' => round($avgMemory, 2),
+                'avg_cpu' => round($avgCpu ?? 0, 2),
+                'avg_memory' => round($avgMemory ?? 0, 2),
                 'routers' => $routerStats,
                 'timestamp' => now()->toIso8601String(),
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to get telemetry stats', ['error' => $e->getMessage()]);
+            Log::error('Failed to get telemetry stats', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return response()->json([
                 'total_active_users' => 0,
                 'total_routers' => 0,

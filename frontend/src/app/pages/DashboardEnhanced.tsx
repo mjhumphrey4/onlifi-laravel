@@ -82,15 +82,30 @@ export function Dashboard() {
   const load = useCallback(async () => {
     try {
       // Fetch telemetry stats from new endpoint
-      const telemetryUrl = selectedSite 
-        ? `/api/telemetry/stats?site_id=${selectedSite.id}`
-        : '/api/telemetry/stats';
+      // Don't filter by site_id to get all telemetry data
+      const telemetryUrl = '/api/telemetry/stats';
+      
+      console.log('Fetching telemetry from:', telemetryUrl);
       
       const [telemetryRes, txRes, voucherRes] = await Promise.all([
-        fetch(telemetryUrl, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(telemetryUrl, { headers: getAuthHeaders() })
+          .then(r => {
+            console.log('Telemetry response status:', r.status);
+            if (!r.ok) {
+              console.error('Telemetry fetch failed:', r.status, r.statusText);
+              return null;
+            }
+            return r.json();
+          })
+          .catch(err => {
+            console.error('Telemetry fetch error:', err);
+            return null;
+          }),
         getTransactions({ page: 1 }).catch(() => ({ data: [] })),
         getVoucherStatistics().catch(() => null),
       ]);
+      
+      console.log('Telemetry response:', telemetryRes);
       
       if (telemetryRes) {
         // Map telemetry response to dashboard stats format
@@ -104,6 +119,13 @@ export function Dashboard() {
           unused_vouchers: 0, // Will come from vouchers
           routers: telemetryRes.routers || [],
         });
+        console.log('Dashboard stats set:', {
+          total_routers: telemetryRes.total_routers,
+          online_routers: telemetryRes.online_routers,
+          routers_count: telemetryRes.routers?.length,
+        });
+      } else {
+        console.warn('No telemetry data received');
       }
       
       setTxs(txRes.data ?? []);
@@ -114,11 +136,11 @@ export function Dashboard() {
       
       setLastUpdated(new Date());
     } catch (e) {
-      console.error(e);
+      console.error('Dashboard load error:', e);
     } finally {
       setLoading(false);
     }
-  }, [selectedSite]);
+  }, []);
 
   useEffect(() => {
     load();

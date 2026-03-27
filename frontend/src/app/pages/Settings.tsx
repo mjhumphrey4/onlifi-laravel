@@ -278,18 +278,28 @@ export function Settings() {
   :put ("Onlifi: CPU: " . \$cpuVal . "%")
   :put ("Onlifi: Users: " . \$hotspotUsers)
   
+  # FIX: Build headers as a variable so \$apiToken is expanded correctly
+  :local authHeader ("Authorization: Bearer " . \$apiToken)
+  :local headers (\$authHeader . ",Content-Type: application/json")
+  
+  :local fetchError ""
   :do {
-    /tool fetch url=\$dashboardUrl mode=http http-method=post http-data=\$reportJson http-header-field="Authorization: Bearer \$apiToken" http-content-type="application/json" keep-result=no
+    /tool fetch url=\$dashboardUrl mode=http http-method=post \\
+      http-data=\$reportJson \\
+      http-header-field=\$headers \\
+      keep-result=no
     :log info "onlifi-telemetry: data posted successfully"
     :put "SUCCESS: Telemetry posted to dashboard"
   } on-error={
-    :log warning "onlifi-telemetry: failed to post data"
-    :put "FAILED: Could not post telemetry data"
+    :set fetchError \$1
+    :log warning ("onlifi-telemetry: FAILED to post - " . \$fetchError)
+    :put ("FAILED: " . \$fetchError)
   }
   :log info ("onlifi-telemetry: CPU=" . \$cpuVal . "% Users=" . \$hotspotUsers . " Identity=" . \$routerIdentity)
 } on-error={
-  :log warning "onlifi-telemetry: collection failed"
-  :put "FAILED: Telemetry collection aborted"
+  :local collectionError \$1
+  :log warning ("onlifi-telemetry: collection failed - " . \$collectionError)
+  :put ("FAILED: Telemetry collection aborted - " . \$collectionError)
 }
 
 #---------- SCHEDULER SETUP ----------
