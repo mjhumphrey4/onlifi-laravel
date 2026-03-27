@@ -166,6 +166,25 @@ Route::middleware(['tenant'])->group(function () {
         Route::post('/telemetry/ingest', [MikrotikController::class, 'ingestTelemetry']);
     });
 
+    // NAS (Network Access Server) management for FreeRADIUS
+    Route::prefix('nas')->group(function () {
+        Route::get('/', [\App\Http\Controllers\NasController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\NasController::class, 'store']);
+        Route::get('/{id}', [\App\Http\Controllers\NasController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\NasController::class, 'update']);
+        Route::delete('/{id}', [\App\Http\Controllers\NasController::class, 'destroy']);
+        Route::post('/{id}/regenerate-identifier', [\App\Http\Controllers\NasController::class, 'regenerateIdentifier']);
+        Route::get('/{id}/mikrotik-script', [\App\Http\Controllers\NasController::class, 'getMikrotikScript']);
+    });
+
+    // RADIUS sync endpoints
+    Route::prefix('radius')->group(function () {
+        Route::post('/sync-vouchers', [\App\Http\Controllers\RadiusController::class, 'syncAllVouchers']);
+        Route::post('/sync-voucher/{id}', [\App\Http\Controllers\RadiusController::class, 'syncVoucher']);
+        Route::post('/cleanup-expired', [\App\Http\Controllers\RadiusController::class, 'cleanupExpired']);
+        Route::get('/sessions/{voucher_code}', [\App\Http\Controllers\RadiusController::class, 'getSessions']);
+    });
+
     Route::prefix('sales-points')->group(function () {
         Route::get('/', [SalesPointController::class, 'index']);
         Route::post('/', [SalesPointController::class, 'store']);

@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\FreeRadiusService;
+use App\Models\Voucher;
+use App\Services\RadiusService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -10,11 +11,82 @@ class RadiusController extends Controller
 {
     private $radiusService;
 
-    public function __construct(FreeRadiusService $radiusService)
+    public function __construct(RadiusService $radiusService)
     {
         $this->radiusService = $radiusService;
     }
 
+    /**
+     * Sync all active vouchers to RADIUS
+     */
+    public function syncAllVouchers(Request $request)
+    {
+        $result = $this->radiusService->syncAllActiveVouchers();
+
+        return response()->json([
+            'message' => 'Voucher sync completed',
+            'total' => $result['total'],
+            'synced' => $result['synced'],
+            'failed' => $result['failed'],
+        ]);
+    }
+
+    /**
+     * Sync a single voucher to RADIUS
+     */
+    public function syncVoucher(Request $request, $id)
+    {
+        $voucher = Voucher::find($id);
+        
+        if (!$voucher) {
+            return response()->json(['error' => 'Voucher not found'], 404);
+        }
+
+        $success = $this->radiusService->syncVoucher($voucher);
+
+        if ($success) {
+            return response()->json([
+                'message' => 'Voucher synced to RADIUS successfully',
+                'voucher_code' => $voucher->voucher_code,
+            ]);
+        }
+
+        return response()->json([
+            'error' => 'Failed to sync voucher to RADIUS',
+        ], 500);
+    }
+
+    /**
+     * Cleanup expired vouchers from RADIUS
+     */
+    public function cleanupExpired(Request $request)
+    {
+        $cleaned = $this->radiusService->cleanupExpiredVouchers();
+
+        return response()->json([
+            'message' => 'Cleanup completed',
+            'cleaned' => $cleaned,
+        ]);
+    }
+
+    /**
+     * Get session history for a voucher
+     */
+    public function getSessions(Request $request, $voucher_code)
+    {
+        $activeSessions = $this->radiusService->getActiveSessions($voucher_code);
+        $sessionHistory = $this->radiusService->getSessionHistory($voucher_code);
+
+        return response()->json([
+            'voucher_code' => $voucher_code,
+            'active_sessions' => $activeSessions,
+            'session_history' => $sessionHistory,
+        ]);
+    }
+
+    /**
+     * Authenticate a voucher (for testing)
+     */
     public function authenticate(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -29,18 +101,21 @@ class RadiusController extends Controller
             ], 400);
         }
 
-        $authenticated = $this->radiusService->checkRadiusAuth(
-            $request->username,
-            $request->password
-        );
+        $voucher = Voucher::where('voucher_code', $request->username)
+            ->where('password', $request->password)
+            ->whereIn('status', ['unused', 'used'])
+            ->first();
 
-        if ($authenticated) {
-            $limits = $this->radiusService->getRadiusSessionLimits($request->username);
-
+        if ($voucher) {
             return response()->json([
                 'authenticated' => true,
                 'username' => $request->username,
-                'session_limits' => $limits,
+                'voucher' => [
+                    'validity_hours' => $voucher->validity_hours,
+                    'data_limit_mb' => $voucher->data_limit_mb,
+                    'speed_limit_kbps' => $voucher->speed_limit_kbps,
+                    'status' => $voucher->status,
+                ],
             ]);
         }
 
@@ -48,61 +123,5 @@ class RadiusController extends Controller
             'authenticated' => false,
             'error' => 'Invalid credentials',
         ], 401);
-    }
-
-    public function syncVoucher(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'voucher_code' => 'required|string',
-            'password' => 'required|string',
-            'validity_hours' => 'required|integer',
-            'data_limit_mb' => 'nullable|integer',
-            'speed_limit_kbps' => 'nullable|integer',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'error' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $success = $this->radiusService->syncVoucherToRadius($request->all());
-
-        if ($success) {
-            return response()->json([
-                'message' => 'Voucher synced to FreeRADIUS successfully',
-            ]);
-        }
-
-        return response()->json([
-            'error' => 'Failed to sync voucher to FreeRADIUS',
-        ], 500);
-    }
-
-    public function removeVoucher(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'username' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'error' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $success = $this->radiusService->removeVoucherFromRadius($request->username);
-
-        if ($success) {
-            return response()->json([
-                'message' => 'Voucher removed from FreeRADIUS successfully',
-            ]);
-        }
-
-        return response()->json([
-            'error' => 'Failed to remove voucher from FreeRADIUS',
-        ], 500);
     }
 }
