@@ -29,6 +29,12 @@ Route::get('/system/settings/public', [SystemSettingController::class, 'publicSe
 // Public telemetry endpoint for routers (authenticated via API token in request)
 Route::post('/telemetry', [TelemetryController::class, 'receive']);
 
+// Telemetry data endpoints (authenticated)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/telemetry/latest', [TelemetryController::class, 'getLatest']);
+    Route::get('/telemetry/stats', [TelemetryController::class, 'getStats']);
+});
+
 Route::prefix('tenant/signup')->group(function () {
     Route::post('/', [TenantController::class, 'store']);
 });

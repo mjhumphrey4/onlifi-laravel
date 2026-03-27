@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { DollarSign, RefreshCw, Users, Server, Ticket, Activity } from 'lucide-react';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
+import { useSite } from '../context/SiteContext';
 import { getTenantDashboardStats, getTransactions, getVoucherStatistics } from '../utils/api';
 
 interface DashboardStats {
@@ -61,22 +62,48 @@ function statusStyle(s: string) {
 
 export function Dashboard() {
   const { user, isAdmin } = useAuth();
+  const { selectedSite } = useSite();
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [voucherStats, setVoucherStats] = useState<VoucherStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  const getAuthHeaders = (): HeadersInit => {
+    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  };
+
   const load = useCallback(async () => {
     try {
-      const [statsRes, txRes, voucherRes] = await Promise.all([
-        getTenantDashboardStats().catch(() => null),
+      // Fetch telemetry stats from new endpoint
+      const telemetryUrl = selectedSite 
+        ? `/api/telemetry/stats?site_id=${selectedSite.id}`
+        : '/api/telemetry/stats';
+      
+      const [telemetryRes, txRes, voucherRes] = await Promise.all([
+        fetch(telemetryUrl, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null),
         getTransactions({ page: 1 }).catch(() => ({ data: [] })),
         getVoucherStatistics().catch(() => null),
       ]);
       
-      if (statsRes) {
-        setDashboardStats(statsRes);
+      if (telemetryRes) {
+        // Map telemetry response to dashboard stats format
+        setDashboardStats({
+          total_active_users: telemetryRes.total_active_users || 0,
+          total_routers: telemetryRes.total_routers || 0,
+          online_routers: telemetryRes.online_routers || 0,
+          today_transactions: 0, // Will come from transactions
+          today_revenue: 0, // Will come from transactions
+          active_vouchers: 0, // Will come from vouchers
+          unused_vouchers: 0, // Will come from vouchers
+          routers: telemetryRes.routers || [],
+        });
       }
       
       setTxs(txRes.data ?? []);
@@ -91,7 +118,7 @@ export function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedSite]);
 
   useEffect(() => {
     load();

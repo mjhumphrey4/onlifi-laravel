@@ -9,6 +9,122 @@ use Illuminate\Support\Facades\DB;
 
 class TelemetryController extends Controller
 {
+    public function getLatest(Request $request)
+    {
+        try {
+            $siteId = $request->query('site_id');
+            
+            // Get latest telemetry for each router
+            $query = DB::table('router_telemetry')
+                ->select([
+                    'router_identity',
+                    'site_id',
+                    DB::raw('MAX(id) as latest_id')
+                ])
+                ->groupBy('router_identity', 'site_id');
+            
+            if ($siteId) {
+                $query->where('site_id', $siteId);
+            }
+            
+            $latestIds = $query->pluck('latest_id');
+            
+            $telemetry = DB::table('router_telemetry')
+                ->whereIn('id', $latestIds)
+                ->orderBy('created_at', 'desc')
+                ->get();
+            
+            return response()->json([
+                'telemetry' => $telemetry,
+                'count' => $telemetry->count(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch telemetry', ['error' => $e->getMessage()]);
+            return response()->json([
+                'telemetry' => [],
+                'count' => 0,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function getStats(Request $request)
+    {
+        try {
+            $siteId = $request->query('site_id');
+            
+            // Get latest telemetry for each router
+            $query = DB::table('router_telemetry')
+                ->select([
+                    'router_identity',
+                    'site_id',
+                    DB::raw('MAX(id) as latest_id')
+                ])
+                ->groupBy('router_identity', 'site_id');
+            
+            if ($siteId) {
+                $query->where('site_id', $siteId);
+            }
+            
+            $latestIds = $query->pluck('latest_id');
+            
+            $routers = DB::table('router_telemetry')
+                ->whereIn('id', $latestIds)
+                ->get();
+            
+            $totalRouters = $routers->count();
+            $onlineRouters = $routers->filter(function($r) {
+                return $r->created_at && now()->diffInMinutes($r->created_at) < 10;
+            })->count();
+            
+            $totalActiveUsers = $routers->sum('active_connections');
+            $avgCpu = $routers->avg('cpu_load');
+            $avgMemory = $routers->avg(function($r) {
+                return $r->memory_total_mb > 0 ? ($r->memory_used_mb / $r->memory_total_mb) * 100 : 0;
+            });
+            
+            $routerStats = $routers->map(function($r) {
+                $isOnline = $r->created_at && now()->diffInMinutes($r->created_at) < 10;
+                return [
+                    'id' => $r->id,
+                    'name' => $r->router_identity,
+                    'location' => 'N/A',
+                    'cpu_load' => $r->cpu_load,
+                    'memory_used_mb' => $r->memory_used_mb,
+                    'memory_total_mb' => $r->memory_total_mb,
+                    'active_users' => $r->active_connections,
+                    'last_seen' => $r->created_at,
+                    'is_online' => $isOnline,
+                    'uptime_seconds' => $r->uptime_seconds,
+                    'bandwidth_download_kbps' => $r->bandwidth_download_kbps,
+                    'bandwidth_upload_kbps' => $r->bandwidth_upload_kbps,
+                ];
+            })->values();
+            
+            return response()->json([
+                'total_active_users' => $totalActiveUsers,
+                'total_routers' => $totalRouters,
+                'online_routers' => $onlineRouters,
+                'avg_cpu' => round($avgCpu, 2),
+                'avg_memory' => round($avgMemory, 2),
+                'routers' => $routerStats,
+                'timestamp' => now()->toIso8601String(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to get telemetry stats', ['error' => $e->getMessage()]);
+            return response()->json([
+                'total_active_users' => 0,
+                'total_routers' => 0,
+                'online_routers' => 0,
+                'avg_cpu' => 0,
+                'avg_memory' => 0,
+                'routers' => [],
+                'timestamp' => now()->toIso8601String(),
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
     public function receive(Request $request)
     {
         // Log the incoming request for debugging
