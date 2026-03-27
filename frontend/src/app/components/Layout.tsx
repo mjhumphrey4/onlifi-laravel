@@ -23,6 +23,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useSite } from '../context/SiteContext';
 
 interface Announcement {
   id: number;
@@ -69,8 +70,8 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading, logout } = useAuth();
+  const { sites, selectedSite, setSelectedSite, refreshSites } = useSite();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [selectedSite, setSelectedSite] = useState('Main Site');
   const [isSiteDropdownOpen, setIsSiteDropdownOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -80,46 +81,6 @@ export function Layout() {
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteDescription, setNewSiteDescription] = useState('');
   const [savingSite, setSavingSite] = useState(false);
-  const [availableSites, setAvailableSites] = useState<{id: number; name: string; slug: string}[]>([]);
-  const [selectedSiteId, setSelectedSiteId] = useState<number | null>(null);
-
-  // Fetch sites on mount
-  useEffect(() => {
-    const fetchSites = async () => {
-      try {
-        const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
-        if (!token) return;
-        
-        const response = await fetch('/api/sites', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const sites = data.sites || [];
-          if (Array.isArray(sites) && sites.length > 0) {
-            setAvailableSites(sites);
-            // Set first site as selected if none selected
-            if (!selectedSiteId) {
-              setSelectedSiteId(sites[0].id);
-              setSelectedSite(sites[0].name);
-            }
-          } else {
-            // No sites exist, keep default
-            setAvailableSites([]);
-            setSelectedSite('Default');
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch sites:', error);
-      }
-    };
-
-    fetchSites();
-  }, []);
 
   const handleAddSite = async () => {
     if (!newSiteName.trim()) return;
@@ -143,9 +104,8 @@ export function Layout() {
       if (response.ok) {
         const data = await response.json();
         const newSite = data.site;
-        setAvailableSites(prev => [...prev, newSite]);
-        setSelectedSiteId(newSite.id);
-        setSelectedSite(newSite.name);
+        setSelectedSite(newSite);
+        await refreshSites();
         setShowAddSiteModal(false);
         setNewSiteName('');
         setNewSiteDescription('');
@@ -267,7 +227,7 @@ export function Layout() {
             >
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <Building2 className="w-4 h-4 text-primary flex-shrink-0" />
-                <span className="text-sm text-sidebar-foreground truncate">{selectedSite}</span>
+                <span className="text-sm text-sidebar-foreground truncate">{selectedSite?.name || 'Select Site'}</span>
               </div>
               <ChevronDown className={`w-4 h-4 text-sidebar-foreground/60 flex-shrink-0 transition-transform ${isSiteDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -275,19 +235,18 @@ export function Layout() {
             {/* Dropdown Menu */}
             {isSiteDropdownOpen && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
-                {availableSites.length === 0 ? (
+                {sites.length === 0 ? (
                   <div className="px-3 py-2 text-sm text-muted-foreground">No sites yet</div>
                 ) : (
-                  availableSites.map((site) => (
+                  sites.map((site) => (
                     <button
                       key={site.id}
                       onClick={() => {
-                        setSelectedSiteId(site.id);
-                        setSelectedSite(site.name);
+                        setSelectedSite(site);
                         setIsSiteDropdownOpen(false);
                       }}
                       className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                        selectedSiteId === site.id
+                        selectedSite?.id === site.id
                           ? 'bg-primary text-primary-foreground'
                           : 'text-card-foreground hover:bg-muted'
                       }`}
