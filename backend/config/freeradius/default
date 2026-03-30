@@ -1,0 +1,120 @@
+# -*- text -*-
+#
+# Onlifi FreeRADIUS Virtual Server Configuration
+# 
+# This is the main virtual server that handles authentication and accounting.
+# It uses the Perl module for multi-tenant database routing.
+#
+# Place this file at: /etc/freeradius/3.0/sites-available/default
+# Then enable it: ln -s ../sites-available/default /etc/freeradius/3.0/sites-enabled/
+#
+
+server default {
+    #
+    # Listen for authentication requests
+    #
+    listen {
+        type = auth
+        ipaddr = *
+        port = 1812
+    }
+    
+    #
+    # Listen for accounting requests
+    #
+    listen {
+        type = acct
+        ipaddr = *
+        port = 1813
+    }
+    
+    #
+    # Pre-processing - normalize request attributes
+    #
+    preprocess {
+        # Standard preprocessing
+    }
+    
+    #
+    # Authorization section
+    # This is where we authenticate users against tenant databases
+    #
+    authorize {
+        #
+        # First, check if NAS-Identifier is present
+        # This is the MikroTik router's System Identity
+        #
+        if (!&NAS-Identifier || &NAS-Identifier == "") {
+            reject
+        }
+        
+        #
+        # Use the Perl module to:
+        # 1. Look up the NAS in central database
+        # 2. Get tenant database credentials
+        # 3. Query tenant database for user credentials
+        # 4. Set reply attributes
+        #
+        perl
+        
+        #
+        # If Perl module found the user, check password
+        #
+        pap
+        chap
+        mschap
+    }
+    
+    #
+    # Authentication section
+    #
+    authenticate {
+        Auth-Type PAP {
+            pap
+        }
+        
+        Auth-Type CHAP {
+            chap
+        }
+        
+        Auth-Type MS-CHAP {
+            mschap
+        }
+    }
+    
+    #
+    # Pre-accounting - normalize accounting attributes
+    #
+    preacct {
+        preprocess
+    }
+    
+    #
+    # Accounting section
+    # Records session data in tenant database
+    #
+    accounting {
+        #
+        # Use Perl module to route to correct tenant database
+        #
+        perl
+    }
+    
+    #
+    # Post-authentication
+    # Logs authentication results
+    #
+    post-auth {
+        #
+        # Log successful authentication
+        #
+        perl
+        
+        #
+        # Handle rejected authentications
+        #
+        Post-Auth-Type REJECT {
+            perl
+        }
+    }
+}

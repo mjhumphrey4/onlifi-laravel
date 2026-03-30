@@ -182,6 +182,47 @@ export function Vouchers() {
         </div>
       </div>
 
+      {/* Sales Point Tabs - Quick Filter */}
+      {stats?.by_sales_point && stats.by_sales_point.length > 0 && (
+        <div className="mb-6 bg-card border border-border rounded-lg p-2">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setSelectedSalesPoint(null)}
+              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                selectedSalesPoint === null
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              All Sales Points
+              <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+                selectedSalesPoint === null ? 'bg-primary-foreground/20' : 'bg-muted-foreground/20'
+              }`}>
+                {groups.length}
+              </span>
+            </button>
+            {stats.by_sales_point.map((point) => (
+              <button
+                key={point.name}
+                onClick={() => setSelectedSalesPoint(selectedSalesPoint === point.name ? null : point.name)}
+                className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  selectedSalesPoint === point.name
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                {point.name}
+                <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+                  selectedSalesPoint === point.name ? 'bg-primary-foreground/20' : 'bg-muted-foreground/20'
+                }`}>
+                  {groups.filter(g => g.sales_point_name === point.name).length}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Stats Overview */}
       {stats?.overall && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

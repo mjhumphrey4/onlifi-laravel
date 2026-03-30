@@ -5,28 +5,32 @@
 # This Perl module enables FreeRADIUS to route authentication requests
 # to the correct tenant database based on the NAS-Identifier attribute.
 #
-# Since routers often have dynamic IPs, we use a unique router_identifier
-# (format: ONLIFI-{tenant_id}-{router_id}-{random}) sent via NAS-Identifier.
+# KEY CONCEPT: MikroTik Identity as Router Identifier
+# - Each MikroTik router's System Identity is used as NAS-Identifier
+# - Each router has its own unique RADIUS secret stored in the `nas` table
+# - The module looks up the router by NAS-Identifier to find the tenant
+# - Then queries the tenant's database for voucher authentication
 #
 # Installation:
-# 1. Copy to /etc/freeradius/3.0/mods-config/perl/
+# 1. Copy to /etc/freeradius/3.0/mods-config/perl/onlifi_multi_tenant.pl
 # 2. Enable perl module: ln -s ../mods-available/perl /etc/freeradius/3.0/mods-enabled/
-# 3. Configure perl module to use this script
-# 4. Add 'perl' to authorize section in sites-available/default
+# 3. Configure perl module: set module = /etc/freeradius/3.0/mods-config/perl/onlifi_multi_tenant.pl
+# 4. Add 'perl' to authorize, accounting, and post-auth sections
 #
 # MikroTik Configuration:
-# /radius set nas-identifier=ONLIFI-X-Y-XXXXXXXX
+# /system identity set name="YOUR-UNIQUE-ROUTER-NAME"
+# /radius add address=RADIUS_SERVER secret="UNIQUE_SECRET_FOR_THIS_ROUTER" service=hotspot
 #
 
 use strict;
 use warnings;
 use DBI;
 
-# Database configuration
-my $central_db_host = "localhost";
-my $central_db_name = "onlifi_central";
-my $central_db_user = "radius_user";
-my $central_db_pass = "your_secure_password";
+# Database configuration - UPDATE THESE VALUES
+my $central_db_host = $ENV{'RADIUS_DB_HOST'} // "localhost";
+my $central_db_name = $ENV{'RADIUS_DB_NAME'} // "onlifi_central";
+my $central_db_user = $ENV{'RADIUS_DB_USER'} // "radius_user";
+my $central_db_pass = $ENV{'RADIUS_DB_PASS'} // "your_secure_password";
 
 # Cache for tenant database connections (keyed by router_identifier)
 my %tenant_cache;
