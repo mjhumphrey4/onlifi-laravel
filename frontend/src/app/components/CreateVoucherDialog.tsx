@@ -34,7 +34,8 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
     quantity: 10,
     sales_point_id: 0,
     code_prefix: '',
-    code_length: 6,
+    code_length: 8,
+    code_format: 'mixed', // numbers, letters, mixed
   });
 
   useEffect(() => {
@@ -98,6 +99,8 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
         data_limit_mb: selectedType.data_limit_mb,
         speed_limit_kbps: selectedType.speed_limit_kbps,
         sales_point_id: formData.sales_point_id || null,
+        code_format: formData.code_format,
+        code_length: formData.code_length,
       };
 
       const response = await fetch('/api/vouchers/generate-batch', {
@@ -282,6 +285,22 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
 
               <div>
                 <label className="block text-sm font-medium text-card-foreground mb-2">
+                  Code Format
+                </label>
+                <select
+                  value={formData.code_format}
+                  onChange={(e) => handleChange('code_format', e.target.value)}
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                >
+                  <option value="mixed">Mixed (Letters + Numbers)</option>
+                  <option value="numbers">Numbers Only</option>
+                  <option value="letters">Letters Only</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">Choose voucher code format</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-2">
                   Code Length
                 </label>
                 <input
@@ -292,7 +311,7 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
                   onChange={(e) => handleChange('code_length', parseInt(e.target.value))}
                   className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
-                <p className="text-xs text-muted-foreground mt-1">Default: 6 characters</p>
+                <p className="text-xs text-muted-foreground mt-1">6-16 characters (Default: 8)</p>
               </div>
             </div>
           </div>

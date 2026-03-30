@@ -119,18 +119,51 @@ class VoucherService
         return $voucher;
     }
 
-    private function generateVoucherCode(): string
+    private function generateVoucherCode(string $format = 'mixed', int $length = 8): string
     {
         do {
-            $code = strtoupper(Str::random(8));
+            switch ($format) {
+                case 'numbers':
+                    // All numbers
+                    $code = '';
+                    for ($i = 0; $i < $length; $i++) {
+                        $code .= rand(0, 9);
+                    }
+                    break;
+                case 'letters':
+                    // All letters
+                    $code = strtoupper(substr(str_shuffle('ABCDEFGHJKLMNPQRSTUVWXYZ'), 0, $length));
+                    break;
+                case 'mixed':
+                default:
+                    // Mixed alphanumeric (exclude confusing chars: 0, O, I, 1)
+                    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                    $code = '';
+                    for ($i = 0; $i < $length; $i++) {
+                        $code .= $chars[rand(0, strlen($chars) - 1)];
+                    }
+                    break;
+            }
         } while (Voucher::where('voucher_code', $code)->exists());
 
         return $code;
     }
 
-    private function generateVoucherPassword(): string
+    private function generateVoucherPassword(string $format = 'mixed', int $length = 8): string
     {
-        return Str::random(8);
+        switch ($format) {
+            case 'numbers':
+                $password = '';
+                for ($i = 0; $i < $length; $i++) {
+                    $password .= rand(0, 9);
+                }
+                return $password;
+            case 'letters':
+                return strtoupper(substr(str_shuffle('ABCDEFGHJKLMNPQRSTUVWXYZ'), 0, $length));
+            case 'mixed':
+            default:
+                return strtoupper(Str::random($length));
+        }
     }
 
     private function getValidityHoursFromAmount(float $amount): int
@@ -159,16 +192,19 @@ class VoucherService
             'created_by' => $data['created_by'] ?? 'admin',
         ]);
 
-        $vouchers = [];
         $count = $data['count'] ?? 10;
-
-        $radiusService = app(FreeRadiusService::class);
-
+        $codeFormat = $data['code_format'] ?? 'mixed'; // numbers, letters, mixed
+        $codeLength = $data['code_length'] ?? 8;
+        
+        // Generate vouchers in bulk for better performance
+        $vouchersData = [];
+        $now = now();
+        
         for ($i = 0; $i < $count; $i++) {
-            $voucher = Voucher::create([
-                'voucher_code' => $this->generateVoucherCode(),
-                'password' => $this->generateVoucherPassword(),
-                'group_id' => $group->id,
+            $vouchersData[] = [
+                'voucher_code' => $this->generateVoucherCode($codeFormat, $codeLength),
+                'password' => $this->generateVoucherPassword($codeFormat, $codeLength),
+                'voucher_group_id' => $group->id,
                 'profile_name' => $group->profile_name,
                 'validity_hours' => $group->validity_hours,
                 'data_limit_mb' => $group->data_limit_mb,
@@ -176,24 +212,41 @@ class VoucherService
                 'price' => $group->price,
                 'sales_point_id' => $group->sales_point_id,
                 'status' => 'unused',
-            ]);
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
 
-            $radiusService->syncVoucherToRadius([
-                'voucher_code' => $voucher->voucher_code,
-                'password' => $voucher->password,
-                'validity_hours' => $voucher->validity_hours,
-                'data_limit_mb' => $voucher->data_limit_mb,
-                'speed_limit_kbps' => $voucher->speed_limit_kbps,
-            ]);
+        // Bulk insert vouchers (much faster than individual inserts)
+        Voucher::insert($vouchersData);
+        
+        // Get the inserted vouchers
+        $vouchers = Voucher::where('voucher_group_id', $group->id)
+            ->where('created_at', $now)
+            ->get();
 
-            $vouchers[] = $voucher;
+        // Batch sync to RADIUS (if enabled)
+        try {
+            $radiusService = app(FreeRadiusService::class);
+            foreach ($vouchers as $voucher) {
+                $radiusService->syncVoucherToRadius([
+                    'voucher_code' => $voucher->voucher_code,
+                    'password' => $voucher->password,
+                    'validity_hours' => $voucher->validity_hours,
+                    'data_limit_mb' => $voucher->data_limit_mb,
+                    'speed_limit_kbps' => $voucher->speed_limit_kbps,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning('RADIUS sync failed during batch generation', ['error' => $e->getMessage()]);
+            // Don't fail the entire batch if RADIUS sync fails
         }
 
         return [
             'success' => true,
             'group' => $group,
             'vouchers' => $vouchers,
-            'count' => count($vouchers),
+            'count' => $vouchers->count(),
         ];
     }
 }

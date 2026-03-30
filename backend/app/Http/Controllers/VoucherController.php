@@ -255,7 +255,7 @@ class VoucherController extends Controller
         // Statistics by sales point
         $stats['by_sales_point'] = VoucherGroup::join('vouchers', 'voucher_groups.id', '=', 'vouchers.voucher_group_id')
             ->join('sales_points', 'voucher_groups.sales_point_id', '=', 'sales_points.id')
-            ->selectRaw('sales_points.name, COUNT(vouchers.id) as total_vouchers, SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used, SUM(CASE WHEN vouchers.status = "used" THEN vouchers.price ELSE 0 END) as revenue')
+            ->selectRaw('sales_points.id, sales_points.name, COUNT(vouchers.id) as total_vouchers, SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used, SUM(CASE WHEN vouchers.status = "used" THEN vouchers.price ELSE 0 END) as revenue')
             ->groupBy('sales_points.id', 'sales_points.name')
             ->get()
             ->map(function ($point) {
