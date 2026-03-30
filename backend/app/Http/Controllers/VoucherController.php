@@ -252,20 +252,25 @@ class VoucherController extends Controller
                 ];
             });
 
-        // Statistics by sales point
-        $stats['by_sales_point'] = VoucherGroup::join('vouchers', 'voucher_groups.id', '=', 'vouchers.voucher_group_id')
-            ->join('sales_points', 'voucher_groups.sales_point_id', '=', 'sales_points.id')
-            ->selectRaw('sales_points.id, sales_points.name, COUNT(vouchers.id) as total_vouchers, SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used, SUM(CASE WHEN vouchers.status = "used" THEN vouchers.price ELSE 0 END) as revenue')
-            ->groupBy('sales_points.id', 'sales_points.name')
-            ->get()
-            ->map(function ($point) {
-                return [
-                    'name' => $point->name,
-                    'total_vouchers' => (int) $point->total_vouchers,
-                    'used' => (int) $point->used,
-                    'revenue' => (float) $point->revenue,
-                ];
-            });
+        // Statistics by sales point - use try/catch to handle missing tables gracefully
+        try {
+            $stats['by_sales_point'] = VoucherGroup::join('vouchers', 'voucher_groups.id', '=', 'vouchers.group_id')
+                ->join('voucher_sales_points', 'voucher_groups.sales_point_id', '=', 'voucher_sales_points.id')
+                ->selectRaw('voucher_sales_points.id, voucher_sales_points.name, COUNT(vouchers.id) as total_vouchers, SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used, SUM(CASE WHEN vouchers.status = "used" THEN vouchers.price ELSE 0 END) as revenue')
+                ->groupBy('voucher_sales_points.id', 'voucher_sales_points.name')
+                ->get()
+                ->map(function ($point) {
+                    return [
+                        'name' => $point->name,
+                        'total_vouchers' => (int) $point->total_vouchers,
+                        'used' => (int) $point->used,
+                        'revenue' => (float) $point->revenue,
+                    ];
+                });
+        } catch (\Exception $e) {
+            // If query fails (no data or table issues), return empty array
+            $stats['by_sales_point'] = [];
+        }
 
         return response()->json($stats);
     }

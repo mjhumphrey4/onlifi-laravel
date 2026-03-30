@@ -204,7 +204,7 @@ class VoucherService
             $vouchersData[] = [
                 'voucher_code' => $this->generateVoucherCode($codeFormat, $codeLength),
                 'password' => $this->generateVoucherPassword($codeFormat, $codeLength),
-                'voucher_group_id' => $group->id,
+                'group_id' => $group->id,
                 'profile_name' => $group->profile_name,
                 'validity_hours' => $group->validity_hours,
                 'data_limit_mb' => $group->data_limit_mb,
@@ -221,7 +221,7 @@ class VoucherService
         Voucher::insert($vouchersData);
         
         // Get the inserted vouchers
-        $vouchers = Voucher::where('voucher_group_id', $group->id)
+        $vouchers = Voucher::where('group_id', $group->id)
             ->where('created_at', $now)
             ->get();
 
