@@ -224,6 +224,7 @@ class VoucherController extends Controller
 
     public function statistics()
     {
+        // Overall statistics
         $stats = [
             'total_vouchers' => Voucher::count(),
             'unused_vouchers' => Voucher::unused()->count(),
@@ -234,6 +235,37 @@ class VoucherController extends Controller
                 ->groupBy('status')
                 ->get(),
         ];
+
+        // Daily statistics (last 30 days)
+        $stats['daily'] = Voucher::selectRaw('DATE(first_used_at) as date, COUNT(*) as vouchers_used, SUM(price) as revenue, COUNT(DISTINCT used_by_mac) as unique_devices')
+            ->whereNotNull('first_used_at')
+            ->where('first_used_at', '>=', now()->subDays(30))
+            ->groupBy('date')
+            ->orderBy('date', 'desc')
+            ->get()
+            ->map(function ($day) {
+                return [
+                    'date' => $day->date,
+                    'vouchers_used' => (int) $day->vouchers_used,
+                    'revenue' => (float) $day->revenue,
+                    'unique_devices' => (int) $day->unique_devices,
+                ];
+            });
+
+        // Statistics by sales point
+        $stats['by_sales_point'] = VoucherGroup::join('vouchers', 'voucher_groups.id', '=', 'vouchers.voucher_group_id')
+            ->join('sales_points', 'voucher_groups.sales_point_id', '=', 'sales_points.id')
+            ->selectRaw('sales_points.name, COUNT(vouchers.id) as total_vouchers, SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used, SUM(CASE WHEN vouchers.status = "used" THEN vouchers.price ELSE 0 END) as revenue')
+            ->groupBy('sales_points.id', 'sales_points.name')
+            ->get()
+            ->map(function ($point) {
+                return [
+                    'name' => $point->name,
+                    'total_vouchers' => (int) $point->total_vouchers,
+                    'used' => (int) $point->used,
+                    'revenue' => (float) $point->revenue,
+                ];
+            });
 
         return response()->json($stats);
     }
