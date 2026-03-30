@@ -44,6 +44,10 @@ class VoucherController extends Controller
 
     public function generateBatch(Request $request)
     {
+        // Increase execution time for large batches
+        set_time_limit(300); // 5 minutes
+        ini_set('memory_limit', '512M');
+        
         $validator = Validator::make($request->all(), [
             'group_name' => 'required|string|max:100',
             'profile_name' => 'required|string|max:64',
@@ -54,6 +58,8 @@ class VoucherController extends Controller
             'data_limit_mb' => 'nullable|integer',
             'speed_limit_kbps' => 'nullable|integer',
             'sales_point_id' => 'nullable|integer',
+            'code_format' => 'nullable|string|in:mixed,numbers,letters',
+            'code_length' => 'nullable|integer|min:6|max:16',
         ]);
 
         if ($validator->fails()) {
@@ -67,6 +73,12 @@ class VoucherController extends Controller
             $result = $this->voucherService->generateVoucherBatch($request->all());
             return response()->json($result);
         } catch (\Exception $e) {
+            \Log::error('Voucher generation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all()
+            ]);
+            
             return response()->json([
                 'error' => 'Failed to generate vouchers',
                 'message' => $e->getMessage(),
