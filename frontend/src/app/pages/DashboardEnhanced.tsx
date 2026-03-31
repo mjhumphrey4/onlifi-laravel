@@ -183,109 +183,70 @@ export function Dashboard() {
         <StatsCard title="Unused Vouchers" value={(voucherStats?.unused ?? 0).toString()} icon={Ticket} />
       </div>
 
-      {/* MikroTik Stats Section */}
+      {/* Earnings and Router Stats Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Voucher Stats */}
-        {voucherStats && (
-          <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-primary" />
-                Voucher Statistics
-              </h2>
-              <a href="/vouchers" className="text-sm text-primary hover:text-primary/80">View all →</a>
+        {/* Total Earnings Card */}
+        <div className="bg-gradient-to-br from-primary to-primary/80 rounded-lg p-6 text-primary-foreground">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <DollarSign className="w-5 h-5" />
+              Total Earnings
+            </h2>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm opacity-90 mb-1">Today's Revenue</p>
+              <p className="text-3xl font-bold">{fmt(todayRevenue)}</p>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-primary-foreground/20">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Total Vouchers</p>
-                <p className="text-2xl font-bold text-card-foreground">{voucherStats.total}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Available</p>
-                <p className="text-2xl font-bold text-emerald-500">{voucherStats.unused}</p>
+                <p className="text-xs opacity-75 mb-1">Active Vouchers</p>
+                <p className="text-xl font-semibold">{voucherStats?.active ?? 0}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Used</p>
-                <p className="text-2xl font-bold text-blue-500">{voucherStats.used}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Active</p>
-                <p className="text-xl font-bold text-primary">{voucherStats.active}</p>
-              </div>
-            </div>
-
-            {/* Usage Bar */}
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-muted-foreground">Usage Rate</span>
-                <span className="text-xs font-semibold text-card-foreground">
-                  {voucherStats.total > 0 
-                    ? `${((voucherStats.used / voucherStats.total) * 100).toFixed(1)}%`
-                    : '0%'}
-                </span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className="bg-primary h-2 rounded-full transition-all"
-                  style={{ 
-                    width: voucherStats.total > 0 
-                      ? `${Math.min((voucherStats.used / voucherStats.total) * 100, 100)}%`
-                      : '0%'
-                  }}
-                />
+                <p className="text-xs opacity-75 mb-1">Total Transactions</p>
+                <p className="text-xl font-semibold">{txs.length}</p>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Router Status */}
+        {/* Compact Router Stats */}
         <div className="bg-card border border-border rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
-              <Server className="w-5 h-5 text-primary" />
-              Router Status
+              <Activity className="w-5 h-5 text-primary" />
+              Router Stats
             </h2>
-            <a href="/devices" className="text-sm text-primary hover:text-primary/80">View all →</a>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              onlineRouters > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
+            }`}>
+              {onlineRouters}/{totalRouters} Online
+            </span>
           </div>
 
           {routerStats.length > 0 ? (
-            <div className="space-y-4">
-              {routerStats.slice(0, 3).map((router) => {
+            <div className="space-y-3">
+              {routerStats.slice(0, 1).map((router) => {
                 const memPercent = router.memory_total_mb > 0 ? (router.memory_used_mb / router.memory_total_mb) * 100 : 0;
                 return (
-                  <div key={router.id} className="bg-muted/50 rounded-lg p-4">
+                  <div key={router.id}>
                     <div className="flex items-center justify-between mb-3">
                       <p className="font-semibold text-card-foreground">{router.name}</p>
                       <Activity className={`w-4 h-4 ${router.is_online ? 'text-emerald-500' : 'text-muted-foreground'}`} />
                     </div>
                     
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-muted-foreground">CPU Load</span>
-                          <span className="text-xs font-semibold text-card-foreground">{router.cpu_load}%</span>
-                        </div>
-                        <div className="w-full bg-background rounded-full h-1.5">
-                          <div
-                            className={`h-1.5 rounded-full transition-all ${
-                              router.cpu_load > 80 ? 'bg-destructive' : router.cpu_load > 60 ? 'bg-yellow-500' : 'bg-emerald-500'
-                            }`}
-                            style={{ width: `${Math.min(router.cpu_load, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-muted-foreground">Memory</span>
+                          <span className="text-xs text-muted-foreground">Memory Usage</span>
                           <span className="text-xs font-semibold text-card-foreground">
-                            {router.memory_used_mb} / {router.memory_total_mb} MB
+                            {router.memory_used_mb} / {router.memory_total_mb} MB ({memPercent.toFixed(0)}%)
                           </span>
                         </div>
-                        <div className="w-full bg-background rounded-full h-1.5">
+                        <div className="w-full bg-muted rounded-full h-2">
                           <div
-                            className={`h-1.5 rounded-full transition-all ${
+                            className={`h-2 rounded-full transition-all ${
                               memPercent > 90 ? 'bg-destructive' : memPercent > 75 ? 'bg-yellow-500' : 'bg-blue-500'
                             }`}
                             style={{ width: `${Math.min(memPercent, 100)}%` }}
@@ -293,33 +254,93 @@ export function Dashboard() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-border">
+                      <div className="grid grid-cols-3 gap-3 pt-3 border-t border-border">
                         <div>
-                          <span className="text-xs text-muted-foreground block mb-1">Active Users</span>
-                          <span className="text-xs font-semibold text-card-foreground">
-                            {router.active_users}
-                          </span>
+                          <span className="text-xs text-muted-foreground block mb-1">CPU</span>
+                          <span className="text-sm font-semibold text-card-foreground">{router.cpu_load}%</span>
+                        </div>
+                        <div>
+                          <span className="text-xs text-muted-foreground block mb-1">Users</span>
+                          <span className="text-sm font-semibold text-card-foreground">{router.active_users}</span>
                         </div>
                         <div>
                           <span className="text-xs text-muted-foreground block mb-1">Location</span>
-                          <span className="text-xs font-semibold text-card-foreground">
-                            {router.location || 'N/A'}
-                          </span>
+                          <span className="text-sm font-semibold text-card-foreground truncate">{router.location || 'N/A'}</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 );
               })}
+              {routerStats.length > 1 && (
+                <a href="/devices" className="block text-center text-sm text-primary hover:text-primary/80 pt-2">
+                  View all {routerStats.length} routers →
+                </a>
+              )}
             </div>
           ) : (
-            <div className="text-center py-8">
+            <div className="text-center py-6">
               <Server className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">No router data available</p>
+              <p className="text-xs text-muted-foreground mt-1">Configure telemetry on your routers</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Voucher Stats Section - Full Width */}
+      {voucherStats && (
+        <div className="bg-card border border-border rounded-lg p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-card-foreground flex items-center gap-2">
+              <Ticket className="w-5 h-5 text-primary" />
+              Voucher Statistics
+            </h2>
+            <a href="/vouchers" className="text-sm text-primary hover:text-primary/80">View all →</a>
+          </div>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Total Vouchers</p>
+              <p className="text-2xl font-bold text-card-foreground">{voucherStats.total}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Available</p>
+              <p className="text-2xl font-bold text-emerald-500">{voucherStats.unused}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Used</p>
+              <p className="text-2xl font-bold text-blue-500">{voucherStats.used}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Active</p>
+              <p className="text-xl font-bold text-primary">{voucherStats.active}</p>
+            </div>
+          </div>
+
+          {/* Usage Bar */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-muted-foreground">Usage Rate</span>
+              <span className="text-xs font-semibold text-card-foreground">
+                {voucherStats.total > 0 
+                  ? `${((voucherStats.used / voucherStats.total) * 100).toFixed(1)}%`
+                  : '0%'}
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className="bg-primary h-2 rounded-full transition-all"
+                style={{ 
+                  width: voucherStats.total > 0 
+                    ? `${Math.min((voucherStats.used / voucherStats.total) * 100, 100)}%`
+                    : '0%'
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent transactions */}
       <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
