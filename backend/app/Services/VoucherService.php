@@ -121,7 +121,7 @@ class VoucherService
 
     private function generateVoucherCode(string $format = 'mixed', int $length = 8, array $existingCodes = []): string
     {
-        $maxAttempts = 100;
+        $maxAttempts = 1000; // Increased from 100
         $attempts = 0;
         
         do {
@@ -134,8 +134,12 @@ class VoucherService
                     }
                     break;
                 case 'letters':
-                    // All letters
-                    $code = strtoupper(substr(str_shuffle('ABCDEFGHJKLMNPQRSTUVWXYZ'), 0, $length));
+                    // All letters - use random_int for better randomness
+                    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+                    $code = '';
+                    for ($i = 0; $i < $length; $i++) {
+                        $code .= $chars[random_int(0, strlen($chars) - 1)];
+                    }
                     break;
                 case 'mixed':
                 default:
@@ -143,15 +147,16 @@ class VoucherService
                     $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
                     $code = '';
                     for ($i = 0; $i < $length; $i++) {
-                        $code .= $chars[rand(0, strlen($chars) - 1)];
+                        $code .= $chars[random_int(0, strlen($chars) - 1)];
                     }
                     break;
             }
             $attempts++;
+            
         } while ((in_array($code, $existingCodes) || Voucher::where('voucher_code', $code)->exists()) && $attempts < $maxAttempts);
 
         if ($attempts >= $maxAttempts) {
-            throw new \Exception('Failed to generate unique voucher code after ' . $maxAttempts . ' attempts');
+            throw new \Exception('Failed to generate unique voucher code after ' . $maxAttempts . ' attempts. Try increasing code length.');
         }
 
         return $code;
