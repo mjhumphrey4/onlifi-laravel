@@ -1,0 +1,33 @@
+# -*- text -*-
+#
+# Onlifi FreeRADIUS Perl Module Configuration
+#
+# This module loads the multi_tenant.pl script for dynamic tenant routing
+#
+
+perl {
+    #
+    # Path to the Perl script that handles multi-tenant routing
+    # FreeRADIUS 3.0+ uses 'filename' instead of deprecated 'module'
+    #
+    filename = /etc/freeradius/3.0/mods-config/perl/multi_tenant.pl
+
+    #
+    # Functions to call for different packet types
+    # These correspond to the functions defined in multi_tenant.pl
+    #
+    func_authorize = authorize
+    func_authenticate = authenticate
+    func_accounting = accounting
+    func_post_auth = post_auth
+
+    #
+    # Perl configuration options
+    #
+    # Set to yes to enable Perl warnings
+    perl_flags = "-w"
+
+    # Set to yes to reload the Perl script on HUP signal
+    func_start_accounting = ""
+    func_stop_accounting = ""
+}
