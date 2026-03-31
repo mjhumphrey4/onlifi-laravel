@@ -13,6 +13,7 @@ import { Vouchers } from './pages/Vouchers';
 import { VoucherTypes } from './pages/VoucherTypes';
 import { VoucherTemplates } from './pages/VoucherTemplates';
 import { Settings } from './pages/Settings';
+import { RadiusSetup } from './pages/RadiusSetup';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Users } from './pages/Users';
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: 'voucher-types', Component: VoucherTypes },
       { path: 'voucher-templates', Component: VoucherTemplates },
       { path: 'settings', Component: Settings },
+      { path: 'radius-setup', Component: RadiusSetup },
       { path: 'users', Component: Users },
     ],
   },

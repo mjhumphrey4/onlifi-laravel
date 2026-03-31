@@ -63,6 +63,7 @@ const menuItems: MenuItem[] = [
   { path: '/transactions',   label: 'Transactions',       icon: ArrowLeftRight, adminOnly: false },
   { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false },
   { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false },
+  { path: '/radius-setup',   label: 'RADIUS Setup',       icon: Server, adminOnly: false },
   { path: '/settings',       label: 'Settings',           icon: SettingsIcon, adminOnly: false },
 ];
 
