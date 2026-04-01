@@ -12,23 +12,8 @@ class TelemetryController extends Controller
     public function getLatest(Request $request)
     {
         try {
-            // Get tenant from authenticated user
-            $user = $request->user();
-            $tenant = $user ? $user->tenant : null;
-            
-            // Allow site_id override from query parameter (for super admin)
+            // Allow site_id filter from query parameter
             $siteId = $request->query('site_id');
-            
-            // If no site_id provided and user has tenant, use tenant's sites
-            if (!$siteId && $tenant) {
-                // Get all site IDs for this tenant
-                $siteIds = DB::connection('central')->table('sites')
-                    ->where('tenant_id', $tenant->id)
-                    ->pluck('id')
-                    ->toArray();
-            } else {
-                $siteIds = $siteId ? [$siteId] : [];
-            }
             
             // Use central database connection for telemetry
             $query = DB::connection('central')->table('router_telemetry')
@@ -39,9 +24,9 @@ class TelemetryController extends Controller
                 ])
                 ->groupBy('router_identity', 'site_id');
             
-            // Filter by site IDs if available
-            if (!empty($siteIds)) {
-                $query->whereIn('site_id', $siteIds);
+            // Filter by site_id if provided
+            if ($siteId) {
+                $query->where('site_id', $siteId);
             }
             
             $latestIds = $query->pluck('latest_id');
@@ -68,29 +53,13 @@ class TelemetryController extends Controller
     public function getStats(Request $request)
     {
         try {
-            // Get tenant from authenticated user
-            $user = $request->user();
-            $tenant = $user ? $user->tenant : null;
-            
-            // Allow site_id override from query parameter (for super admin)
+            // Allow site_id filter from query parameter
             $siteId = $request->query('site_id');
             
-            // If no site_id provided and user has tenant, use tenant's sites
-            if (!$siteId && $tenant) {
-                // Get all site IDs for this tenant
-                $siteIds = DB::connection('central')->table('sites')
-                    ->where('tenant_id', $tenant->id)
-                    ->pluck('id')
-                    ->toArray();
-                
-                Log::info('Fetching telemetry stats for tenant', [
-                    'tenant_id' => $tenant->id,
-                    'site_ids' => $siteIds
-                ]);
-            } else {
-                $siteIds = $siteId ? [$siteId] : [];
-                Log::info('Fetching telemetry stats', ['site_id' => $siteId]);
-            }
+            Log::info('Fetching telemetry stats', [
+                'site_id' => $siteId,
+                'user_id' => $request->user()?->id
+            ]);
             
             // Use central database connection for telemetry
             $query = DB::connection('central')->table('router_telemetry')
@@ -101,9 +70,9 @@ class TelemetryController extends Controller
                 ])
                 ->groupBy('router_identity', 'site_id');
             
-            // Filter by site IDs if available
-            if (!empty($siteIds)) {
-                $query->whereIn('site_id', $siteIds);
+            // Filter by site_id if provided
+            if ($siteId) {
+                $query->where('site_id', $siteId);
             }
             
             $latestIds = $query->pluck('latest_id');
