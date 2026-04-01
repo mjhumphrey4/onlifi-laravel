@@ -36,24 +36,24 @@ export function Transactions() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [selectedSite, setSelectedSite] = useState('');
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async (page: number, tab: TabType, search: string, site: string) => {
+  const load = useCallback(async (page: number, tab: TabType, search: string) => {
     setLoading(true);
     try {
       if (tab === 'no-voucher') {
         // Fetch all successful transactions and filter client-side for missing voucher
-        const res = await apiTransactions({ page: 1, limit: 500, status: 'success', search, site });
+        const res = await apiTransactions({ page: 1, limit: 500, status: 'success', search });
         const rows: TxRow[] = (res.transactions ?? []).filter((r: TxRow) => !r.voucher_code);
         setTxs(rows);
         setTotal(rows.length);
       } else {
         const status = tab === 'all' ? '' : tab;
-        const res = await apiTransactions({ page, limit: ITEMS_PER_PAGE, status, search, site });
+        const params = new URLSearchParams({ page: String(page), limit: String(ITEMS_PER_PAGE), status: tab, search });
+        const res = await apiTransactions(params);
         setTxs(res.transactions ?? []);
         setTotal(res.total ?? 0);
       }
@@ -61,10 +61,9 @@ export function Transactions() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(currentPage, activeTab, searchQuery, selectedSite); }, [currentPage, activeTab, searchQuery, selectedSite, load]);
+  useEffect(() => { load(currentPage, activeTab, searchQuery); }, [currentPage, activeTab, searchQuery, load]);
 
   const handleTabChange = (tab: TabType) => { setActiveTab(tab); setCurrentPage(1); };
-  const handleSiteChange = (site: string) => { setSelectedSite(site); setCurrentPage(1); };
 
   const handleSearchChange = (val: string) => {
     setSearchInput(val);
@@ -109,13 +108,6 @@ export function Transactions() {
               value={searchInput} onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-input-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm" />
           </div>
-          {sites.length > 1 && (
-            <select value={selectedSite} onChange={(e) => handleSiteChange(e.target.value)}
-              className="px-4 py-2.5 bg-input-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm">
-              <option value="">All Sites</option>
-              {sites.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          )}
         </div>
 
         {/* Table */}
