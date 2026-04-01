@@ -89,13 +89,17 @@ export function Dashboard() {
       
       const [telemetryRes, txRes, voucherRes] = await Promise.all([
         fetch(telemetryUrl, { headers: getAuthHeaders() })
-          .then(r => {
+          .then(async r => {
             console.log('Telemetry response status:', r.status);
             if (!r.ok) {
               console.error('Telemetry fetch failed:', r.status, r.statusText);
+              const errorText = await r.text();
+              console.error('Error response:', errorText);
               return null;
             }
-            return r.json();
+            const data = await r.json();
+            console.log('Telemetry JSON parsed:', data);
+            return data;
           })
           .catch(err => {
             console.error('Telemetry fetch error:', err);
@@ -105,27 +109,26 @@ export function Dashboard() {
         getVoucherStatistics().catch(() => null),
       ]);
       
-      console.log('Telemetry response:', telemetryRes);
+      console.log('Telemetry response received:', telemetryRes);
+      console.log('Telemetry response type:', typeof telemetryRes);
+      console.log('Telemetry has data:', telemetryRes ? 'YES' : 'NO');
       
       if (telemetryRes) {
-        // Map telemetry response to dashboard stats format
-        setDashboardStats({
+        const newStats = {
           total_active_users: telemetryRes.total_active_users || 0,
           total_routers: telemetryRes.total_routers || 0,
           online_routers: telemetryRes.online_routers || 0,
-          today_transactions: 0, // Will come from transactions
-          today_revenue: 0, // Will come from transactions
-          active_vouchers: 0, // Will come from vouchers
-          unused_vouchers: 0, // Will come from vouchers
+          today_transactions: 0,
+          today_revenue: 0,
+          active_vouchers: 0,
+          unused_vouchers: 0,
           routers: telemetryRes.routers || [],
-        });
-        console.log('Dashboard stats set:', {
-          total_routers: telemetryRes.total_routers,
-          online_routers: telemetryRes.online_routers,
-          routers_count: telemetryRes.routers?.length,
-        });
+        };
+        console.log('Setting dashboard stats to:', newStats);
+        setDashboardStats(newStats);
+        console.log('Dashboard stats updated successfully');
       } else {
-        console.warn('No telemetry data received');
+        console.warn('No telemetry data received - telemetryRes is null/undefined');
       }
       
       setTxs(txRes.data ?? []);
@@ -154,7 +157,14 @@ export function Dashboard() {
   const onlineRouters = dashboardStats?.online_routers ?? 0;
   const routerStats = dashboardStats?.routers ?? [];
 
+  console.log('Dashboard render - dashboardStats:', dashboardStats);
+  console.log('Dashboard render - activeUsers:', activeUsers);
+  console.log('Dashboard render - totalRouters:', totalRouters);
+  console.log('Dashboard render - routerStats count:', routerStats.length);
+  console.log('Dashboard render - loading:', loading);
+
   if (loading) {
+    console.log('Showing loading spinner');
     return (
       <div className="flex items-center justify-center h-64">
         <RefreshCw className="w-6 h-6 text-primary animate-spin" />
