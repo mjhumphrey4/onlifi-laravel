@@ -75,6 +75,7 @@ class NasController extends Controller
             'shortname' => $request->input('name'),
             'type' => 'other',
             'secret' => $radiusSecret,
+            'server' => null,  // Use default virtual server
             'description' => $request->input('description'),
             'tenant_id' => $tenant->id,
             'router_id' => $request->input('router_id'),
