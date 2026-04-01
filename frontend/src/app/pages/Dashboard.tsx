@@ -111,41 +111,36 @@ export function Dashboard() {
         setClients([]);
       }
 
-      // Fetch device stats
+      // Fetch device stats from telemetry endpoint
       try {
-        const routersRes = await fetch('/api/routers', { headers });
-        if (routersRes.ok) {
-          const routersData = await routersRes.json();
-          const routers = Array.isArray(routersData) ? routersData : routersData.data || [];
-          const onlineRouters = routers.filter((r: any) => {
-            if (!r.last_seen) return false;
-            const diff = Date.now() - new Date(r.last_seen).getTime();
-            return diff < 600000; // 10 minutes
-          });
-          const totalConnections = routers.reduce((sum: number, r: any) => sum + (r.last_active_connections || 0), 0);
-          // Calculate averages from router telemetry
-          const avgCpu = routers.length > 0 
-            ? routers.reduce((sum: number, r: any) => sum + (r.last_cpu_load || 0), 0) / routers.length 
-            : 0;
-          const avgMemory = routers.length > 0 
-            ? routers.reduce((sum: number, r: any) => sum + (r.last_memory_percent || 0), 0) / routers.length 
-            : 0;
-          const totalBwUp = routers.reduce((sum: number, r: any) => sum + (r.last_bandwidth_up || 0), 0);
-          const totalBwDown = routers.reduce((sum: number, r: any) => sum + (r.last_bandwidth_down || 0), 0);
+        console.log('Fetching telemetry stats...');
+        const telemetryRes = await fetch('/api/telemetry/stats', { headers });
+        console.log('Telemetry response status:', telemetryRes.status);
+        
+        if (telemetryRes.ok) {
+          const telemetryData = await telemetryRes.json();
+          console.log('Telemetry data received:', telemetryData);
           
           setDeviceStats({
-            total_routers: routers.length,
-            online_routers: onlineRouters.length,
+            total_routers: telemetryData.total_routers || 0,
+            online_routers: telemetryData.online_routers || 0,
             total_clients: clients.length,
-            active_connections: totalConnections,
-            avg_cpu: Math.round(avgCpu),
-            avg_memory: Math.round(avgMemory),
-            bandwidth_up: totalBwUp,
-            bandwidth_down: totalBwDown,
+            active_connections: telemetryData.total_active_users || 0,
+            avg_cpu: Math.round(telemetryData.avg_cpu || 0),
+            avg_memory: Math.round(telemetryData.avg_memory || 0),
+            bandwidth_up: 0,
+            bandwidth_down: 0,
           });
+          console.log('Device stats updated:', {
+            total_routers: telemetryData.total_routers,
+            online_routers: telemetryData.online_routers,
+            active_connections: telemetryData.total_active_users
+          });
+        } else {
+          console.error('Telemetry fetch failed:', telemetryRes.status);
         }
-      } catch {
-        // Device stats not available
+      } catch (err) {
+        console.error('Telemetry fetch error:', err);
       }
 
       setLastUpdated(new Date());
