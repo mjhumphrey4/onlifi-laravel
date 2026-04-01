@@ -26,6 +26,9 @@ use strict;
 use warnings;
 use DBI;
 
+# FreeRADIUS special variables - must be declared with 'our'
+our (%RAD_REQUEST, %RAD_REPLY, %RAD_CHECK, %RAD_CONFIG);
+
 # Database configuration - UPDATE THESE VALUES
 my $central_db_host = $ENV{'RADIUS_DB_HOST'} // "localhost";
 my $central_db_name = $ENV{'RADIUS_DB_NAME'} // "onlifi_central";
