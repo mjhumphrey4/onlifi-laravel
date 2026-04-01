@@ -95,9 +95,11 @@ class VoucherService
 
     private function createVoucher(VoucherGroup $group): Voucher
     {
+        $code = $this->generateVoucherCode();
+        
         $voucher = Voucher::create([
-            'voucher_code' => $this->generateVoucherCode(),
-            'password' => $this->generateVoucherPassword(),
+            'voucher_code' => $code,
+            'password' => $code,  // Same as voucher_code for single-entry authentication
             'group_id' => $group->id,
             'profile_name' => $group->profile_name,
             'validity_hours' => $group->validity_hours,
@@ -220,9 +222,11 @@ class VoucherService
             $code = $this->generateVoucherCode($codeFormat, $codeLength, $generatedCodes);
             $generatedCodes[] = $code;
             
+            // Use voucher code as both username and password for simplicity
+            // Users only need to enter the voucher code once
             $vouchersData[] = [
                 'voucher_code' => $code,
-                'password' => $this->generateVoucherPassword($codeFormat, $codeLength),
+                'password' => $code,  // Same as voucher_code
                 'group_id' => $group->id,
                 'profile_name' => $group->profile_name,
                 'validity_hours' => $group->validity_hours,
