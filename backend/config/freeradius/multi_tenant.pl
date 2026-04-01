@@ -29,8 +29,8 @@ use DBI;
 # Database configuration - UPDATE THESE VALUES
 my $central_db_host = $ENV{'RADIUS_DB_HOST'} // "localhost";
 my $central_db_name = $ENV{'RADIUS_DB_NAME'} // "onlifi_central";
-my $central_db_user = $ENV{'RADIUS_DB_USER'} // "radius_user";
-my $central_db_pass = $ENV{'RADIUS_DB_PASS'} // "your_secure_password";
+my $central_db_user = $ENV{'RADIUS_DB_USER'} // "onlifi";
+my $central_db_pass = $ENV{'RADIUS_DB_PASS'} // "password";
 
 # Cache for tenant database connections (keyed by router_identifier)
 my %tenant_cache;
@@ -97,13 +97,17 @@ sub authorize {
     my $router_identifier = $RAD_REQUEST{'NAS-Identifier'} // '';
     my $username = $RAD_REQUEST{'User-Name'} // '';
     
+    &radiusd::radlog(1, "PERL AUTHORIZE START: User=$username, NAS-ID=$router_identifier");
+    
     # Get tenant database using router identifier
     my $tenant = get_tenant_db($router_identifier);
     
     unless ($tenant) {
-        &radiusd::radlog(1, "No tenant found for router identifier: $router_identifier");
+        &radiusd::radlog(1, "PERL ERROR: No tenant found for router identifier: $router_identifier");
         return RLM_MODULE_REJECT;
     }
+    
+    &radiusd::radlog(1, "PERL: Found tenant DB: $tenant->{database_name} at $tenant->{database_host}");
     
     # Connect to tenant database
     my $dbh = DBI->connect(
@@ -114,9 +118,12 @@ sub authorize {
     );
     
     unless ($dbh) {
-        &radiusd::radlog(1, "Cannot connect to tenant database: $tenant->{database_name}");
+        my $err = $DBI::errstr // 'unknown error';
+        &radiusd::radlog(1, "PERL ERROR: Cannot connect to tenant database: $tenant->{database_name} - $err");
         return RLM_MODULE_FAIL;
     }
+    
+    &radiusd::radlog(1, "PERL: Connected to tenant database successfully");
     
     # Check radcheck for user
     my $sth = $dbh->prepare(q{
@@ -124,6 +131,8 @@ sub authorize {
         FROM radcheck
         WHERE username = ?
     });
+    
+    &radiusd::radlog(1, "PERL: Executing radcheck query for user: $username");
     
     $sth->execute($username);
     
@@ -136,17 +145,17 @@ sub authorize {
         # Set all check attributes to control list
         $RAD_CHECK{$attr} = $val;
         
-        &radiusd::radlog(3, "Found radcheck: $attr = $val for user $username");
+        &radiusd::radlog(1, "PERL: Found radcheck: $attr = $val for user $username");
     }
     $sth->finish();
     
     unless ($found) {
-        &radiusd::radlog(1, "User not found in radcheck: $username");
+        &radiusd::radlog(1, "PERL ERROR: User not found in radcheck: $username");
         $dbh->disconnect();
         return RLM_MODULE_NOTFOUND;
     }
     
-    &radiusd::radlog(2, "User $username authorized from tenant DB: $tenant->{database_name}");
+    &radiusd::radlog(1, "PERL SUCCESS: User $username authorized from tenant DB: $tenant->{database_name}");
     
     # Get reply attributes from radreply
     $sth = $dbh->prepare(q{
