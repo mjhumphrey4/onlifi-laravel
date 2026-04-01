@@ -217,40 +217,68 @@ sub accounting {
     if ($acct_status eq 'Start') {
         my $sth = $dbh->prepare(q{
             INSERT INTO radacct 
-            (acctsessionid, acctuniqueid, username, nasipaddress, 
-             acctstarttime, calledstationid, callingstationid, framedipaddress)
-            VALUES (?, ?, ?, ?, NOW(), ?, ?, ?)
+            (acctsessionid, acctuniqueid, username, nasipaddress, nasportid, nasporttype,
+             acctstarttime, acctstoptime, acctsessiontime, acctauthentic, connectinfo_start,
+             acctinputoctets, acctoutputoctets, calledstationid, callingstationid, 
+             acctterminatecause, servicetype, framedprotocol, framedipaddress, acctupdatetime)
+            VALUES (?, ?, ?, ?, ?, ?, NOW(), NULL, 0, ?, ?, 0, 0, ?, ?, '', ?, ?, ?, NOW())
         });
         
-        $sth->execute(
+        my $rows = $sth->execute(
             $RAD_REQUEST{'Acct-Session-Id'} // '',
             $RAD_REQUEST{'Acct-Unique-Session-Id'} // '',
             $username,
             $nas_ip,
+            $RAD_REQUEST{'NAS-Port'} // '',
+            $RAD_REQUEST{'NAS-Port-Type'} // 'Wireless-802.11',
+            $RAD_REQUEST{'Acct-Authentic'} // 'RADIUS',
+            $RAD_REQUEST{'Connect-Info'} // '',
             $RAD_REQUEST{'Called-Station-Id'} // '',
             $RAD_REQUEST{'Calling-Station-Id'} // '',
+            $RAD_REQUEST{'Service-Type'} // 'Login-User',
+            $RAD_REQUEST{'Framed-Protocol'} // 'PPP',
             $RAD_REQUEST{'Framed-IP-Address'} // ''
         );
+        
+        if ($rows) {
+            &radiusd::radlog(1, "PERL ACCOUNTING: Session started for $username (Session-ID: " . ($RAD_REQUEST{'Acct-Session-Id'} // 'N/A') . ")");
+        } else {
+            &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Failed to insert Start record for $username: " . $dbh->errstr);
+        }
         $sth->finish();
     }
     elsif ($acct_status eq 'Stop') {
+        my $session_time = $RAD_REQUEST{'Acct-Session-Time'} // 0;
+        my $input_octets = $RAD_REQUEST{'Acct-Input-Octets'} // 0;
+        my $output_octets = $RAD_REQUEST{'Acct-Output-Octets'} // 0;
+        my $terminate_cause = $RAD_REQUEST{'Acct-Terminate-Cause'} // 'Unknown';
+        my $unique_id = $RAD_REQUEST{'Acct-Unique-Session-Id'} // '';
+        
         my $sth = $dbh->prepare(q{
             UPDATE radacct SET
                 acctstoptime = NOW(),
                 acctsessiontime = ?,
                 acctinputoctets = ?,
                 acctoutputoctets = ?,
-                acctterminatecause = ?
+                acctterminatecause = ?,
+                connectinfo_stop = ?
             WHERE acctuniqueid = ?
         });
         
-        $sth->execute(
-            $RAD_REQUEST{'Acct-Session-Time'} // 0,
-            $RAD_REQUEST{'Acct-Input-Octets'} // 0,
-            $RAD_REQUEST{'Acct-Output-Octets'} // 0,
-            $RAD_REQUEST{'Acct-Terminate-Cause'} // 'Unknown',
-            $RAD_REQUEST{'Acct-Unique-Session-Id'} // ''
+        my $rows = $sth->execute(
+            $session_time,
+            $input_octets,
+            $output_octets,
+            $terminate_cause,
+            $RAD_REQUEST{'Connect-Info'} // '',
+            $unique_id
         );
+        
+        if ($rows) {
+            &radiusd::radlog(1, "PERL ACCOUNTING: Session stopped for $username - Duration: ${session_time}s, Download: ${input_octets} bytes, Upload: ${output_octets} bytes, Cause: $terminate_cause");
+        } else {
+            &radiusd::radlog(1, "PERL ACCOUNTING WARNING: No matching session found for Stop packet (Unique-ID: $unique_id)");
+        }
         $sth->finish();
         
         # CRITICAL: Invalidate voucher after session ends to prevent reuse
@@ -281,6 +309,11 @@ sub accounting {
         &radiusd::radlog(1, "PERL ACCOUNTING: Voucher $username invalidated and removed from RADIUS");
     }
     elsif ($acct_status eq 'Interim-Update') {
+        my $session_time = $RAD_REQUEST{'Acct-Session-Time'} // 0;
+        my $input_octets = $RAD_REQUEST{'Acct-Input-Octets'} // 0;
+        my $output_octets = $RAD_REQUEST{'Acct-Output-Octets'} // 0;
+        my $unique_id = $RAD_REQUEST{'Acct-Unique-Session-Id'} // '';
+        
         my $sth = $dbh->prepare(q{
             UPDATE radacct SET
                 acctupdatetime = NOW(),
@@ -290,13 +323,22 @@ sub accounting {
             WHERE acctuniqueid = ?
         });
         
-        $sth->execute(
-            $RAD_REQUEST{'Acct-Session-Time'} // 0,
-            $RAD_REQUEST{'Acct-Input-Octets'} // 0,
-            $RAD_REQUEST{'Acct-Output-Octets'} // 0,
-            $RAD_REQUEST{'Acct-Unique-Session-Id'} // ''
+        my $rows = $sth->execute(
+            $session_time,
+            $input_octets,
+            $output_octets,
+            $unique_id
         );
+        
+        if ($rows) {
+            &radiusd::radlog(3, "PERL ACCOUNTING: Interim update for $username - Duration: ${session_time}s, Download: ${input_octets} bytes, Upload: ${output_octets} bytes");
+        } else {
+            &radiusd::radlog(1, "PERL ACCOUNTING WARNING: No matching session found for Interim-Update (Unique-ID: $unique_id)");
+        }
         $sth->finish();
+    }
+    else {
+        &radiusd::radlog(1, "PERL ACCOUNTING: Unknown Acct-Status-Type: $acct_status");
     }
     
     &radiusd::radlog(1, "PERL ACCOUNTING SUCCESS: Recorded $acct_status for user $username");
