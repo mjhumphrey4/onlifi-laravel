@@ -130,16 +130,23 @@ sub authorize {
     my $found = 0;
     while (my $row = $sth->fetchrow_hashref()) {
         $found = 1;
-        if ($row->{attribute} eq 'Cleartext-Password') {
-            $RAD_CHECK{'Cleartext-Password'} = $row->{value};
-        }
+        my $attr = $row->{attribute};
+        my $val = $row->{value};
+        
+        # Set all check attributes to control list
+        $RAD_CHECK{$attr} = $val;
+        
+        &radiusd::radlog(3, "Found radcheck: $attr = $val for user $username");
     }
     $sth->finish();
     
     unless ($found) {
+        &radiusd::radlog(1, "User not found in radcheck: $username");
         $dbh->disconnect();
         return RLM_MODULE_NOTFOUND;
     }
+    
+    &radiusd::radlog(2, "User $username authorized from tenant DB: $tenant->{database_name}");
     
     # Get reply attributes from radreply
     $sth = $dbh->prepare(q{
