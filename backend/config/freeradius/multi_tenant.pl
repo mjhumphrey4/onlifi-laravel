@@ -194,8 +194,13 @@ sub accounting {
     my $username = $RAD_REQUEST{'User-Name'} // '';
     my $acct_status = $RAD_REQUEST{'Acct-Status-Type'} // '';
     
+    &radiusd::radlog(1, "PERL ACCOUNTING: User=$username, Status=$acct_status, NAS-ID=$router_identifier");
+    
     my $tenant = get_tenant_db($router_identifier);
-    return RLM_MODULE_NOOP unless $tenant;
+    unless ($tenant) {
+        &radiusd::radlog(1, "PERL ACCOUNTING ERROR: No tenant found for $router_identifier");
+        return RLM_MODULE_NOOP;
+    }
     
     my $dbh = DBI->connect(
         "DBI:mysql:database=$tenant->{database_name};host=$tenant->{database_host}",
@@ -204,7 +209,10 @@ sub accounting {
         { RaiseError => 0, PrintError => 0 }
     );
     
-    return RLM_MODULE_FAIL unless $dbh;
+    unless ($dbh) {
+        &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Cannot connect to tenant DB");
+        return RLM_MODULE_FAIL;
+    }
     
     if ($acct_status eq 'Start') {
         my $sth = $dbh->prepare(q{
@@ -263,6 +271,8 @@ sub accounting {
         );
         $sth->finish();
     }
+    
+    &radiusd::radlog(1, "PERL ACCOUNTING SUCCESS: Recorded $acct_status for user $username");
     
     $dbh->disconnect();
     return RLM_MODULE_OK;
