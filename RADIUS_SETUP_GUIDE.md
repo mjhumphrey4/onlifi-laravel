@@ -51,13 +51,12 @@ cd /path/to/onlifi-laravel
 sudo cp backend/config/freeradius/sql.conf \
        /etc/freeradius/3.0/mods-available/sql
 
-# Copy queries for central database
+# Copy queries for central database (NAS lookup only)
 sudo cp backend/config/freeradius/queries.conf \
        /etc/freeradius/3.0/mods-config/sql/main/mysql/queries.conf
 
-# Copy queries for tenant databases
-sudo cp backend/config/freeradius/queries_tenant.conf \
-       /etc/freeradius/3.0/mods-config/sql/main/mysql/queries_tenant.conf
+# Note: Tenant database queries are handled by the Perl module directly
+# No need to copy queries_tenant.conf
 
 # Copy Perl module configuration
 sudo cp backend/config/freeradius/perl \
@@ -148,19 +147,22 @@ sudo freeradius -X
 
 **Common Errors and Fixes:**
 
-1. **"Reference ${..accounting_start_query} not found"**
-   - Already fixed in `queries_tenant.conf` - make sure you copied the latest version
-
-2. **"Configuration item 'module' is deprecated"**
+1. **"Configuration item 'module' is deprecated"**
    - Already fixed in `perl` config - uses `filename` instead
 
-3. **"Can't connect to MySQL server"**
-   - Check database credentials in `sql.conf` and `multi_tenant.pl`
+2. **"Can't connect to MySQL server"**
+   - Check database credentials in `sql.conf` (for central DB)
+   - Check database credentials in `multi_tenant.pl` (lines 30-33)
    - Ensure MySQL is running: `sudo systemctl status mysql`
 
-4. **"Permission denied" for Perl script**
+3. **"Permission denied" for Perl script**
    - Run: `sudo chmod 644 /etc/freeradius/3.0/mods-config/perl/multi_tenant.pl`
    - Run: `sudo chown freerad:freerad /etc/freeradius/3.0/mods-config/perl/multi_tenant.pl`
+
+4. **"Unknown MySQL server host '%{control:Tenant-DB-Host}'"**
+   - This error means you have an old version of `sql.conf` with the `sql_tenant` module
+   - Update to the latest `sql.conf` which removes the `sql_tenant` module
+   - The Perl module handles all tenant database connections directly
 
 ---
 
