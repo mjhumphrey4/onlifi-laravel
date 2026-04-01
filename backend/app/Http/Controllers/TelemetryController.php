@@ -53,13 +53,32 @@ class TelemetryController extends Controller
     public function getStats(Request $request)
     {
         try {
-            // Allow site_id filter from query parameter
-            $siteId = $request->query('site_id');
+            $user = $request->user();
             
-            Log::info('Fetching telemetry stats', [
-                'site_id' => $siteId,
-                'user_id' => $request->user()?->id
+            // Get user's sites - users can only see their own sites
+            $userSites = DB::connection('central')->table('sites')
+                ->where('tenant_id', $user->tenant_id)
+                ->pluck('id')
+                ->toArray();
+            
+            Log::info('Fetching telemetry stats for user sites', [
+                'user_id' => $user->id,
+                'tenant_id' => $user->tenant_id,
+                'site_ids' => $userSites
             ]);
+            
+            if (empty($userSites)) {
+                Log::warning('No sites found for user', ['user_id' => $user->id]);
+                return response()->json([
+                    'total_active_users' => 0,
+                    'total_routers' => 0,
+                    'online_routers' => 0,
+                    'avg_cpu' => 0,
+                    'avg_memory' => 0,
+                    'routers' => [],
+                    'timestamp' => now()->toIso8601String(),
+                ]);
+            }
             
             // Use central database connection for telemetry
             $query = DB::connection('central')->table('router_telemetry')
@@ -68,12 +87,8 @@ class TelemetryController extends Controller
                     'site_id',
                     DB::raw('MAX(id) as latest_id')
                 ])
+                ->whereIn('site_id', $userSites)
                 ->groupBy('router_identity', 'site_id');
-            
-            // Filter by site_id if provided
-            if ($siteId) {
-                $query->where('site_id', $siteId);
-            }
             
             $latestIds = $query->pluck('latest_id');
             

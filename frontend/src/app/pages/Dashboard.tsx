@@ -100,14 +100,36 @@ export function Dashboard() {
       setSites(statsRes.sites ?? {});
       setTxs(txRes.transactions ?? []);
 
-      // Fetch clients (top 10)
+      // Fetch active clients from radacct (active hotspot users)
       try {
-        const clientsRes = await fetch('/api/clients?limit=10', { headers });
+        console.log('Fetching active clients from radacct...');
+        const clientsRes = await fetch('/api/radius/active-users', { headers });
+        console.log('Active clients response status:', clientsRes.status);
+        
         if (clientsRes.ok) {
           const clientsData = await clientsRes.json();
-          setClients(clientsData.data || clientsData.clients || []);
+          console.log('Active clients data:', clientsData);
+          
+          // Map radacct data to client format
+          const activeClients = (clientsData.active_users || []).map((user: any) => ({
+            id: user.session_id,
+            mac_address: user.mac_address,
+            username: user.username,
+            ip_address: user.ip_address,
+            total_sessions: 1,
+            total_spent: 0,
+            last_seen: user.connected_at,
+            status: 'active'
+          }));
+          
+          setClients(activeClients);
+          console.log('Active clients set:', activeClients.length);
+        } else {
+          console.error('Failed to fetch active clients:', clientsRes.status);
+          setClients([]);
         }
-      } catch {
+      } catch (err) {
+        console.error('Active clients fetch error:', err);
         setClients([]);
       }
 

@@ -252,6 +252,33 @@ sub accounting {
             $RAD_REQUEST{'Acct-Unique-Session-Id'} // ''
         );
         $sth->finish();
+        
+        # CRITICAL: Invalidate voucher after session ends to prevent reuse
+        &radiusd::radlog(1, "PERL ACCOUNTING: Invalidating voucher $username after session stop");
+        
+        # Mark voucher as 'used' (expired)
+        my $voucher_update = $dbh->prepare(q{
+            UPDATE vouchers SET status = 'used', last_used_at = NOW()
+            WHERE voucher_code = ? AND status != 'expired'
+        });
+        $voucher_update->execute($username);
+        $voucher_update->finish();
+        
+        # Remove from radcheck to prevent re-authentication
+        my $radcheck_delete = $dbh->prepare(q{
+            DELETE FROM radcheck WHERE username = ?
+        });
+        $radcheck_delete->execute($username);
+        $radcheck_delete->finish();
+        
+        # Remove from radreply to clean up
+        my $radreply_delete = $dbh->prepare(q{
+            DELETE FROM radreply WHERE username = ?
+        });
+        $radreply_delete->execute($username);
+        $radreply_delete->finish();
+        
+        &radiusd::radlog(1, "PERL ACCOUNTING: Voucher $username invalidated and removed from RADIUS");
     }
     elsif ($acct_status eq 'Interim-Update') {
         my $sth = $dbh->prepare(q{
