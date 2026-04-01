@@ -51,6 +51,10 @@ cd /path/to/onlifi-laravel
 sudo cp backend/config/freeradius/sql.conf \
        /etc/freeradius/3.0/mods-available/sql
 
+# Copy clients configuration (dynamic client lookup)
+sudo cp backend/config/freeradius/clients.conf \
+       /etc/freeradius/3.0/clients.conf
+
 # Copy queries for central database (NAS lookup only)
 sudo cp backend/config/freeradius/queries.conf \
        /etc/freeradius/3.0/mods-config/sql/main/mysql/queries.conf
