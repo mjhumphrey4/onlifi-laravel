@@ -18,6 +18,7 @@ use App\Http\Controllers\SalesPointController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\TenantAuthController;
 use App\Http\Controllers\TelemetryController;
+use App\Http\Controllers\RadiusAccountingController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -132,6 +133,13 @@ Route::middleware(['tenant'])->group(function () {
         Route::get('/realtime', [TenantDashboardController::class, 'getRealtimeStats']);
         Route::get('/active-users', [TenantDashboardController::class, 'getActiveUsers']);
         Route::get('/router-script', [TenantDashboardController::class, 'getRouterScript']);
+    });
+
+    // RADIUS Accounting endpoints - active users from radacct table
+    Route::prefix('radius')->group(function () {
+        Route::get('/active-users', [RadiusAccountingController::class, 'getActiveUsers']);
+        Route::get('/users/{username}/history', [RadiusAccountingController::class, 'getUserHistory']);
+        Route::get('/accounting/stats', [RadiusAccountingController::class, 'getStats']);
     });
 
     Route::prefix('payments')->group(function () {

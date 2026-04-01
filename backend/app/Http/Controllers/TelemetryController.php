@@ -14,8 +14,8 @@ class TelemetryController extends Controller
         try {
             $siteId = $request->query('site_id');
             
-            // Get latest telemetry for each router
-            $query = DB::table('router_telemetry')
+            // Use central database connection for telemetry
+            $query = DB::connection('central')->table('router_telemetry')
                 ->select([
                     'router_identity',
                     'site_id',
@@ -29,7 +29,7 @@ class TelemetryController extends Controller
             
             $latestIds = $query->pluck('latest_id');
             
-            $telemetry = DB::table('router_telemetry')
+            $telemetry = DB::connection('central')->table('router_telemetry')
                 ->whereIn('id', $latestIds)
                 ->orderBy('created_at', 'desc')
                 ->get();
@@ -55,8 +55,8 @@ class TelemetryController extends Controller
             
             Log::info('Fetching telemetry stats', ['site_id' => $siteId]);
             
-            // Get latest telemetry for each router
-            $query = DB::table('router_telemetry')
+            // Use central database connection for telemetry
+            $query = DB::connection('central')->table('router_telemetry')
                 ->select([
                     'router_identity',
                     'site_id',
@@ -86,7 +86,7 @@ class TelemetryController extends Controller
                 ]);
             }
             
-            $routers = DB::table('router_telemetry')
+            $routers = DB::connection('central')->table('router_telemetry')
                 ->whereIn('id', $latestIds)
                 ->get();
             
@@ -207,11 +207,11 @@ class TelemetryController extends Controller
             'site_id' => $site->id,
         ]);
 
-        // Store telemetry data directly without router dependency
+        // Store telemetry data in central database
         try {
-            // Check if router_telemetry table exists
-            if (!DB::getSchemaBuilder()->hasTable('router_telemetry')) {
-                Log::error('router_telemetry table does not exist');
+            // Check if router_telemetry table exists in central database
+            if (!DB::connection('central')->getSchemaBuilder()->hasTable('router_telemetry')) {
+                Log::error('router_telemetry table does not exist in central database');
                 return response()->json([
                     'error' => 'Configuration error',
                     'message' => 'Telemetry storage not configured',
@@ -258,7 +258,7 @@ class TelemetryController extends Controller
                 'created_at' => now(),
             ];
 
-            DB::table('router_telemetry')->insert($telemetryData);
+            DB::connection('central')->table('router_telemetry')->insert($telemetryData);
 
             Log::info('Telemetry stored successfully', [
                 'site' => $site->name,
