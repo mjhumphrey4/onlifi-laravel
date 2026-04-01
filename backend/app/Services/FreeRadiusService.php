@@ -44,19 +44,14 @@ class FreeRadiusService
 
     private function insertRadcheck(string $username, string $password): void
     {
+        // Only insert Cleartext-Password
+        // FreeRADIUS will automatically detect auth type (PAP/CHAP/MSCHAP)
+        // Do NOT set Auth-Type as it interferes with auto-detection
         DB::connection('tenant')->table('radcheck')->updateOrInsert(
             ['username' => $username, 'attribute' => 'Cleartext-Password'],
             [
                 'op' => ':=',
                 'value' => $password,
-            ]
-        );
-
-        DB::connection('tenant')->table('radcheck')->updateOrInsert(
-            ['username' => $username, 'attribute' => 'Auth-Type'],
-            [
-                'op' => ':=',
-                'value' => 'Accept',
             ]
         );
     }
