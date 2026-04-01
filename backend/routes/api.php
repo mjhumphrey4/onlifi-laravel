@@ -104,6 +104,18 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
 // Active announcements for all authenticated users
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/announcements/active', [AnnouncementController::class, 'activeAnnouncements']);
+    
+    // NAS (Network Access Server) management for FreeRADIUS
+    // Uses central database, not tenant database
+    Route::prefix('nas')->group(function () {
+        Route::get('/', [\App\Http\Controllers\NasController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\NasController::class, 'store']);
+        Route::get('/{id}', [\App\Http\Controllers\NasController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\NasController::class, 'update']);
+        Route::delete('/{id}', [\App\Http\Controllers\NasController::class, 'destroy']);
+        Route::post('/{id}/regenerate-identifier', [\App\Http\Controllers\NasController::class, 'regenerateIdentifier']);
+        Route::get('/{id}/mikrotik-script', [\App\Http\Controllers\NasController::class, 'getMikrotikScript']);
+    });
 });
 
 Route::middleware(['tenant'])->group(function () {
@@ -164,17 +176,6 @@ Route::middleware(['tenant'])->group(function () {
         Route::get('/{id}/telemetry/latest', [MikrotikController::class, 'getRealtimeStats']);
         Route::post('/{id}/collect-telemetry', [MikrotikController::class, 'collectTelemetry']);
         Route::post('/telemetry/ingest', [MikrotikController::class, 'ingestTelemetry']);
-    });
-
-    // NAS (Network Access Server) management for FreeRADIUS
-    Route::prefix('nas')->group(function () {
-        Route::get('/', [\App\Http\Controllers\NasController::class, 'index']);
-        Route::post('/', [\App\Http\Controllers\NasController::class, 'store']);
-        Route::get('/{id}', [\App\Http\Controllers\NasController::class, 'show']);
-        Route::put('/{id}', [\App\Http\Controllers\NasController::class, 'update']);
-        Route::delete('/{id}', [\App\Http\Controllers\NasController::class, 'destroy']);
-        Route::post('/{id}/regenerate-identifier', [\App\Http\Controllers\NasController::class, 'regenerateIdentifier']);
-        Route::get('/{id}/mikrotik-script', [\App\Http\Controllers\NasController::class, 'getMikrotikScript']);
     });
 
     // RADIUS sync endpoints
