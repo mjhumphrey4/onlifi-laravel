@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 class Site extends Model
 {
     protected $fillable = [
+        'tenant_id',
         'name',
         'slug',
         'description',

@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\MikrotikRouter;
 use App\Models\RadiusNas;
+use App\Models\RouterTelemetry;
+use App\Models\Site;
 use App\Services\MikrotikService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class MikrotikController extends Controller
 {
@@ -146,6 +150,7 @@ class MikrotikController extends Controller
         $validator = Validator::make($request->all(), [
             'router_id' => 'nullable|integer',
             'router_name' => 'nullable|string',
+            'router_identity' => 'nullable|string',
             'api_token' => 'nullable|string',
             'cpu_load' => 'nullable|numeric',
             'memory_used_mb' => 'nullable|integer',
@@ -164,18 +169,22 @@ class MikrotikController extends Controller
             ], 422);
         }
 
-        // Find router by ID or name
+        // Find router by ID, name, or identity (router_identity matches system identity name)
         $router = null;
         if ($request->router_id) {
             $router = MikrotikRouter::find($request->router_id);
         } elseif ($request->router_name) {
             $router = MikrotikRouter::where('name', $request->router_name)->first();
+        } elseif ($request->router_identity) {
+            $router = MikrotikRouter::where('name', $request->router_identity)->first();
         }
 
-        // If router not found, try to create it (auto-register)
-        if (!$router && $request->router_name) {
+        // If router not found, try to auto-register it
+        $routerName = $request->router_name ?? $request->router_identity;
+        if (!$router && $routerName) {
+            Log::info('Auto-registering new router from telemetry', ['name' => $routerName]);
             $router = MikrotikRouter::create([
-                'name' => $request->router_name,
+                'name' => $routerName,
                 'ip_address' => $request->ip() ?? '0.0.0.0',
                 'is_active' => true,
             ]);
@@ -183,7 +192,7 @@ class MikrotikController extends Controller
 
         if (!$router) {
             return response()->json([
-                'error' => 'Router not found. Provide router_id or router_name.',
+                'error' => 'Router not found. Provide router_id, router_name, or router_identity.',
             ], 404);
         }
 
@@ -194,6 +203,61 @@ class MikrotikController extends Controller
             'memory_total_mb' => $request->memory_total_mb,
             'last_active_connections' => $request->active_connections,
         ]);
+
+        // Also store in central database for dashboard telemetry
+        try {
+            // Find site by router or get tenant context
+            $site = null;
+            $tenant = app('tenant');
+            
+            // Try to find a site for this router
+            if ($router->site_id) {
+                $site = Site::find($router->site_id);
+            }
+            
+            // Build telemetry data for central DB
+            $telemetryData = [
+                'router_id' => $router->id,
+                'site_id' => $site ? $site->id : null,
+                'tenant_id' => $tenant ? $tenant->id : null,
+                'router_identity' => $router->name,
+                'router_version' => $request->router_version,
+                'router_board' => $request->router_board,
+                'cpu_load' => $request->cpu_load,
+                'memory_used_mb' => $request->memory_used_mb,
+                'memory_total_mb' => $request->memory_total_mb,
+                'uptime_seconds' => $request->uptime_seconds,
+                'active_connections' => $request->active_connections ?? $request->total_clients,
+                'bandwidth_upload_kbps' => $request->bandwidth_upload_kbps,
+                'bandwidth_download_kbps' => $request->bandwidth_download_kbps,
+                'total_tx_bytes' => $request->total_tx_bytes,
+                'total_rx_bytes' => $request->total_rx_bytes,
+                'timestamp' => now(),
+                'created_at' => now(),
+            ];
+            
+            // Check if tenant_id column exists before including it
+            $hasTenantIdColumn = DB::connection('central')
+                ->getSchemaBuilder()
+                ->hasColumn('router_telemetry', 'tenant_id');
+                
+            if (!$hasTenantIdColumn) {
+                unset($telemetryData['tenant_id']);
+            }
+            
+            DB::connection('central')->table('router_telemetry')->insert($telemetryData);
+            
+            Log::info('Telemetry stored in central database', [
+                'router' => $router->name,
+                'cpu_load' => $request->cpu_load,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to store telemetry in central database', [
+                'error' => $e->getMessage(),
+                'router' => $router->name,
+            ]);
+            // Don't fail the request - telemetry was still stored in router table
+        }
 
         return response()->json([
             'success' => true,

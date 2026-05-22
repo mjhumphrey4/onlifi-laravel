@@ -9,9 +9,17 @@ use Illuminate\Support\Str;
 
 class SiteController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $sites = Site::orderBy('name')->get();
+        $user = $request->user();
+        $query = Site::query();
+
+        // If authenticated user has a tenant_id, filter by their tenant
+        if ($user && $user->tenant_id) {
+            $query->where('tenant_id', $user->tenant_id);
+        }
+
+        $sites = $query->orderBy('name')->get();
 
         return response()->json([
             'sites' => $sites,
@@ -33,6 +41,7 @@ class SiteController extends Controller
         }
 
         $site = Site::create([
+            'tenant_id' => $request->user()?->tenant_id,
             'name' => $request->name,
             'slug' => Str::slug($request->name),
             'description' => $request->description,

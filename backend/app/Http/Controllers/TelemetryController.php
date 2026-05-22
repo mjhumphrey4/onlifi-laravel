@@ -12,8 +12,7 @@ class TelemetryController extends Controller
     public function getLatest(Request $request)
     {
         try {
-            // Allow site_id filter from query parameter
-            $siteId = $request->query('site_id');
+            $user = $request->user();
             
             // Use central database connection for telemetry
             $query = DB::connection('central')->table('router_telemetry')
@@ -24,9 +23,15 @@ class TelemetryController extends Controller
                 ])
                 ->groupBy('router_identity', 'site_id');
             
-            // Filter by site_id if provided
-            if ($siteId) {
-                $query->where('site_id', $siteId);
+            // CRITICAL: Filter telemetry by the authenticated user's tenant
+            // so users only see their own routers' data
+            // Check if tenant_id column exists before filtering
+            $hasTenantIdColumn = DB::connection('central')
+                ->getSchemaBuilder()
+                ->hasColumn('router_telemetry', 'tenant_id');
+            
+            if ($hasTenantIdColumn && $user && isset($user->tenant_id) && $user->tenant_id) {
+                $query->where('tenant_id', $user->tenant_id);
             }
             
             $latestIds = $query->pluck('latest_id');
@@ -61,8 +66,8 @@ class TelemetryController extends Controller
             ]);
             
             // Use central database connection for telemetry
-            // Note: sites table doesn't have tenant_id, so we show all telemetry for authenticated users
-            // TODO: Implement proper site-tenant relationship for filtering
+            // Filter by the authenticated user's tenant_id so users only see
+            // telemetry data for their own routers
             $query = DB::connection('central')->table('router_telemetry')
                 ->select([
                     'router_identity',
@@ -70,6 +75,15 @@ class TelemetryController extends Controller
                     DB::raw('MAX(id) as latest_id')
                 ])
                 ->groupBy('router_identity', 'site_id');
+            
+            // Check if tenant_id column exists before filtering
+            $hasTenantIdColumn = DB::connection('central')
+                ->getSchemaBuilder()
+                ->hasColumn('router_telemetry', 'tenant_id');
+            
+            if ($hasTenantIdColumn && $user && isset($user->tenant_id) && $user->tenant_id) {
+                $query->where('tenant_id', $user->tenant_id);
+            }
             
             $latestIds = $query->pluck('latest_id');
             
@@ -245,6 +259,7 @@ class TelemetryController extends Controller
             $telemetryData = [
                 'router_id' => null, // Will be null for now
                 'site_id' => $site->id,
+                'tenant_id' => $site->tenant_id, // Link telemetry to the tenant who owns the site
                 'router_identity' => $request->input('router_identity', $request->input('router_name', 'unknown')),
                 'router_version' => $request->input('router_version'),
                 'router_board' => $request->input('router_board'),

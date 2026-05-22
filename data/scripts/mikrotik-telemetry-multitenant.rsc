@@ -1,14 +1,21 @@
 # ============================================
-# OnLiFi Multi-Tenant Router Telemetry Script
+# OnLiFi Router Telemetry Script (RouterOS)
 # ============================================
-# CRITICAL: This script includes tenant API authentication
-# Each router must be configured with tenant-specific credentials
+# This script sends real-time telemetry to your OnLiFi dashboard
+#
+# INSTALLATION:
+# 1. Copy this entire script
+# 2. In MikroTik Terminal: /system script add name=onlifi-telemetry source="<paste script here>"
+# 3. Configure the variables below (get API token from your dashboard Settings page)
+# 4. Run manually first: /system script run onlifi-telemetry
+# 5. Script will auto-create scheduler to run every 5 minutes
+#
+# IMPORTANT: Update dashboardUrl to your actual domain/IP!
+# Example: https://yourdomain.com/api/telemetry
 
-#---------- CONFIGURATION (MUST BE SET PER TENANT) ----------
-:local dashboardUrl "https://yourdomain.com/api/routers/telemetry/ingest"
-:local tenantApiKey "YOUR_TENANT_API_KEY_HERE"
-:local tenantApiSecret "YOUR_TENANT_API_SECRET_HERE"
-:local routerId "1"
+#---------- CONFIGURATION ----------
+:local dashboardUrl "https://yourdomain.com/api/telemetry"
+:local apiToken "YOUR_SITE_API_TOKEN_HERE"
 :local schedulerName "onlifi-telemetry-scheduler"
 
 #---------- TELEMETRY COLLECTION FUNCTIONS ----------
@@ -135,38 +142,44 @@
   :local memUsedMb ($memUsed / 1048576)
   :local memTotalMb ($memTotal / 1048576)
   
-  # Build JSON payload with router_id for tenant routing
+  # Get timestamp
+  :local currentTime [/system clock get time]
+  :local currentDate [/system clock get date]
+  :local timestamp ($currentDate . " " . $currentTime)
+
+  # Build JSON payload with router_identity for proper routing
   :local reportJson "{"
-  :set reportJson ($reportJson . "\"router_id\":" . $routerId . ",")
+  :set reportJson ($reportJson . "\"router_identity\":\"" . $routerIdentity . "\",")
+  :set reportJson ($reportJson . "\"router_version\":\"" . $routerVersion . "\",")
+  :set reportJson ($reportJson . "\"router_board\":\"" . $routerBoard . "\",")
+  :set reportJson ($reportJson . "\"timestamp\":\"" . $timestamp . "\",")
   :set reportJson ($reportJson . "\"cpu_load\":" . $cpuVal . ",")
-  :set reportJson ($reportJson . "\"memory_used_mb\":" . $memUsedMb . ",")
   :set reportJson ($reportJson . "\"memory_total_mb\":" . $memTotalMb . ",")
+  :set reportJson ($reportJson . "\"memory_used_mb\":" . $memUsedMb . ",")
   :set reportJson ($reportJson . "\"uptime_seconds\":" . $uptimeSeconds . ",")
   :set reportJson ($reportJson . "\"active_connections\":" . $hotspotUsers . ",")
-  :set reportJson ($reportJson . "\"total_clients\":" . $hotspotUsers . ",")
   :set reportJson ($reportJson . "\"bandwidth_upload_kbps\":" . (($totalTxBytes * 8) / (300 * 1024)) . ",")
-  :set reportJson ($reportJson . "\"bandwidth_download_kbps\":" . (($totalRxBytes * 8) / (300 * 1024)) . "")
+  :set reportJson ($reportJson . "\"bandwidth_download_kbps\":" . (($totalRxBytes * 8) / (300 * 1024)) . ",")
+  :set reportJson ($reportJson . "\"total_tx_bytes\":" . $totalTxBytes . ",")
+  :set reportJson ($reportJson . "\"total_rx_bytes\":" . $totalRxBytes)
   :set reportJson ($reportJson . "}")
-  
-  :put ("OnLiFi: Router ID: " . $routerId)
+
+  :put ("OnLiFi: Router: " . $routerIdentity)
   :put ("OnLiFi: CPU: " . $cpuVal . "%")
   :put ("OnLiFi: Memory: " . $memUsedMb . "/" . $memTotalMb . " MB")
-  :put ("OnLiFi: Active Users: " . $hotspotUsers)
-  :put ("OnLiFi: Tenant API Key: " . [:pick $tenantApiKey 0 15] . "...")
-  
-  # POST with tenant authentication headers
+  :put ("OnLiFi: Users: " . $hotspotUsers)
+
+  # POST telemetry to API with Bearer token authentication
   :do {
-    /tool fetch url=$dashboardUrl mode=https http-method=post http-data=$reportJson \
-      http-header-field="X-API-Key: $tenantApiKey,X-API-Secret: $tenantApiSecret,Content-Type: application/json" \
-      keep-result=no
-    :log info "onlifi-telemetry: data posted successfully for router_id=$routerId"
-    :put "SUCCESS: Telemetry posted with tenant authentication"
+    /tool fetch url=$dashboardUrl mode=http http-method=post http-data=$reportJson http-header-field="Authorization: Bearer $apiToken,Content-Type: application/json" keep-result=no
+    :log info "OnLiFi telemetry: data posted successfully"
+    :put "SUCCESS: Telemetry posted to dashboard"
   } on-error={
-    :log warning "onlifi-telemetry: failed to post data for router_id=$routerId"
-    :put "FAILED: Could not post telemetry data - check API credentials"
+    :log warning "OnLiFi telemetry: failed to post data - check URL and API token"
+    :put "FAILED: Could not post telemetry - verify dashboardUrl and apiToken"
   }
-  
-  :log info ("onlifi-telemetry: RouterID=" . $routerId . " CPU=" . $cpuVal . "% Users=" . $hotspotUsers)
+
+  :log info ("OnLiFi telemetry: Router=" . $routerIdentity . " CPU=" . $cpuVal . "% Users=" . $hotspotUsers)
 
 } on-error={
   :log warning "onlifi-telemetry: collection failed"
@@ -176,7 +189,7 @@
 #---------- SCHEDULER SETUP ----------
 :if ([:len [/system scheduler find name=$schedulerName]] = 0) do={
   /system scheduler add name=$schedulerName start-time=startup interval=5m on-event="/system script run onlifi-telemetry"
-  :log info "onlifi-telemetry: scheduler created - runs every 5 minutes"
+  :log info "OnLiFi telemetry: scheduler created - runs every 5 minutes"
   :put "Scheduler created: runs every 5 minutes"
 } else={
   :put "Scheduler already exists"

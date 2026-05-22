@@ -1,18 +1,21 @@
 # ============================================
-# Onlifi Router Telemetry Script (RouterOS)
+# OnLiFi Router Telemetry Script (RouterOS)
 # ============================================
-# This script collects router statistics and sends them to your Onlifi dashboard
-# 
+# This script collects router statistics and sends them to your OnLiFi dashboard
+#
 # INSTALLATION:
 # 1. Copy this entire script
 # 2. In MikroTik Terminal: /system script add name=onlifi-telemetry source="<paste script here>"
-# 3. Configure the variables below
+# 3. Configure the variables below (get API token from your dashboard Settings page)
 # 4. Run manually first: /system script run onlifi-telemetry
 # 5. Script will auto-create scheduler to run every 5 minutes
+#
+# IMPORTANT: Update dashboardUrl to your actual domain/IP!
+# Example: https://yourdomain.com/api/telemetry
 
 #---------- CONFIGURATION ----------
-:local dashboardUrl "http://192.168.0.180/api/telemetry_ingest.php"
-:local apiToken "YOUR_API_TOKEN_HERE"
+:local dashboardUrl "https://yourdomain.com/api/telemetry"
+:local apiToken "YOUR_SITE_API_TOKEN_HERE"
 :local schedulerName "onlifi-telemetry-scheduler"
 
 #---------- TELEMETRY COLLECTION FUNCTIONS ----------
@@ -188,14 +191,14 @@
   :put ("Onlifi: Active Users: " . $hotspotUsers)
   :put ("Onlifi: JSON Length: " . [:len $reportJson] . " bytes")
   
-  # POST telemetry to API
+  # POST telemetry to API with Bearer token authentication
   :do {
     /tool fetch url=$dashboardUrl mode=http http-method=post http-data=$reportJson http-header-field="Authorization: Bearer $apiToken,Content-Type: application/json" keep-result=no
-    :log info "onlifi-telemetry: data posted successfully"
+    :log info "OnLiFi telemetry: data posted successfully"
     :put "SUCCESS: Telemetry posted to dashboard"
   } on-error={
-    :log warning "onlifi-telemetry: failed to post data"
-    :put "FAILED: Could not post telemetry data"
+    :log warning "OnLiFi telemetry: failed to post data - check URL and API token"
+    :put "FAILED: Could not post telemetry - verify dashboardUrl and apiToken"
   }
   
   # Log summary
@@ -209,7 +212,7 @@
 #---------- SCHEDULER SETUP (runs every 5 minutes & at startup) ----------
 :if ([:len [/system scheduler find name=$schedulerName]] = 0) do={
   /system scheduler add name=$schedulerName start-time=startup interval=5m on-event="/system script run onlifi-telemetry"
-  :log info "onlifi-telemetry: scheduler created - runs every 5 minutes"
+  :log info "OnLiFi telemetry: scheduler created - runs every 5 minutes"
   :put "Scheduler created: runs every 5 minutes"
 } else={
   :put "Scheduler already exists"

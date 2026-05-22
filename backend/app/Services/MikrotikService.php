@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\MikrotikRouter;
 use App\Models\RouterTelemetry;
+use App\Models\Site;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class MikrotikService
 {
@@ -83,7 +85,7 @@ class MikrotikService
         }
     }
 
-    public function collectTelemetry(MikrotikRouter $router): ?RouterTelemetry
+    public function collectTelemetry(MikrotikRouter $router): ?array
     {
         if (!$this->connect($router)) {
             return null;
@@ -91,36 +93,98 @@ class MikrotikService
 
         try {
             $systemResource = $this->api->getSystemResources();
+            $hotspotUsers = $this->api->getHotspotUsers();
             
             if (!$systemResource) {
                 $this->disconnect();
                 return null;
             }
 
-            $telemetry = RouterTelemetry::create([
-                'router_id' => $router->id,
-                'cpu_load' => $systemResource['cpu_load'] ?? null,
-                'memory_usage' => isset($systemResource['free_memory']) 
-                    ? round(($systemResource['total_memory'] - $systemResource['free_memory']) / 1024 / 1024)
-                    : null,
-                'uptime' => $systemResource['uptime'] ?? null,
-                'active_users' => count($this->api->getHotspotUsers()),
-                'recorded_at' => now(),
-            ]);
+            $memoryUsedMB = isset($systemResource['free_memory']) 
+                ? round(($systemResource['total_memory'] - $systemResource['free_memory']) / 1024 / 1024)
+                : null;
+            $memoryTotalMB = isset($systemResource['total_memory'])
+                ? round($systemResource['total_memory'] / 1024 / 1024)
+                : null;
+            $activeConnections = count($hotspotUsers);
+            $cpuLoad = $systemResource['cpu_load'] ?? null;
+            $uptime = $systemResource['uptime'] ?? null;
+            $version = $systemResource['version'] ?? null;
+            $boardName = $systemResource['board_name'] ?? null;
 
+            // Store telemetry in central database
+            try {
+                // Get router identity from API if possible
+                $routerIdentity = $this->api->getIdentity() ?? $router->name;
+                
+                // Find site by router
+                $site = null;
+                if ($router->site_id) {
+                    $site = Site::find($router->site_id);
+                }
+                
+                $telemetryData = [
+                    'router_id' => $router->id,
+                    'site_id' => $site ? $site->id : null,
+                    'tenant_id' => null, // Will be set below if column exists
+                    'router_identity' => $routerIdentity,
+                    'router_version' => $version,
+                    'router_board' => $boardName,
+                    'cpu_load' => $cpuLoad,
+                    'memory_used_mb' => $memoryUsedMB,
+                    'memory_total_mb' => $memoryTotalMB,
+                    'uptime_seconds' => $this->parseUptimeToSeconds($uptime),
+                    'active_connections' => $activeConnections,
+                    'bandwidth_upload_kbps' => null,
+                    'bandwidth_download_kbps' => null,
+                    'total_tx_bytes' => null,
+                    'total_rx_bytes' => null,
+                    'timestamp' => now(),
+                    'created_at' => now(),
+                ];
+                
+                // Check if tenant_id column exists before including it
+                $hasTenantIdColumn = DB::connection('central')
+                    ->getSchemaBuilder()
+                    ->hasColumn('router_telemetry', 'tenant_id');
+                    
+                if (!$hasTenantIdColumn) {
+                    unset($telemetryData['tenant_id']);
+                }
+                
+                DB::connection('central')->table('router_telemetry')->insert($telemetryData);
+                
+                Log::info('Telemetry collected and stored in central database', [
+                    'router' => $router->name,
+                    'cpu_load' => $cpuLoad,
+                    'memory_used_mb' => $memoryUsedMB,
+                    'active_connections' => $activeConnections,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to store telemetry in central database', [
+                    'error' => $e->getMessage(),
+                    'router' => $router->name,
+                ]);
+            }
+
+            // Update router record with latest stats
             $router->update([
-                'last_cpu_load' => $systemResource['cpu_load'] ?? null,
-                'last_memory_used_mb' => isset($systemResource['free_memory']) 
-                    ? round(($systemResource['total_memory'] - $systemResource['free_memory']) / 1024 / 1024)
-                    : null,
-                'memory_total_mb' => isset($systemResource['total_memory'])
-                    ? round($systemResource['total_memory'] / 1024 / 1024)
-                    : null,
-                'last_active_connections' => count($this->api->getHotspotUsers()),
+                'last_seen' => now(),
+                'last_cpu_load' => $cpuLoad,
+                'last_memory_used_mb' => $memoryUsedMB,
+                'memory_total_mb' => $memoryTotalMB,
+                'last_active_connections' => $activeConnections,
             ]);
 
             $this->disconnect();
-            return $telemetry;
+            return [
+                'cpu_load' => $cpuLoad,
+                'memory_used_mb' => $memoryUsedMB,
+                'memory_total_mb' => $memoryTotalMB,
+                'uptime' => $uptime,
+                'active_connections' => $activeConnections,
+                'recorded_at' => now()->toIso8601String(),
+            ];
         } catch (\Exception $e) {
             Log::error("Failed to collect telemetry from MikroTik", [
                 'router' => $router->ip_address,
@@ -129,6 +193,25 @@ class MikrotikService
             $this->disconnect();
             return null;
         }
+    }
+
+    /**
+     * Parse MikroTik uptime string to seconds
+     */
+    private function parseUptimeToSeconds(?string $uptime): ?int
+    {
+        if (!$uptime) return null;
+        
+        $seconds = 0;
+        
+        // Parse formats like "2d3h45m12s" or "3h45m" or "45m12s"
+        if (preg_match('/(\d+)w/', $uptime, $m)) $seconds += intval($m[1]) * 7 * 24 * 3600;
+        if (preg_match('/(\d+)d/', $uptime, $m)) $seconds += intval($m[1]) * 24 * 3600;
+        if (preg_match('/(\d+)h/', $uptime, $m)) $seconds += intval($m[1]) * 3600;
+        if (preg_match('/(\d+)m/', $uptime, $m)) $seconds += intval($m[1]) * 60;
+        if (preg_match('/(\d+)s/', $uptime, $m)) $seconds += intval($m[1]);
+        
+        return $seconds > 0 ? $seconds : null;
     }
 
     public function removeUser(MikrotikRouter $router, string $username): bool
