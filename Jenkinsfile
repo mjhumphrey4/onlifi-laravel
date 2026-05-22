@@ -13,7 +13,7 @@ pipeline {
                 sh '''
                     pwd
                     ls -al
-                    rsync -avz --exclude '.git' ./ hum@192.168.0.180:/var/www/onlifi
+                    rsync -avz --exclude '.git' ./ hum@192.168.0.42:/var/www/onlifi
                 '''
             }
         }
