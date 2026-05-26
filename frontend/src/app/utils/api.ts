@@ -134,6 +134,7 @@ export const tenantSignup = (data: Record<string, unknown>) => post('/tenant/sig
 // ============ TENANT DASHBOARD (requires tenant middleware) ============
 export const getTenantDashboardStats = () => get('/dashboard/stats');
 export const getTenantRealtimeStats = () => get('/dashboard/realtime');
+export const getTelemetryStats = () => get('/telemetry/stats');
 
 // ============ VOUCHERS (Tenant) ============
 export const getVouchers = (params?: { page?: number; status?: string }) => {

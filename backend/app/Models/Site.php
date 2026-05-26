@@ -7,6 +7,8 @@ use Illuminate\Support\Str;
 
 class Site extends Model
 {
+    protected $connection = 'central';
+
     protected $fillable = [
         'tenant_id',
         'name',

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Site;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 class SiteController extends Controller
@@ -29,7 +30,12 @@ class SiteController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:100|unique:sites,name',
+            'name' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('central.sites', 'name')->where(fn ($query) => $query->where('tenant_id', $request->user()?->tenant_id)),
+            ],
             'description' => 'nullable|string|max:255',
         ]);
 
@@ -66,7 +72,14 @@ class SiteController extends Controller
         $site = Site::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|string|max:100|unique:sites,name,' . $id,
+            'name' => [
+                'sometimes',
+                'string',
+                'max:100',
+                Rule::unique('central.sites', 'name')
+                    ->ignore($id)
+                    ->where(fn ($query) => $query->where('tenant_id', $request->user()?->tenant_id)),
+            ],
             'description' => 'nullable|string|max:255',
             'is_active' => 'sometimes|boolean',
         ]);

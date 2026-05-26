@@ -20,7 +20,7 @@ export function Settings() {
   const [loadingToken, setLoadingToken] = useState(false);
   
   // Admin configurable telemetry URL
-  const [telemetryUrl, setTelemetryUrl] = useState('http://192.168.0.180:8000/api/telemetry');
+  const [telemetryUrl, setTelemetryUrl] = useState(() => `${window.location.origin}/api/telemetry`);
   const [showUrlConfig, setShowUrlConfig] = useState(false);
 
   useEffect(() => {
@@ -251,10 +251,9 @@ export function Settings() {
   :if ([:typeof \$totalTxBytes] != "num") do={ :set totalTxBytes 0 }
   :if ([:typeof \$totalRxBytes] != "num") do={ :set totalRxBytes 0 }
   
+  # Dashboard calculates bandwidth rate from byte-counter deltas between samples
   :local bandwidthDownKbps 0
   :local bandwidthUpKbps 0
-  :if (\$totalRxBytes > 0) do={ :set bandwidthDownKbps ((\$totalRxBytes * 8) / (300 * 1024)) }
-  :if (\$totalTxBytes > 0) do={ :set bandwidthUpKbps ((\$totalTxBytes * 8) / (300 * 1024)) }
   
   :local reportJson "{"
   :set reportJson (\$reportJson . "\\"site_slug\\":\\"" . \$siteSlug . "\\",")
@@ -304,9 +303,9 @@ export function Settings() {
 
 #---------- SCHEDULER SETUP ----------
 :if ([:len [/system scheduler find name=\$schedulerName]] = 0) do={
-  /system scheduler add name=\$schedulerName start-time=startup interval=5m on-event="/system script run onlifi-telemetry"
+  /system scheduler add name=\$schedulerName start-time=startup interval=30s on-event="/system script run onlifi-telemetry"
   :log info "onlifi-telemetry: scheduler created"
-  :put "Scheduler created: runs every 5 minutes"
+  :put "Scheduler created: runs every 30 seconds"
 } else={
   :put "Scheduler already exists"
 }
@@ -496,7 +495,7 @@ export function Settings() {
               <li>The script will automatically:
                 <ul className="list-disc list-inside ml-6 mt-1 space-y-1">
                   <li>Create the telemetry collection script</li>
-                  <li>Set up a scheduler to run every 5 minutes</li>
+                  <li>Set up a scheduler to run every 30 seconds</li>
                   <li>Start sending data to your dashboard</li>
                 </ul>
               </li>
@@ -548,7 +547,7 @@ export function Settings() {
               <li>Script is pre-configured with your unique API token</li>
               <li>Router identity is set to: <code className="bg-green-500/10 px-1 py-0.5 rounded font-semibold">{selectedRouter || 'Select a router above'}</code></li>
               <li>No manual editing required - just copy and paste!</li>
-              <li>Data will appear on your dashboard within 5 minutes</li>
+              <li>Data will appear on your dashboard within 30 seconds</li>
               <li>Collects: CPU, memory, uptime, active clients, network bandwidth</li>
             </ul>
           </div>

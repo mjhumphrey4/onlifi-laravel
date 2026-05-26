@@ -13,6 +13,7 @@ class MikrotikRouter extends Model
 
     protected $fillable = [
         'name',
+        'site_id',
         'ip_address',
         'api_port',
         'username',
@@ -35,6 +36,7 @@ class MikrotikRouter extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'is_active' => 'boolean',
+        'site_id' => 'integer',
         'last_cpu_load' => 'decimal:2',
         'last_memory_used_mb' => 'integer',
         'memory_total_mb' => 'integer',

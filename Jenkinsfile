@@ -20,7 +20,6 @@ pipeline {
 
     }
 
-
     post {
         success {
             echo "Build succeeded, cleaning up synced files..."

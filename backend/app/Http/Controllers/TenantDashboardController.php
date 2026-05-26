@@ -196,7 +196,7 @@ class TenantDashboardController extends Controller
 # 1. Copy this entire script
 # 2. In MikroTik Terminal: /system script add name=onlifi-telemetry source="<paste script here>"
 # 3. Run manually first: /system script run onlifi-telemetry
-# 4. Script will auto-create scheduler to run every 5 minutes
+# 4. Script will auto-create scheduler to run every 30 seconds
 
 #---------- CONFIGURATION ----------
 :local dashboardUrl "{$apiUrl}"
@@ -324,11 +324,9 @@ class TenantDashboardController extends Controller
   :local memUsedMb (\$memUsed / 1048576)
   :local memTotalMb (\$memTotal / 1048576)
 
-  # Calculate bandwidth in Kbps (rough estimate based on 5-minute interval)
+  # Dashboard calculates bandwidth rate from byte-counter deltas between samples
   :local bandwidthDownKbps 0
   :local bandwidthUpKbps 0
-  :if (\$totalRxBytes > 0) do={ :set bandwidthDownKbps ((\$totalRxBytes * 8) / (300 * 1024)) }
-  :if (\$totalTxBytes > 0) do={ :set bandwidthUpKbps ((\$totalTxBytes * 8) / (300 * 1024)) }
 
   # Build JSON payload
   :local reportJson "{"
@@ -368,11 +366,11 @@ class TenantDashboardController extends Controller
   :put "FAILED: Telemetry collection aborted"
 }
 
-#---------- SCHEDULER SETUP (runs every 5 minutes) ----------
+#---------- SCHEDULER SETUP (runs every 30 seconds) ----------
 :if ([:len [/system scheduler find name=\$schedulerName]] = 0) do={
-  /system scheduler add name=\$schedulerName start-time=startup interval=5m on-event="/system script run onlifi-telemetry"
-  :log info "OnLiFi telemetry: Scheduler created - runs every 5 minutes"
-  :put "Scheduler created: runs every 5 minutes"
+  /system scheduler add name=\$schedulerName start-time=startup interval=30s on-event="/system script run onlifi-telemetry"
+  :log info "OnLiFi telemetry: Scheduler created - runs every 30 seconds"
+  :put "Scheduler created: runs every 30 seconds"
 } else={
   :put "Scheduler already exists"
 }

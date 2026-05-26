@@ -3,7 +3,7 @@ import { DollarSign, TrendingUp, RefreshCw, Users, ArrowRight, Server, Wifi, Act
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
-import { apiStats, apiTransactions } from '../utils/api';
+import { apiStats, apiTransactions, getTelemetryStats } from '../utils/api';
 
 interface SiteStat {
   total_amount: number;
@@ -101,14 +101,12 @@ export function Dashboard() {
       setTxs(txRes.transactions ?? []);
 
       // Fetch active clients from radacct (active hotspot users)
+      let activeClientCount = 0;
       try {
-        console.log('Fetching active clients from radacct...');
         const clientsRes = await fetch('/api/radius/active-users', { headers });
-        console.log('Active clients response status:', clientsRes.status);
         
         if (clientsRes.ok) {
           const clientsData = await clientsRes.json();
-          console.log('Active clients data:', clientsData);
           
           // Map radacct data to client format
           const activeClients = (clientsData.active_users || []).map((user: any) => ({
@@ -122,10 +120,9 @@ export function Dashboard() {
             status: 'active'
           }));
           
+          activeClientCount = activeClients.length;
           setClients(activeClients);
-          console.log('Active clients set:', activeClients.length);
         } else {
-          console.error('Failed to fetch active clients:', clientsRes.status);
           setClients([]);
         }
       } catch (err) {
@@ -135,32 +132,18 @@ export function Dashboard() {
 
       // Fetch device stats from telemetry endpoint
       try {
-        console.log('Fetching telemetry stats...');
-        const telemetryRes = await fetch('/api/telemetry/stats', { headers });
-        console.log('Telemetry response status:', telemetryRes.status);
-        
-        if (telemetryRes.ok) {
-          const telemetryData = await telemetryRes.json();
-          console.log('Telemetry data received:', telemetryData);
-          
-          setDeviceStats({
-            total_routers: telemetryData.total_routers || 0,
-            online_routers: telemetryData.online_routers || 0,
-            total_clients: clients.length,
-            active_connections: telemetryData.total_active_users || 0,
-            avg_cpu: Math.round(telemetryData.avg_cpu || 0),
-            avg_memory: Math.round(telemetryData.avg_memory || 0),
-            bandwidth_up: 0,
-            bandwidth_down: 0,
-          });
-          console.log('Device stats updated:', {
-            total_routers: telemetryData.total_routers,
-            online_routers: telemetryData.online_routers,
-            active_connections: telemetryData.total_active_users
-          });
-        } else {
-          console.error('Telemetry fetch failed:', telemetryRes.status);
-        }
+        const telemetryData = await getTelemetryStats();
+
+        setDeviceStats({
+          total_routers: telemetryData.total_routers || 0,
+          online_routers: telemetryData.online_routers || 0,
+          total_clients: activeClientCount,
+          active_connections: telemetryData.total_active_users || 0,
+          avg_cpu: Math.round(telemetryData.avg_cpu || 0),
+          avg_memory: Math.round(telemetryData.avg_memory || 0),
+          bandwidth_up: Math.round(telemetryData.bandwidth_upload_kbps || 0),
+          bandwidth_down: Math.round(telemetryData.bandwidth_download_kbps || 0),
+        });
       } catch (err) {
         console.error('Telemetry fetch error:', err);
       }

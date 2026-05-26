@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 
 class TelemetryController extends Controller
 {
+    private const ONLINE_WINDOW_MINUTES = 2;
+
     public function getLatest(Request $request)
     {
         try {
@@ -61,8 +63,8 @@ class TelemetryController extends Controller
             $user = $request->user();
             
             Log::info('Fetching telemetry stats', [
-                'user_id' => $user->id,
-                'tenant_id' => $user->tenant_id
+                'user_id' => $user?->id,
+                'tenant_id' => $user?->tenant_id ?? null,
             ]);
             
             // Use central database connection for telemetry
@@ -107,12 +109,14 @@ class TelemetryController extends Controller
                 ->whereIn('id', $latestIds)
                 ->get();
             
+            $previousSamples = $this->getPreviousTelemetrySamples($routers);
+
             $totalRouters = $routers->count();
             $onlineRouters = $routers->filter(function($r) {
                 if (!$r->created_at) return false;
                 try {
                     $createdAt = \Carbon\Carbon::parse($r->created_at);
-                    return $createdAt->diffInMinutes(now()) < 10;
+                    return $createdAt->diffInMinutes(now()) < self::ONLINE_WINDOW_MINUTES;
                 } catch (\Exception $e) {
                     return false;
                 }
@@ -128,16 +132,17 @@ class TelemetryController extends Controller
                 $avgMemory = $memoryPercentages->avg() ?? 0;
             }
             
-            $routerStats = $routers->map(function($r) {
+            $routerStats = $routers->map(function($r) use ($previousSamples) {
                 $isOnline = false;
                 if ($r->created_at) {
                     try {
                         $createdAt = \Carbon\Carbon::parse($r->created_at);
-                        $isOnline = $createdAt->diffInMinutes(now()) < 10;
+                        $isOnline = $createdAt->diffInMinutes(now()) < self::ONLINE_WINDOW_MINUTES;
                     } catch (\Exception $e) {
                         $isOnline = false;
                     }
                 }
+                $rates = $this->calculateBandwidthRates($r, $previousSamples[$r->id] ?? null);
                 return [
                     'id' => $r->id,
                     'name' => $r->router_identity ?? 'Unknown',
@@ -149,8 +154,10 @@ class TelemetryController extends Controller
                     'last_seen' => $r->created_at,
                     'is_online' => $isOnline,
                     'uptime_seconds' => $r->uptime_seconds ?? 0,
-                    'bandwidth_download_kbps' => $r->bandwidth_download_kbps ?? 0,
-                    'bandwidth_upload_kbps' => $r->bandwidth_upload_kbps ?? 0,
+                    'bandwidth_download_kbps' => $rates['download'],
+                    'bandwidth_upload_kbps' => $rates['upload'],
+                    'total_tx_bytes' => $r->total_tx_bytes ?? 0,
+                    'total_rx_bytes' => $r->total_rx_bytes ?? 0,
                 ];
             })->values();
             
@@ -166,6 +173,8 @@ class TelemetryController extends Controller
                 'online_routers' => $onlineRouters,
                 'avg_cpu' => round($avgCpu ?? 0, 2),
                 'avg_memory' => round($avgMemory ?? 0, 2),
+                'bandwidth_download_kbps' => round($routerStats->sum('bandwidth_download_kbps'), 2),
+                'bandwidth_upload_kbps' => round($routerStats->sum('bandwidth_upload_kbps'), 2),
                 'routers' => $routerStats,
                 'timestamp' => now()->toIso8601String(),
             ]);
@@ -301,5 +310,44 @@ class TelemetryController extends Controller
                 'message' => 'Failed to store telemetry data: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function getPreviousTelemetrySamples($routers): array
+    {
+        $previousSamples = [];
+
+        foreach ($routers as $router) {
+            $previous = DB::connection('central')->table('router_telemetry')
+                ->where('id', '<', $router->id)
+                ->where('router_identity', $router->router_identity)
+                ->when($router->site_id === null, fn ($query) => $query->whereNull('site_id'), fn ($query) => $query->where('site_id', $router->site_id))
+                ->orderBy('id', 'desc')
+                ->first();
+
+            if ($previous) {
+                $previousSamples[$router->id] = $previous;
+            }
+        }
+
+        return $previousSamples;
+    }
+
+    private function calculateBandwidthRates($current, $previous): array
+    {
+        if (!$previous || !$current->created_at || !$previous->created_at) {
+            return [
+                'download' => round((float) ($current->bandwidth_download_kbps ?? 0), 2),
+                'upload' => round((float) ($current->bandwidth_upload_kbps ?? 0), 2),
+            ];
+        }
+
+        $seconds = max(1, \Carbon\Carbon::parse($previous->created_at)->diffInSeconds(\Carbon\Carbon::parse($current->created_at)));
+        $rxDelta = max(0, (int) ($current->total_rx_bytes ?? 0) - (int) ($previous->total_rx_bytes ?? 0));
+        $txDelta = max(0, (int) ($current->total_tx_bytes ?? 0) - (int) ($previous->total_tx_bytes ?? 0));
+
+        return [
+            'download' => round(($rxDelta * 8) / ($seconds * 1024), 2),
+            'upload' => round(($txDelta * 8) / ($seconds * 1024), 2),
+        ];
     }
 }
