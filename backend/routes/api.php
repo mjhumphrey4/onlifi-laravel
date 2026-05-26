@@ -19,6 +19,7 @@ use App\Http\Controllers\SiteController;
 use App\Http\Controllers\TenantAuthController;
 use App\Http\Controllers\TelemetryController;
 use App\Http\Controllers\RadiusAccountingController;
+use App\Http\Controllers\TwoFactorController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -29,6 +30,7 @@ Route::get('/system/settings/public', [SystemSettingController::class, 'publicSe
 
 // Public telemetry endpoint for routers (authenticated via API token in request)
 Route::post('/telemetry', [TelemetryController::class, 'receive']);
+Route::get('/router/provision/{token}', [\App\Http\Controllers\NasController::class, 'publicProvisioningScript']);
 
 // Telemetry data endpoints (authenticated)
 Route::middleware('auth:sanctum')->group(function () {
@@ -44,6 +46,10 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
     Route::post('/logout', [SuperAdminAuthController::class, 'logout']);
     Route::get('/me', [SuperAdminAuthController::class, 'me']);
     Route::post('/change-password', [SuperAdminAuthController::class, 'changePassword']);
+    Route::get('/2fa/status', [TwoFactorController::class, 'status']);
+    Route::post('/2fa/setup', [TwoFactorController::class, 'setup']);
+    Route::post('/2fa/confirm', [TwoFactorController::class, 'confirm']);
+    Route::post('/2fa/disable', [TwoFactorController::class, 'disable']);
 
     Route::prefix('tenants')->group(function () {
         Route::get('/', [TenantController::class, 'index']);
@@ -58,9 +64,8 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
         Route::post('/{tenant}/suspend', [TenantController::class, 'suspend']);
         Route::post('/{tenant}/activate', [TenantController::class, 'activate']);
         Route::post('/{tenant}/reset-password', [AdminTenantController::class, 'resetPassword']);
+        Route::post('/{tenant}/repair', [AdminTenantController::class, 'repairTenant']);
         Route::post('/{tenant}/regenerate-credentials', [TenantController::class, 'regenerateCredentials']);
-        Route::post('/{tenant}/extend-trial', [TenantController::class, 'extendTrial']);
-        Route::post('/{tenant}/subscribe', [TenantController::class, 'subscribe']);
         Route::get('/{tenant}/stats', [TenantController::class, 'stats']);
         Route::get('/{tenant}/database', [AdminTenantController::class, 'viewDatabase']);
         Route::post('/{tenant}/database/query', [AdminTenantController::class, 'queryDatabase']);
@@ -100,6 +105,10 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/logout', [TenantAuthController::class, 'logout']);
     Route::get('/me', [TenantAuthController::class, 'me']);
     Route::post('/change-password', [TenantAuthController::class, 'changePassword']);
+    Route::get('/2fa/status', [TwoFactorController::class, 'status']);
+    Route::post('/2fa/setup', [TwoFactorController::class, 'setup']);
+    Route::post('/2fa/confirm', [TwoFactorController::class, 'confirm']);
+    Route::post('/2fa/disable', [TwoFactorController::class, 'disable']);
 });
 
 // Active announcements for all authenticated users

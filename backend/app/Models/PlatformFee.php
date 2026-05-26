@@ -41,8 +41,10 @@ class PlatformFee extends Model
         float $grossAmount,
         ?string $yoTransactionRef = null
     ): self {
-        // Get current fee percentage from system settings
-        $feePercentage = (float) SystemSetting::get('platform_collection_fee_percent', 5);
+        $tenant = Tenant::find($tenantId);
+        $feePercentage = $tenant?->collection_fee_percent !== null
+            ? (float) $tenant->collection_fee_percent
+            : (float) SystemSetting::get('platform_collection_fee_percent', 5);
         
         $platformFee = round($grossAmount * ($feePercentage / 100), 2);
         $netAmount = $grossAmount - $platformFee;

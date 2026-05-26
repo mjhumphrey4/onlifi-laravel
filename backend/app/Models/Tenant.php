@@ -27,8 +27,6 @@ class Tenant extends Model
         'api_secret',
         'is_active',
         'settings',
-        'trial_ends_at',
-        'subscribed_at',
         'status',
         'approved_at',
         'approved_by',
@@ -37,6 +35,10 @@ class Tenant extends Model
         'yoapi_password',
         'yoapi_mode',
         'radius_secret',
+        'collection_fee_percent',
+        'disbursement_fee_percent',
+        'minimum_disbursement',
+        'support_notes',
     ];
 
     protected $hidden = [
@@ -49,8 +51,9 @@ class Tenant extends Model
     protected $casts = [
         'settings' => 'array',
         'is_active' => 'boolean',
-        'trial_ends_at' => 'datetime',
-        'subscribed_at' => 'datetime',
+        'collection_fee_percent' => 'decimal:2',
+        'disbursement_fee_percent' => 'decimal:2',
+        'minimum_disbursement' => 'decimal:2',
     ];
 
     public function users()
@@ -150,18 +153,8 @@ class Tenant extends Model
         return hash_equals($this->api_secret, $secret);
     }
 
-    public function isTrialExpired(): bool
-    {
-        return $this->trial_ends_at && $this->trial_ends_at->isPast();
-    }
-
-    public function isSubscribed(): bool
-    {
-        return $this->subscribed_at !== null;
-    }
-
     public function canAccess(): bool
     {
-        return $this->is_active && ($this->isSubscribed() || !$this->isTrialExpired());
+        return $this->is_active && $this->status === 'approved';
     }
 }

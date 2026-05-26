@@ -11,6 +11,8 @@ export default function AdminLogin() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,13 +27,24 @@ export default function AdminLogin() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
+          ...(twoFactorToken ? { two_factor_token: twoFactorToken } : {}),
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.message || 'Login failed');
+      }
+
+      if (data.requires_2fa) {
+        setTwoFactorToken(data.two_factor_token);
+        setTwoFactorCode('');
+        return;
       }
 
       localStorage.setItem('admin_token', data.token);
@@ -93,8 +106,25 @@ export default function AdminLogin() {
               />
             </div>
 
+            {twoFactorToken && (
+              <div className="space-y-2">
+                <Label htmlFor="two_factor_code">Authenticator Code</Label>
+                <Input
+                  id="two_factor_code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="123456"
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+              </div>
+            )}
+
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Logging in...' : twoFactorToken ? 'Verify and Login' : 'Login'}
             </Button>
           </form>
         </CardContent>

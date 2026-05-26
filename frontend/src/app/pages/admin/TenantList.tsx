@@ -13,6 +13,7 @@ import {
   Clock,
   XCircle,
   RefreshCw,
+  Wrench,
   ChevronLeft,
   ChevronRight,
   Key,
@@ -30,7 +31,7 @@ interface Tenant {
   status: 'pending' | 'approved' | 'rejected' | 'suspended';
   is_active: boolean;
   created_at: string;
-  trial_ends_at: string | null;
+  support_notes?: string | null;
   users?: { id: number; name: string; email: string }[];
   primary_email?: string;
   database?: string;
@@ -50,9 +51,15 @@ export default function TenantList() {
   const [showRadiusModal, setShowRadiusModal] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [radiusSettings, setRadiusSettings] = useState({
+    radius_server_ip: '129.168.0.42',
+    radius_auth_port: 1812,
+    radius_acct_port: 1813,
+  });
 
   useEffect(() => {
     fetchTenants();
+    fetchRadiusSettings();
   }, [currentPage, statusFilter]);
 
   const fetchTenants = async () => {
@@ -83,6 +90,22 @@ export default function TenantList() {
       console.error('Error fetching tenants:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRadiusSettings = async () => {
+    try {
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch('/api/super-admin/settings/group/radius', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRadiusSettings((current) => ({ ...current, ...data }));
+      }
+    } catch (error) {
+      console.error('Error fetching RADIUS settings:', error);
     }
   };
 
@@ -141,6 +164,35 @@ export default function TenantList() {
     setActionMenuOpen(null);
   };
 
+  const handleRepair = async (tenant: Tenant) => {
+    if (!confirm(`Run database repair and migrations for "${tenant.name}"?`)) return;
+
+    try {
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/repair`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ activate: tenant.status !== 'approved' }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(`${data.message}\nActions: ${(data.actions || []).join(', ') || 'none'}${data.warnings?.length ? `\nWarnings: ${data.warnings.join('; ')}` : ''}`);
+        fetchTenants();
+      } else {
+        alert(data.message || 'Tenant repair failed');
+      }
+    } catch (error) {
+      console.error('Error repairing tenant:', error);
+      alert('Tenant repair failed');
+    }
+
+    setActionMenuOpen(null);
+  };
+
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
     setCopiedField(field);
@@ -152,7 +204,9 @@ export default function TenantList() {
     // Generate a unique DB user for this tenant (convention: radius_<slug>)
     const dbUser = `radius_${tenant.slug.replace(/-/g, '_').substring(0, 16)}`;
     return {
-      server: '192.168.0.180',
+      server: String(radiusSettings.radius_server_ip || '129.168.0.42'),
+      auth_port: String(radiusSettings.radius_auth_port || 1812),
+      acct_port: String(radiusSettings.radius_acct_port || 1813),
       port: '3306',
       database: dbName,
       db_user: dbUser,
@@ -345,6 +399,12 @@ export default function TenantList() {
                             >
                               <Database className="w-4 h-4" /> RADIUS Info
                             </button>
+                            <button
+                              onClick={() => handleRepair(tenant)}
+                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-cyan-400 hover:bg-slate-600 transition-colors"
+                            >
+                              <Wrench className="w-4 h-4" /> Repair Tenant
+                            </button>
                             {tenant.is_active ? (
                               <button
                                 onClick={() => handleSuspend(tenant)}
@@ -452,7 +512,7 @@ function EditTenantModal({ tenant, onClose, onSave }: { tenant: Tenant; onClose:
   const [formData, setFormData] = useState({
     name: tenant.name,
     domain: tenant.domain || '',
-    trial_days: 30,
+    support_notes: tenant.support_notes || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -514,13 +574,13 @@ function EditTenantModal({ tenant, onClose, onSave }: { tenant: Tenant; onClose:
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Extend Trial (days)</label>
-            <input
-              type="number"
-              value={formData.trial_days}
-              onChange={(e) => setFormData({ ...formData, trial_days: parseInt(e.target.value) })}
+            <label className="block text-sm font-medium text-slate-300 mb-2">Support Notes</label>
+            <textarea
+              value={formData.support_notes}
+              onChange={(e) => setFormData({ ...formData, support_notes: e.target.value })}
               className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              min="0"
+              rows={4}
+              placeholder="Internal notes about this tenant"
             />
           </div>
           <div className="flex gap-3 pt-4">

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Tenant;
+use App\Models\PlatformFee;
+use App\Models\RadiusNas;
 use App\Services\TenantService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -55,9 +57,6 @@ class AdminTenantController extends Controller
             'is_active' => true,
             'approved_at' => now(),
             'approved_by' => $admin->id,
-            'trial_ends_at' => now()->addDays(
-                \App\Models\SystemSetting::get('default_trial_days', 30)
-            ),
         ]);
 
         $response = [
@@ -116,22 +115,58 @@ class AdminTenantController extends Controller
             'rejected_tenants' => Tenant::where('status', 'rejected')->count(),
             'suspended_tenants' => Tenant::where('status', 'suspended')->count(),
             'active_tenants' => Tenant::where('is_active', true)->count(),
-            'trial_tenants' => Tenant::where('is_active', true)
-                ->whereNotNull('trial_ends_at')
-                ->where('trial_ends_at', '>', now())
-                ->whereNull('subscription_ends_at')
+            'approved_active_tenants' => Tenant::where('status', 'approved')->where('is_active', true)->count(),
+            'tenants_with_fee_overrides' => Tenant::whereNotNull('collection_fee_percent')
+                ->orWhereNotNull('disbursement_fee_percent')
+                ->orWhereNotNull('minimum_disbursement')
                 ->count(),
-            'subscribed_tenants' => Tenant::where('is_active', true)
-                ->whereNotNull('subscription_ends_at')
-                ->where('subscription_ends_at', '>', now())
-                ->count(),
-            'expired_trials' => Tenant::whereNotNull('trial_ends_at')
-                ->where('trial_ends_at', '<', now())
-                ->whereNull('subscription_ends_at')
-                ->count(),
+            'registered_radius_routers' => RadiusNas::count(),
+            'platform_fees_collected' => PlatformFee::getTotalPlatformFees(),
         ];
 
         return response()->json($stats);
+    }
+
+    public function repairTenant(Request $request, Tenant $tenant)
+    {
+        $actions = [];
+        $warnings = [];
+
+        try {
+            $tenant->provisionDatabase();
+            $actions[] = 'database_provisioned';
+        } catch (\Exception $e) {
+            $warnings[] = 'Database provisioning: ' . $e->getMessage();
+        }
+
+        try {
+            $tenant->runMigrations();
+            $actions[] = 'migrations_ran';
+        } catch (\Exception $e) {
+            $warnings[] = 'Tenant migrations: ' . $e->getMessage();
+        }
+
+        if (!$tenant->api_key || !$tenant->api_secret) {
+            $credentials = $this->tenantService->regenerateApiCredentials($tenant);
+            $actions[] = 'api_credentials_regenerated';
+        }
+
+        if ($request->boolean('activate') && $tenant->status !== 'approved') {
+            $tenant->update([
+                'status' => 'approved',
+                'is_active' => true,
+                'approved_at' => now(),
+                'approved_by' => $request->user()?->id,
+            ]);
+            $actions[] = 'tenant_activated';
+        }
+
+        return response()->json([
+            'message' => empty($warnings) ? 'Tenant repair completed' : 'Tenant repair completed with warnings',
+            'tenant' => $tenant->fresh()->load('users'),
+            'actions' => $actions,
+            'warnings' => $warnings,
+        ]);
     }
 
     public function recentActivity()
@@ -142,12 +177,7 @@ class AdminTenantController extends Controller
                 ->orderBy('approved_at', 'desc')
                 ->take(10)
                 ->get(),
-            'expiring_trials' => Tenant::where('is_active', true)
-                ->whereNotNull('trial_ends_at')
-                ->where('trial_ends_at', '>', now())
-                ->where('trial_ends_at', '<', now()->addDays(7))
-                ->orderBy('trial_ends_at', 'asc')
-                ->get(),
+            'recent_repairs' => [],
         ];
 
         return response()->json($recent);
@@ -286,7 +316,7 @@ class AdminTenantController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
             'domain' => 'sometimes|nullable|string|max:255',
-            'trial_days' => 'sometimes|integer|min:0',
+            'support_notes' => 'sometimes|nullable|string|max:5000',
         ]);
 
         if ($validator->fails()) {
@@ -307,8 +337,8 @@ class AdminTenantController extends Controller
                 $updateData['domain'] = $request->domain;
             }
             
-            if ($request->has('trial_days') && $request->trial_days > 0) {
-                $updateData['trial_ends_at'] = now()->addDays($request->trial_days);
+            if ($request->has('support_notes')) {
+                $updateData['support_notes'] = $request->support_notes;
             }
 
             $tenant->update($updateData);

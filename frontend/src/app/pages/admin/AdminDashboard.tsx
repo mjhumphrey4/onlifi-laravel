@@ -11,9 +11,10 @@ interface Statistics {
   rejected_tenants: number;
   suspended_tenants: number;
   active_tenants: number;
-  trial_tenants: number;
-  subscribed_tenants: number;
-  expired_trials: number;
+  approved_active_tenants: number;
+  tenants_with_fee_overrides: number;
+  registered_radius_routers: number;
+  platform_fees_collected: number;
 }
 
 export default function AdminDashboard() {
@@ -189,28 +190,38 @@ export default function AdminDashboard() {
       {/* Secondary Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          title="Trial Accounts"
-          value={stats?.trial_tenants || 0}
+          title="Approved Active"
+          value={stats?.approved_active_tenants || 0}
           icon={TrendingUp}
-          description="Active trial period"
+          description="Ready to use the platform"
           color="text-purple-600"
           bgColor="bg-purple-500"
         />
         <StatCard
-          title="Subscribed"
-          value={stats?.subscribed_tenants || 0}
-          icon={DollarSign}
-          description="Paid subscriptions"
-          color="text-emerald-600"
-          bgColor="bg-emerald-500"
+          title="RADIUS Routers"
+          value={stats?.registered_radius_routers || 0}
+          icon={Settings}
+          description="Registered NAS entries"
+          color="text-cyan-600"
+          bgColor="bg-cyan-500"
         />
         <StatCard
-          title="Expired Trials"
-          value={stats?.expired_trials || 0}
-          icon={AlertCircle}
-          description="Need attention"
-          color="text-orange-600"
-          bgColor="bg-orange-500"
+          title="Custom Fees"
+          value={stats?.tenants_with_fee_overrides || 0}
+          icon={DollarSign}
+          description="Tenant-specific pricing"
+          color="text-amber-600"
+          bgColor="bg-amber-500"
+          onClick={() => navigate('/admin/platform-fees')}
+        />
+        <StatCard
+          title="Platform Fees"
+          value={`UGX ${Math.round(stats?.platform_fees_collected || 0).toLocaleString()}`}
+          icon={DollarSign}
+          description="All-time collected"
+          color="text-emerald-600"
+          bgColor="bg-emerald-500"
+          onClick={() => navigate('/admin/platform-fees')}
         />
       </div>
 

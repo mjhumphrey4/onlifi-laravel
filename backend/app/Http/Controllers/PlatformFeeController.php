@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\PlatformFee;
 use App\Models\PlatformRevenue;
 use App\Models\SystemSetting;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -19,6 +20,9 @@ class PlatformFeeController extends Controller
             'collection_fee_percent' => (float) SystemSetting::get('platform_collection_fee_percent', 5),
             'disbursement_fee_percent' => (float) SystemSetting::get('platform_disbursement_fee_percent', 2),
             'minimum_disbursement' => (float) SystemSetting::get('platform_minimum_disbursement', 10000),
+            'tenant_overrides' => Tenant::select('id', 'name', 'slug', 'collection_fee_percent', 'disbursement_fee_percent', 'minimum_disbursement')
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -31,6 +35,11 @@ class PlatformFeeController extends Controller
             'collection_fee_percent' => 'sometimes|numeric|min:0|max:50',
             'disbursement_fee_percent' => 'sometimes|numeric|min:0|max:50',
             'minimum_disbursement' => 'sometimes|numeric|min:0',
+            'tenant_overrides' => 'sometimes|array',
+            'tenant_overrides.*.tenant_id' => 'required_with:tenant_overrides|integer|exists:central.tenants,id',
+            'tenant_overrides.*.collection_fee_percent' => 'nullable|numeric|min:0|max:50',
+            'tenant_overrides.*.disbursement_fee_percent' => 'nullable|numeric|min:0|max:50',
+            'tenant_overrides.*.minimum_disbursement' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -65,6 +74,14 @@ class PlatformFeeController extends Controller
                 'fees',
                 'Minimum amount required for disbursement'
             );
+        }
+
+        foreach ($request->input('tenant_overrides', []) as $override) {
+            Tenant::where('id', $override['tenant_id'])->update([
+                'collection_fee_percent' => $override['collection_fee_percent'] ?? null,
+                'disbursement_fee_percent' => $override['disbursement_fee_percent'] ?? null,
+                'minimum_disbursement' => $override['minimum_disbursement'] ?? null,
+            ]);
         }
 
         return response()->json([
@@ -139,6 +156,7 @@ class PlatformFeeController extends Controller
             ->selectRaw('
                 tenant_id,
                 SUM(net_amount) as balance,
+                SUM(platform_fee) as total_fees,
                 COUNT(*) as transaction_count,
                 MAX(created_at) as last_transaction
             ')

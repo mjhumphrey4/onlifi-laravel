@@ -30,6 +30,8 @@ export function RadiusSetup() {
   const [newNasDescription, setNewNasDescription] = useState('');
   const [selectedNas, setSelectedNas] = useState<NasEntry | null>(null);
   const [mikrotikScript, setMikrotikScript] = useState('');
+  const [provisioningUrl, setProvisioningUrl] = useState('');
+  const [fetchCommand, setFetchCommand] = useState('');
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
   const getAuthHeaders = (): HeadersInit => {
@@ -82,14 +84,13 @@ export function RadiusSetup() {
       
       const data = await response.json();
       setMikrotikScript(data.mikrotik_script || '');
+      setProvisioningUrl(data.provisioning_url || '');
+      setFetchCommand(data.fetch_command || '');
       setShowAddDialog(false);
       setNewNasName('');
       setNewNasDescription('');
       await loadNasEntries();
-      
-      // Show the script for the newly created NAS
-      const newNas = nasEntries.find(n => n.router_identifier === data.router_identifier);
-      if (newNas) setSelectedNas(newNas);
+      if (data.nas) setSelectedNas(data.nas);
     } catch (error) {
       console.error('Error creating NAS entry:', error);
       alert('Failed to create NAS entry');
@@ -122,6 +123,8 @@ export function RadiusSetup() {
       if (!response.ok) throw new Error('Failed to fetch NAS details');
       const data = await response.json();
       setMikrotikScript(data.mikrotik_script || '');
+      setProvisioningUrl(data.provisioning_url || '');
+      setFetchCommand(data.fetch_command || '');
     } catch (error) {
       console.error('Error fetching NAS details:', error);
     }
@@ -164,7 +167,7 @@ export function RadiusSetup() {
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl text-foreground mb-2">RADIUS Setup</h1>
-        <p className="text-sm text-muted-foreground">Configure your MikroTik routers to authenticate users via FreeRADIUS</p>
+        <p className="text-sm text-muted-foreground">Generate one script that configures interfaces, DHCP, NAT, hotspot, RADIUS, and telemetry</p>
       </div>
 
       {/* RADIUS Server Info */}
@@ -199,11 +202,11 @@ export function RadiusSetup() {
           </li>
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">2</span>
-            <span>Download or copy the generated MikroTik configuration script</span>
+            <span>Copy the one-line fetch command or download the full provisioning script</span>
           </li>
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">3</span>
-            <span>Run the script on your MikroTik router via Winbox or Terminal</span>
+            <span>Paste the fetch command in MikroTik Terminal to download and run the setup immediately</span>
           </li>
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">4</span>
@@ -354,12 +357,14 @@ export function RadiusSetup() {
           <div className="bg-card rounded-lg p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-card-foreground">
-                MikroTik Configuration: {selectedNas.shortname}
+                Full Router Setup: {selectedNas.shortname}
               </h3>
               <button
                 onClick={() => {
                   setSelectedNas(null);
                   setMikrotikScript('');
+                  setProvisioningUrl('');
+                  setFetchCommand('');
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
@@ -372,10 +377,38 @@ export function RadiusSetup() {
                 <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-muted-foreground">
                   <p className="font-semibold text-card-foreground mb-1">Important:</p>
-                  <p>Copy this script and run it on your MikroTik router. This will configure RADIUS authentication for your hotspot users.</p>
+                  <p>This single script configures LAN bridge, DHCP, NAT, hotspot, RADIUS, and live telemetry. Review interface defaults before running on a production router: WAN is <strong>ether1</strong>, LAN is <strong>onlifi-lan</strong>.</p>
                 </div>
               </div>
             </div>
+
+            {fetchCommand && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-card-foreground mb-2">
+                  One-line RouterOS fetch command
+                </label>
+                <div className="relative">
+                  <pre className="bg-background p-4 pr-20 rounded-lg overflow-x-auto text-xs font-mono border border-border">
+                    {fetchCommand}
+                  </pre>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(fetchCommand);
+                      alert('Fetch command copied to clipboard!');
+                    }}
+                    className="absolute top-2 right-2 px-3 py-1 bg-primary text-primary-foreground rounded text-xs flex items-center gap-1 hover:bg-primary/90"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Copy
+                  </button>
+                </div>
+                {provisioningUrl && (
+                  <p className="text-xs text-muted-foreground mt-2 break-all">
+                    Script URL: {provisioningUrl}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="relative">
               <pre className="bg-background p-4 rounded-lg overflow-x-auto text-xs font-mono border border-border">
@@ -405,6 +438,8 @@ export function RadiusSetup() {
                 onClick={() => {
                   setSelectedNas(null);
                   setMikrotikScript('');
+                  setProvisioningUrl('');
+                  setFetchCommand('');
                 }}
                 className="px-4 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors"
               >

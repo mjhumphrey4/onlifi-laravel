@@ -13,7 +13,6 @@ interface User {
   last_login: string | null;
   database_name: string;
   plan_type: string;
-  subscription_status: string;
 }
 
 export function Users() {

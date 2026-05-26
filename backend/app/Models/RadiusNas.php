@@ -14,6 +14,7 @@ class RadiusNas extends Model
     protected $fillable = [
         'nasname',
         'router_identifier',
+        'provisioning_token',
         'shortname',
         'type',
         'ports',
@@ -76,6 +77,7 @@ class RadiusNas extends Model
         return self::create([
             'nasname' => $router->ip_address ?: 'dynamic',
             'router_identifier' => self::generateRouterIdentifier($tenant->id, $router->id),
+            'provisioning_token' => Str::random(64),
             'shortname' => Str::slug($router->name),
             'type' => 'other',
             'secret' => $globalSecret,

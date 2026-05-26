@@ -3,17 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\SuperAdmin;
+use App\Services\TwoFactorService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 
 class SuperAdminAuthController extends Controller
 {
-    public function login(Request $request)
+    public function login(Request $request, TwoFactorService $twoFactor)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'password' => 'required|string',
+            'two_factor_code' => 'nullable|string',
+            'two_factor_token' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -37,6 +42,29 @@ class SuperAdminAuthController extends Controller
                 'error' => 'Account inactive',
                 'message' => 'Your account has been deactivated',
             ], 403);
+        }
+
+        if ($admin->two_factor_enabled) {
+            if (!$request->filled('two_factor_code') || !$request->filled('two_factor_token')) {
+                $pendingToken = Str::random(64);
+                Cache::put("2fa:admin:{$pendingToken}", $admin->id, now()->addMinutes(5));
+
+                return response()->json([
+                    'requires_2fa' => true,
+                    'two_factor_token' => $pendingToken,
+                    'message' => 'Two-factor code required',
+                ]);
+            }
+
+            $cachedAdminId = Cache::pull("2fa:admin:{$request->two_factor_token}");
+            if ((int) $cachedAdminId !== (int) $admin->id) {
+                return response()->json(['message' => 'Two-factor challenge expired'], 401);
+            }
+
+            $secret = $twoFactor->decryptSecret($admin->two_factor_secret);
+            if (!$twoFactor->verifyCode($secret, $request->two_factor_code)) {
+                return response()->json(['message' => 'Invalid two-factor code'], 401);
+            }
         }
 
         $token = $admin->createToken('admin-token')->plainTextToken;

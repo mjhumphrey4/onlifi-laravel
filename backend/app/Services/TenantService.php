@@ -33,8 +33,8 @@ class TenantService
                 'api_key' => Tenant::generateApiKey(),
                 'api_secret' => Tenant::generateApiSecret(),
                 'status' => $autoApprove ? 'approved' : 'pending',
+                'is_active' => $autoApprove,
                 'approved_at' => $autoApprove ? now() : null,
-                'trial_ends_at' => $autoApprove ? now()->addDays(SystemSetting::get('default_trial_days', 30)) : null,
                 'settings' => $data['settings'] ?? null,
             ]);
 
@@ -93,23 +93,6 @@ class TenantService
         return $tenant->update(['is_active' => true]);
     }
 
-    public function extendTrial(Tenant $tenant, int $days): bool
-    {
-        $newTrialEnd = $tenant->trial_ends_at 
-            ? $tenant->trial_ends_at->addDays($days)
-            : now()->addDays($days);
-
-        return $tenant->update(['trial_ends_at' => $newTrialEnd]);
-    }
-
-    public function subscribe(Tenant $tenant): bool
-    {
-        return $tenant->update([
-            'subscribed_at' => now(),
-            'trial_ends_at' => null,
-        ]);
-    }
-
     public function regenerateApiCredentials(Tenant $tenant): array
     {
         $apiKey = Tenant::generateApiKey();
@@ -144,7 +127,7 @@ class TenantService
             'total_vouchers' => DB::connection('tenant')->table('vouchers')->count(),
             'active_vouchers' => DB::connection('tenant')->table('vouchers')->where('status', 'active')->count(),
             'total_routers' => DB::connection('tenant')->table('mikrotik_routers')->count(),
-            'active_routers' => DB::connection('tenant')->table('mikrotik_routers')->where('status', 'active')->count(),
+            'active_routers' => DB::connection('tenant')->table('mikrotik_routers')->where('is_active', true)->count(),
         ];
     }
 }

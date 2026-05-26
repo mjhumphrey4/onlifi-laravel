@@ -32,7 +32,7 @@ class IdentifyTenant
         if (!$tenant->canAccess()) {
             return response()->json([
                 'error' => 'Access denied',
-                'message' => 'Your trial has expired or subscription is inactive',
+                'message' => 'Your account is not approved or active',
             ], 403);
         }
 

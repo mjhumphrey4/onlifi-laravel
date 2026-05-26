@@ -35,15 +35,26 @@ class SystemSetting extends Model
         return self::castValue($setting->value, $setting->type);
     }
 
-    public static function set(string $key, $value, string $type = 'string'): void
+    public static function set(string $key, $value, string $type = 'string', ?string $group = null, ?string $description = null, ?bool $isPublic = null): void
     {
-        self::updateOrCreate(
-            ['key' => $key],
-            [
-                'value' => is_array($value) ? json_encode($value) : $value,
-                'type' => $type,
-            ]
-        );
+        $attributes = [
+            'value' => is_array($value) ? json_encode($value) : $value,
+            'type' => $type,
+        ];
+
+        if ($group !== null) {
+            $attributes['group'] = $group;
+        }
+
+        if ($description !== null) {
+            $attributes['description'] = $description;
+        }
+
+        if ($isPublic !== null) {
+            $attributes['is_public'] = $isPublic;
+        }
+
+        self::updateOrCreate(['key' => $key], $attributes);
     }
 
     public static function getByGroup(string $group): array

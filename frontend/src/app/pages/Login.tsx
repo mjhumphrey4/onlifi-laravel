@@ -9,6 +9,8 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +19,13 @@ export function Login() {
     setError('');
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      const result = await login(email.trim(), password, twoFactorCode || undefined, twoFactorToken || undefined);
+      if (result?.requires_2fa) {
+        setTwoFactorToken(result.two_factor_token);
+        setTwoFactorCode('');
+        setLoading(false);
+        return;
+      }
       // Check if logged in as admin or tenant and redirect accordingly
       const adminToken = localStorage.getItem('admin_token');
       if (adminToken) {
@@ -90,12 +98,28 @@ export function Login() {
               </div>
             </div>
 
+            {twoFactorToken && (
+              <div>
+                <label className="block text-sm text-card-foreground mb-2">Authenticator Code</label>
+                <input
+                  type="text"
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  required
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="Enter 6-digit code"
+                  className="w-full px-4 py-3 bg-input-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                />
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
               className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in…' : 'Sign In'}
+              {loading ? 'Signing in...' : twoFactorToken ? 'Verify and Sign In' : 'Sign In'}
             </button>
           </form>
 

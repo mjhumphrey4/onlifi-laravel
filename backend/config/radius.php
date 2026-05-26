@@ -12,7 +12,7 @@ return [
     */
 
     // RADIUS server IP address (where FreeRADIUS is running)
-    'server_ip' => env('RADIUS_SERVER_IP', '192.168.0.180'),
+    'server_ip' => env('RADIUS_SERVER_IP', '129.168.0.42'),
 
     // Authentication port (default: 1812)
     'auth_port' => env('RADIUS_AUTH_PORT', 1812),

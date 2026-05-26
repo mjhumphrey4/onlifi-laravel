@@ -68,8 +68,13 @@ const put = <T = any>(endpoint: string, body?: Record<string, unknown>) =>
 const del = <T = any>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' });
 
 // ============ SUPER ADMIN AUTH ============
-export const adminLogin = (email: string, password: string) =>
-  post('/super-admin/login', { email, password });
+export const adminLogin = (email: string, password: string, twoFactorCode?: string, twoFactorToken?: string) =>
+  post('/super-admin/login', {
+    email,
+    password,
+    ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
+    ...(twoFactorToken ? { two_factor_token: twoFactorToken } : {}),
+  });
 
 export const adminLogout = () => post('/super-admin/logout');
 
@@ -119,8 +124,13 @@ export const getPlatformFeeRecords = () => get('/super-admin/platform-fees/recor
 export const getTenantBalances = () => get('/super-admin/platform-fees/tenant-balances');
 
 // ============ TENANT AUTH ============
-export const tenantLogin = (email: string, password: string) =>
-  post('/tenant/login', { email, password });
+export const tenantLogin = (email: string, password: string, twoFactorCode?: string, twoFactorToken?: string) =>
+  post('/tenant/login', {
+    email,
+    password,
+    ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
+    ...(twoFactorToken ? { two_factor_token: twoFactorToken } : {}),
+  });
 
 export const tenantLogout = () => post('/tenant/logout');
 

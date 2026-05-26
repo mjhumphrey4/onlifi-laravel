@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, Server, Copy, Check, Settings as SettingsIcon, RefreshCw, Building2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { TwoFactorPanel } from '../components/TwoFactorPanel';
 
 interface Site {
   id: number;
@@ -335,6 +336,10 @@ export function Settings() {
         <p className="text-sm text-muted-foreground mt-1">
           Configure your system and download router scripts
         </p>
+      </div>
+
+      <div className="mb-6">
+        <TwoFactorPanel endpointPrefix="/tenant" />
       </div>
 
       {/* Telemetry URL Configuration (Admin) */}

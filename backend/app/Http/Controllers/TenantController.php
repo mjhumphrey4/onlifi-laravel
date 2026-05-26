@@ -168,36 +168,6 @@ class TenantController extends Controller
         ]);
     }
 
-    public function extendTrial(Request $request, Tenant $tenant)
-    {
-        $validator = Validator::make($request->all(), [
-            'days' => 'required|integer|min:1|max:365',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'error' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $this->tenantService->extendTrial($tenant, $request->days);
-
-        return response()->json([
-            'message' => 'Trial extended successfully',
-            'trial_ends_at' => $tenant->fresh()->trial_ends_at,
-        ]);
-    }
-
-    public function subscribe(Tenant $tenant)
-    {
-        $this->tenantService->subscribe($tenant);
-
-        return response()->json([
-            'message' => 'Tenant subscribed successfully',
-        ]);
-    }
-
     public function stats(Tenant $tenant)
     {
         $stats = $this->tenantService->getTenantStats($tenant);

@@ -184,7 +184,7 @@ On each MikroTik router, configure RADIUS:
 
 # Add RADIUS server
 /radius add \
-    address=192.168.0.180 \
+    address=129.168.0.42 \
     secret="unique_secret_for_acme_001" \
     service=hotspot \
     authentication-port=1812 \

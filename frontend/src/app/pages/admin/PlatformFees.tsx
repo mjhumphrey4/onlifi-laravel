@@ -12,41 +12,50 @@ import {
 } from 'lucide-react';
 
 interface FeeSettings {
-  platform_fee_percentage: number;
-  minimum_fee: number;
-  maximum_fee: number;
-  fee_collection_method: string;
+  collection_fee_percent: number;
+  disbursement_fee_percent: number;
+  minimum_disbursement: number;
+  tenant_overrides: TenantFeeOverride[];
 }
 
 interface RevenueSummary {
   total_revenue: number;
   this_month: number;
   last_month: number;
-  pending_collection: number;
+  total_fees: number;
 }
 
 interface TenantBalance {
   tenant_id: number;
-  tenant_name: string;
-  total_transactions: number;
+  tenant?: { id: number; name: string; slug: string };
+  transaction_count: number;
   total_fees: number;
-  collected: number;
-  pending: number;
+  balance: number;
+  last_transaction?: string;
+}
+
+interface TenantFeeOverride {
+  id: number;
+  name: string;
+  slug: string;
+  collection_fee_percent: number | null;
+  disbursement_fee_percent: number | null;
+  minimum_disbursement: number | null;
 }
 
 export default function PlatformFees() {
   const navigate = useNavigate();
   const [settings, setSettings] = useState<FeeSettings>({
-    platform_fee_percentage: 2.5,
-    minimum_fee: 0,
-    maximum_fee: 0,
-    fee_collection_method: 'automatic',
+    collection_fee_percent: 5,
+    disbursement_fee_percent: 2,
+    minimum_disbursement: 10000,
+    tenant_overrides: [],
   });
   const [revenue, setRevenue] = useState<RevenueSummary>({
     total_revenue: 0,
     this_month: 0,
     last_month: 0,
-    pending_collection: 0,
+    total_fees: 0,
   });
   const [tenantBalances, setTenantBalances] = useState<TenantBalance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +84,12 @@ export default function PlatformFees() {
       }
       if (revenueRes.ok) {
         const data = await revenueRes.json();
-        setRevenue(data);
+        setRevenue({
+          total_revenue: Number(data.summary?.total_collections || 0),
+          this_month: Number(data.today?.total_fees || 0),
+          last_month: 0,
+          total_fees: Number(data.all_time?.total_fees || 0),
+        });
       }
       if (balancesRes.ok) {
         const data = await balancesRes.json();
@@ -98,7 +112,17 @@ export default function PlatformFees() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify({
+          collection_fee_percent: settings.collection_fee_percent,
+          disbursement_fee_percent: settings.disbursement_fee_percent,
+          minimum_disbursement: settings.minimum_disbursement,
+          tenant_overrides: settings.tenant_overrides.map((tenant) => ({
+            tenant_id: tenant.id,
+            collection_fee_percent: tenant.collection_fee_percent,
+            disbursement_fee_percent: tenant.disbursement_fee_percent,
+            minimum_disbursement: tenant.minimum_disbursement,
+          })),
+        }),
       });
 
       if (response.ok) {
@@ -172,8 +196,8 @@ export default function PlatformFees() {
                   <DollarSign className="w-6 h-6 text-green-400" />
                 </div>
               </div>
-              <p className="mt-4 text-2xl font-bold text-white">{formatCurrency(revenue.total_revenue)}</p>
-              <p className="text-sm text-slate-400">Total Revenue</p>
+              <p className="mt-4 text-2xl font-bold text-white">{formatCurrency(revenue.total_fees)}</p>
+              <p className="text-sm text-slate-400">All-Time Platform Fees</p>
             </div>
 
             <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6">
@@ -208,8 +232,8 @@ export default function PlatformFees() {
                   <Users className="w-6 h-6 text-yellow-400" />
                 </div>
               </div>
-              <p className="mt-4 text-2xl font-bold text-white">{formatCurrency(revenue.pending_collection)}</p>
-              <p className="text-sm text-slate-400">Pending Collection</p>
+              <p className="mt-4 text-2xl font-bold text-white">{settings.tenant_overrides.length}</p>
+              <p className="text-sm text-slate-400">Tenant Fee Overrides</p>
             </div>
           </div>
 
@@ -218,16 +242,16 @@ export default function PlatformFees() {
             <h3 className="text-lg font-semibold text-white mb-4">Current Fee Configuration</h3>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="bg-slate-700/50 rounded-xl p-4">
-                <p className="text-3xl font-bold text-indigo-400">{settings.platform_fee_percentage}%</p>
-                <p className="text-sm text-slate-400 mt-1">Platform Fee Rate</p>
+                <p className="text-3xl font-bold text-indigo-400">{settings.collection_fee_percent}%</p>
+                <p className="text-sm text-slate-400 mt-1">Default Collection Fee</p>
               </div>
               <div className="bg-slate-700/50 rounded-xl p-4">
-                <p className="text-3xl font-bold text-white">{formatCurrency(settings.minimum_fee)}</p>
-                <p className="text-sm text-slate-400 mt-1">Minimum Fee</p>
+                <p className="text-3xl font-bold text-white">{settings.disbursement_fee_percent}%</p>
+                <p className="text-sm text-slate-400 mt-1">Default Disbursement Fee</p>
               </div>
               <div className="bg-slate-700/50 rounded-xl p-4">
-                <p className="text-3xl font-bold text-white">{settings.maximum_fee > 0 ? formatCurrency(settings.maximum_fee) : 'No Limit'}</p>
-                <p className="text-sm text-slate-400 mt-1">Maximum Fee</p>
+                <p className="text-3xl font-bold text-white">{formatCurrency(settings.minimum_disbursement)}</p>
+                <p className="text-sm text-slate-400 mt-1">Minimum Disbursement</p>
               </div>
             </div>
           </div>
@@ -245,15 +269,15 @@ export default function PlatformFees() {
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Platform Fee Percentage (%)
+                  Default Collection Fee (%)
                 </label>
                 <input
                   type="number"
                   step="0.1"
                   min="0"
                   max="100"
-                  value={settings.platform_fee_percentage}
-                  onChange={(e) => setSettings({ ...settings, platform_fee_percentage: parseFloat(e.target.value) })}
+                  value={settings.collection_fee_percent}
+                  onChange={(e) => setSettings({ ...settings, collection_fee_percent: parseFloat(e.target.value) })}
                   className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <p className="text-xs text-slate-500 mt-1">Percentage charged on each transaction</p>
@@ -261,45 +285,77 @@ export default function PlatformFees() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Fee Collection Method
+                  Default Disbursement Fee (%)
                 </label>
-                <select
-                  value={settings.fee_collection_method}
-                  onChange={(e) => setSettings({ ...settings, fee_collection_method: e.target.value })}
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="50"
+                  value={settings.disbursement_fee_percent}
+                  onChange={(e) => setSettings({ ...settings, disbursement_fee_percent: parseFloat(e.target.value) })}
                   className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="automatic">Automatic (deduct from transactions)</option>
-                  <option value="invoice">Invoice (monthly billing)</option>
-                  <option value="manual">Manual Collection</option>
-                </select>
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Minimum Fee (UGX)
+                  Minimum Disbursement (UGX)
                 </label>
                 <input
                   type="number"
                   min="0"
-                  value={settings.minimum_fee}
-                  onChange={(e) => setSettings({ ...settings, minimum_fee: parseInt(e.target.value) })}
+                  value={settings.minimum_disbursement}
+                  onChange={(e) => setSettings({ ...settings, minimum_disbursement: parseInt(e.target.value) })}
                   className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
-                <p className="text-xs text-slate-500 mt-1">Minimum fee per transaction (0 = no minimum)</p>
+                <p className="text-xs text-slate-500 mt-1">Minimum amount required before tenant payout</p>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Maximum Fee (UGX)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={settings.maximum_fee}
-                  onChange={(e) => setSettings({ ...settings, maximum_fee: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <p className="text-xs text-slate-500 mt-1">Maximum fee per transaction (0 = no maximum)</p>
+            <div className="border-t border-slate-700 pt-6">
+              <h3 className="text-white font-semibold mb-3">Tenant-specific fee overrides</h3>
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                {settings.tenant_overrides.map((tenant) => (
+                  <div key={tenant.id} className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr] items-end bg-slate-700/40 rounded-xl p-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">{tenant.name}</p>
+                      <p className="text-xs text-slate-400">{tenant.slug}</p>
+                    </div>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder={`${settings.collection_fee_percent}%`}
+                      value={tenant.collection_fee_percent ?? ''}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        tenant_overrides: settings.tenant_overrides.map((item) => item.id === tenant.id ? { ...item, collection_fee_percent: e.target.value === '' ? null : parseFloat(e.target.value) } : item),
+                      })}
+                      className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white"
+                    />
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder={`${settings.disbursement_fee_percent}%`}
+                      value={tenant.disbursement_fee_percent ?? ''}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        tenant_overrides: settings.tenant_overrides.map((item) => item.id === tenant.id ? { ...item, disbursement_fee_percent: e.target.value === '' ? null : parseFloat(e.target.value) } : item),
+                      })}
+                      className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white"
+                    />
+                    <input
+                      type="number"
+                      placeholder={`${settings.minimum_disbursement}`}
+                      value={tenant.minimum_disbursement ?? ''}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        tenant_overrides: settings.tenant_overrides.map((item) => item.id === tenant.id ? { ...item, minimum_disbursement: e.target.value === '' ? null : parseFloat(e.target.value) } : item),
+                      })}
+                      className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white"
+                    />
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -331,8 +387,8 @@ export default function PlatformFees() {
                   <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Tenant</th>
                   <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Transactions</th>
                   <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Total Fees</th>
-                  <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Collected</th>
-                  <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Pending</th>
+                  <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Tenant Balance</th>
+                  <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Last Transaction</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
@@ -345,11 +401,11 @@ export default function PlatformFees() {
                 ) : (
                   tenantBalances.map((balance) => (
                     <tr key={balance.tenant_id} className="hover:bg-slate-700/50">
-                      <td className="px-6 py-4 text-white font-medium">{balance.tenant_name}</td>
-                      <td className="px-6 py-4 text-right text-slate-300">{balance.total_transactions}</td>
+                      <td className="px-6 py-4 text-white font-medium">{balance.tenant?.name || balance.tenant_id}</td>
+                      <td className="px-6 py-4 text-right text-slate-300">{balance.transaction_count}</td>
                       <td className="px-6 py-4 text-right text-slate-300">{formatCurrency(balance.total_fees)}</td>
-                      <td className="px-6 py-4 text-right text-green-400">{formatCurrency(balance.collected)}</td>
-                      <td className="px-6 py-4 text-right text-yellow-400">{formatCurrency(balance.pending)}</td>
+                      <td className="px-6 py-4 text-right text-green-400">{formatCurrency(balance.balance)}</td>
+                      <td className="px-6 py-4 text-right text-yellow-400">{balance.last_transaction ? new Date(balance.last_transaction).toLocaleDateString() : '-'}</td>
                     </tr>
                   ))
                 )}

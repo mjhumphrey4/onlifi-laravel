@@ -14,8 +14,8 @@ export interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  loginAsTenant: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, twoFactorCode?: string, twoFactorToken?: string) => Promise<any>;
+  loginAsTenant: (email: string, password: string, twoFactorCode?: string, twoFactorToken?: string) => Promise<any>;
   logout: () => Promise<void>;
   isAdmin: () => boolean;
   isTenant: () => boolean;
@@ -76,10 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, twoFactorCode?: string, twoFactorToken?: string) => {
     // Try tenant login first (most common use case)
     try {
-      const data = await tenantLogin(email, password);
+      const data = await tenantLogin(email, password, twoFactorCode, twoFactorToken);
+      if (data.requires_2fa) return data;
       localStorage.setItem('tenant_token', data.token);
       localStorage.setItem('tenant_user', JSON.stringify(data.user));
       
@@ -95,7 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (tenantError) {
       // If tenant login fails, try admin login
       try {
-        const data = await adminLogin(email, password);
+        const data = await adminLogin(email, password, twoFactorCode, twoFactorToken);
+        if (data.requires_2fa) return data;
         localStorage.setItem('admin_token', data.token);
         localStorage.setItem('admin_user', JSON.stringify(data.admin));
 
@@ -113,8 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loginAsTenant = async (email: string, password: string) => {
-    const data = await tenantLogin(email, password);
+  const loginAsTenant = async (email: string, password: string, twoFactorCode?: string, twoFactorToken?: string) => {
+    const data = await tenantLogin(email, password, twoFactorCode, twoFactorToken);
+    if (data.requires_2fa) return data;
     localStorage.setItem('tenant_token', data.token);
     localStorage.setItem('tenant_user', JSON.stringify(data.user));
     

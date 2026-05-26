@@ -7,12 +7,13 @@ import {
   Globe,
   Mail,
   DollarSign,
-  Clock,
   Shield,
   Bell,
   Database,
+  Server,
   ChevronRight,
 } from 'lucide-react';
+import { TwoFactorPanel } from '@/app/components/TwoFactorPanel';
 
 interface Setting {
   key: string;
@@ -38,8 +39,8 @@ export default function SystemSettings() {
 
   const settingGroups = [
     { id: 'general', name: 'General', icon: <Globe className="w-5 h-5" /> },
-    { id: 'trial', name: 'Trial Settings', icon: <Clock className="w-5 h-5" /> },
     { id: 'payment', name: 'Payment', icon: <DollarSign className="w-5 h-5" /> },
+    { id: 'radius', name: 'RADIUS', icon: <Server className="w-5 h-5" /> },
     { id: 'email', name: 'Email', icon: <Mail className="w-5 h-5" /> },
     { id: 'security', name: 'Security', icon: <Shield className="w-5 h-5" /> },
     { id: 'notifications', name: 'Notifications', icon: <Bell className="w-5 h-5" /> },
@@ -90,7 +91,9 @@ export default function SystemSettings() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ settings: editedSettings }),
+        body: JSON.stringify({
+          settings: Object.entries(editedSettings).map(([key, value]) => ({ key, value })),
+        }),
       });
 
       if (response.ok) {
@@ -128,15 +131,16 @@ export default function SystemSettings() {
       { key: 'app_url', label: 'Application URL', type: 'string', description: 'The base URL of your application' },
       { key: 'support_email', label: 'Support Email', type: 'string', description: 'Email for support inquiries' },
     ],
-    trial: [
-      { key: 'default_trial_days', label: 'Default Trial Days', type: 'number', description: 'Number of trial days for new tenants' },
-      { key: 'trial_extension_days', label: 'Trial Extension Days', type: 'number', description: 'Days to extend trial when requested' },
-      { key: 'auto_suspend_expired', label: 'Auto Suspend Expired', type: 'boolean', description: 'Automatically suspend expired trials' },
-    ],
     payment: [
-      { key: 'platform_fee_percentage', label: 'Platform Fee (%)', type: 'number', description: 'Percentage fee on transactions' },
-      { key: 'minimum_withdrawal', label: 'Minimum Withdrawal', type: 'number', description: 'Minimum withdrawal amount' },
+      { key: 'platform_collection_fee_percent', label: 'Collection Fee (%)', type: 'number', description: 'Percentage fee on incoming payments' },
+      { key: 'platform_minimum_disbursement', label: 'Minimum Disbursement', type: 'number', description: 'Minimum tenant payout amount' },
       { key: 'payment_gateway', label: 'Payment Gateway', type: 'string', description: 'Active payment gateway' },
+    ],
+    radius: [
+      { key: 'radius_server_ip', label: 'RADIUS Server IP', type: 'string', description: 'FreeRADIUS server address used in generated router scripts' },
+      { key: 'radius_auth_port', label: 'Authentication Port', type: 'number', description: 'RADIUS authentication UDP port' },
+      { key: 'radius_acct_port', label: 'Accounting Port', type: 'number', description: 'RADIUS accounting UDP port' },
+      { key: 'radius_shared_secret', label: 'Shared Secret', type: 'string', description: 'Fallback shared secret for router authentication' },
     ],
     email: [
       { key: 'smtp_host', label: 'SMTP Host', type: 'string', description: 'SMTP server hostname' },
@@ -151,8 +155,6 @@ export default function SystemSettings() {
     ],
     notifications: [
       { key: 'notify_new_signup', label: 'New Signup Notifications', type: 'boolean', description: 'Email admin on new signups' },
-      { key: 'notify_trial_expiry', label: 'Trial Expiry Notifications', type: 'boolean', description: 'Notify before trial expires' },
-      { key: 'trial_expiry_days', label: 'Days Before Expiry', type: 'number', description: 'Days before expiry to notify' },
     ],
   };
 
@@ -221,6 +223,9 @@ export default function SystemSettings() {
               </h2>
             </div>
             <div className="p-6 space-y-6">
+              {activeGroup === 'security' && (
+                <TwoFactorPanel endpointPrefix="/super-admin" />
+              )}
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />

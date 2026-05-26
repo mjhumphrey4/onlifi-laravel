@@ -16,7 +16,7 @@ interface Announcement {
   title: string;
   content: string;
   type: 'info' | 'warning' | 'success' | 'error';
-  target: 'all' | 'active' | 'trial' | 'specific';
+  target: 'all' | 'active' | 'specific';
   is_active: boolean;
   starts_at: string | null;
   ends_at: string | null;
@@ -264,7 +264,6 @@ export default function Announcements() {
                   <SelectContent>
                     <SelectItem value="all">All Tenants</SelectItem>
                     <SelectItem value="active">Active Only</SelectItem>
-                    <SelectItem value="trial">Trial Only</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SystemSetting;
+use App\Models\Site;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -33,9 +35,9 @@ class NasController extends Controller
         
         return response()->json([
             'nas_entries' => $nasEntries,
-            'radius_server' => config('radius.server_ip', '192.168.0.180'),
-            'radius_port' => config('radius.auth_port', 1812),
-            'radius_acct_port' => config('radius.acct_port', 1813),
+            'radius_server' => $this->radiusServerIp(),
+            'radius_port' => $this->radiusAuthPort(),
+            'radius_acct_port' => $this->radiusAcctPort(),
         ]);
     }
     
@@ -69,9 +71,11 @@ class NasController extends Controller
         $radiusSecret = $tenant->radius_secret ?? config('radius.shared_secret', 'onlifi_radius_secret');
         
         // Insert NAS entry
+        $provisioningToken = Str::random(64);
         $nasId = DB::connection('central')->table('nas')->insertGetId([
             'nasname' => '0.0.0.0/0',  // Accept from any IP (we use NAS-Identifier)
             'router_identifier' => $routerIdentifier,
+            'provisioning_token' => $provisioningToken,
             'shortname' => $request->input('name'),
             'type' => 'other',
             'secret' => $radiusSecret,
@@ -83,21 +87,20 @@ class NasController extends Controller
             'updated_at' => now(),
         ]);
         
-        // Generate MikroTik configuration script
-        $mikrotikScript = $this->generateMikrotikScript(
-            $routerIdentifier,
-            $radiusSecret,
-            config('radius.server_ip', '192.168.0.180')
-        );
+        $nas = DB::connection('central')->table('nas')->where('id', $nasId)->first();
+        $mikrotikScript = $this->generateFullProvisioningScript($nas);
         
         return response()->json([
             'message' => 'Router registered successfully',
             'nas_id' => $nasId,
+            'nas' => $nas,
             'router_identifier' => $routerIdentifier,
+            'provisioning_url' => $this->provisioningUrl($provisioningToken),
+            'fetch_command' => $this->fetchCommand($provisioningToken),
             'radius_config' => [
-                'server' => config('radius.server_ip', '192.168.0.180'),
-                'auth_port' => 1812,
-                'acct_port' => 1813,
+                'server' => $this->radiusServerIp(),
+                'auth_port' => $this->radiusAuthPort(),
+                'acct_port' => $this->radiusAcctPort(),
                 'secret' => $radiusSecret,
                 'nas_identifier' => $routerIdentifier,
             ],
@@ -124,16 +127,14 @@ class NasController extends Controller
             return response()->json(['error' => 'NAS entry not found'], 404);
         }
         
-        // Generate MikroTik script for this NAS
-        $mikrotikScript = $this->generateMikrotikScript(
-            $nas->router_identifier,
-            $nas->secret,
-            config('radius.server_ip', '192.168.0.180')
-        );
+        $nas = $this->ensureProvisioningToken($nas);
+        $mikrotikScript = $this->generateFullProvisioningScript($nas);
         
         return response()->json([
             'nas' => $nas,
             'mikrotik_script' => $mikrotikScript,
+            'provisioning_url' => $this->provisioningUrl($nas->provisioning_token),
+            'fetch_command' => $this->fetchCommand($nas->provisioning_token),
         ]);
     }
     
@@ -233,11 +234,9 @@ class NasController extends Controller
                 'updated_at' => now(),
             ]);
         
-        $mikrotikScript = $this->generateMikrotikScript(
-            $newIdentifier,
-            $nas->secret,
-            config('radius.server_ip', '192.168.0.180')
-        );
+        $nas = DB::connection('central')->table('nas')->where('id', $id)->first();
+        $nas = $this->ensureProvisioningToken($nas);
+        $mikrotikScript = $this->generateFullProvisioningScript($nas);
         
         return response()->json([
             'message' => 'Router identifier regenerated',
@@ -265,15 +264,27 @@ class NasController extends Controller
             return response()->json(['error' => 'NAS entry not found'], 404);
         }
         
-        $script = $this->generateMikrotikScript(
-            $nas->router_identifier,
-            $nas->secret,
-            config('radius.server_ip', '192.168.0.180')
-        );
+        $nas = $this->ensureProvisioningToken($nas);
+        $script = $this->generateFullProvisioningScript($nas);
         
         return response($script)
             ->header('Content-Type', 'text/plain')
             ->header('Content-Disposition', "attachment; filename=\"radius-config-{$nas->shortname}.rsc\"");
+    }
+
+    public function publicProvisioningScript(string $token)
+    {
+        $nas = DB::connection('central')->table('nas')
+            ->where('provisioning_token', $token)
+            ->first();
+
+        if (!$nas) {
+            return response('# Invalid or expired OnLiFi provisioning token', 404)
+                ->header('Content-Type', 'text/plain');
+        }
+
+        return response($this->generateFullProvisioningScript($nas))
+            ->header('Content-Type', 'text/plain');
     }
     
     /**
@@ -286,67 +297,248 @@ class NasController extends Controller
         $random = strtoupper(Str::random(8));
         return "ONLIFI-{$tenantId}-{$timestamp}-{$random}";
     }
+
+    private function ensureProvisioningToken($nas)
+    {
+        if ($nas && empty($nas->provisioning_token)) {
+            $token = Str::random(64);
+            DB::connection('central')->table('nas')
+                ->where('id', $nas->id)
+                ->update(['provisioning_token' => $token, 'updated_at' => now()]);
+            $nas->provisioning_token = $token;
+        }
+
+        return $nas;
+    }
+
+    private function provisioningUrl(string $token): string
+    {
+        return rtrim(config('app.url'), '/') . "/api/router/provision/{$token}";
+    }
+
+    private function fetchCommand(string $token): string
+    {
+        $url = $this->provisioningUrl($token);
+        return "/tool fetch url=\"{$url}\" mode=http dst-path=onlifi-setup.rsc; /import file-name=onlifi-setup.rsc";
+    }
+
+    private function radiusServerIp(): string
+    {
+        return (string) SystemSetting::get('radius_server_ip', config('radius.server_ip', '129.168.0.42'));
+    }
+
+    private function radiusAuthPort(): int
+    {
+        return (int) SystemSetting::get('radius_auth_port', config('radius.auth_port', 1812));
+    }
+
+    private function radiusAcctPort(): int
+    {
+        return (int) SystemSetting::get('radius_acct_port', config('radius.acct_port', 1813));
+    }
     
     /**
      * Generate MikroTik RADIUS configuration script
      */
-    private function generateMikrotikScript(string $routerIdentifier, string $secret, string $serverIp): string
+    private function generateFullProvisioningScript($nas): string
     {
+        $routerIdentifier = $nas->router_identifier;
+        $secret = $nas->secret;
+        $tenant = DB::connection('central')->table('tenants')->where('id', $nas->tenant_id)->first();
+        $tenantName = $tenant->name ?? 'Unknown Tenant';
+        $site = $this->getOrCreateProvisioningSite($nas, $tenant);
+        $telemetryUrl = rtrim(config('app.url'), '/') . '/api/telemetry';
+        $telemetryToken = $site?->api_token ?? '';
+        $serverIp = $this->radiusServerIp();
+        $authPort = $this->radiusAuthPort();
+        $acctPort = $this->radiusAcctPort();
+        $lanAddress = (string) SystemSetting::get('router_default_lan_cidr', '10.10.0.1/24');
+        $lanGateway = explode('/', $lanAddress)[0];
+        $dhcpNetwork = $this->dhcpNetworkFromCidr($lanAddress);
+        $poolRange = (string) SystemSetting::get('router_default_dhcp_pool', '10.10.0.10-10.10.0.254');
+        $dnsServers = (string) SystemSetting::get('router_default_dns_servers', '1.1.1.1,8.8.8.8');
+        $hotspotDns = (string) SystemSetting::get('router_default_hotspot_dns', 'wifi.onlifi.local');
+
         return <<<RSC
 # ============================================
-# Onlifi RADIUS Configuration for MikroTik
+# OnLiFi Full Router Provisioning Script
 # ============================================
 # Router Identifier: {$routerIdentifier}
+# Tenant: {$tenantName}
 # Generated: {now()->toIso8601String()}
 #
-# IMPORTANT: This script configures your MikroTik router
-# to authenticate hotspot users via the Onlifi RADIUS server.
-#
-# Run this script on your MikroTik router via:
-# - Winbox: System > Scripts > New > Paste & Run
-# - Terminal: /import file-name=radius-config.rsc
+# This script is idempotent and safe to run more than once.
+# Defaults:
+# - WAN: ether1
+# - LAN bridge: onlifi-lan
+# - Hotspot network: {$lanAddress}
 # ============================================
 
-# Remove existing RADIUS configuration (optional - uncomment if needed)
-# /radius remove [find]
+:local wanInterface "ether1"
+:local bridgeName "onlifi-lan"
+:local hotspotName "onlifi-hotspot"
+:local hotspotProfile "onlifi-hotspot-profile"
+:local userProfile "onlifi-voucher-profile"
+:local dhcpPool "onlifi-dhcp-pool"
+:local dhcpServer "onlifi-dhcp"
+:local lanAddress "{$lanAddress}"
+:local lanGateway "{$lanGateway}"
+:local poolRange "{$poolRange}"
+:local dnsServers "{$dnsServers}"
+:local hotspotDnsName "{$hotspotDns}"
+:local radiusAddress "{$serverIp}"
+:local radiusSecret "{$secret}"
+:local radiusAuthPort "{$authPort}"
+:local radiusAcctPort "{$acctPort}"
+:local routerIdentifier "{$routerIdentifier}"
+:local telemetryUrl "{$telemetryUrl}"
+:local telemetryToken "{$telemetryToken}"
+:local telemetryScriptName "onlifi-telemetry"
+:local telemetrySchedulerName "onlifi-telemetry-scheduler"
+
+:put "OnLiFi: Starting full router provisioning..."
+
+# Identity
+/system identity set name=\$routerIdentifier
+
+# WAN DHCP client
+:if ([:len [/ip dhcp-client find interface=\$wanInterface]] = 0) do={
+  /ip dhcp-client add interface=\$wanInterface disabled=no use-peer-dns=no use-peer-ntp=yes comment="OnLiFi WAN"
+} else={
+  /ip dhcp-client set [find interface=\$wanInterface] disabled=no use-peer-dns=no use-peer-ntp=yes
+}
+
+# LAN bridge
+:if ([:len [/interface bridge find name=\$bridgeName]] = 0) do={
+  /interface bridge add name=\$bridgeName comment="OnLiFi LAN bridge"
+}
+
+# Add non-WAN ethernet ports to LAN bridge
+:foreach iface in=[/interface ethernet find] do={
+  :local ifaceName [/interface ethernet get \$iface name]
+  :if (\$ifaceName != \$wanInterface) do={
+    :if ([:len [/interface bridge port find bridge=\$bridgeName interface=\$ifaceName]] = 0) do={
+      /interface bridge port add bridge=\$bridgeName interface=\$ifaceName
+    }
+  }
+}
+
+# LAN IP
+:if ([:len [/ip address find interface=\$bridgeName address=\$lanAddress]] = 0) do={
+  /ip address add address=\$lanAddress interface=\$bridgeName comment="OnLiFi LAN gateway"
+}
+
+# DNS
+/ip dns set allow-remote-requests=yes servers=\$dnsServers
+
+# DHCP
+:if ([:len [/ip pool find name=\$dhcpPool]] = 0) do={
+  /ip pool add name=\$dhcpPool ranges=\$poolRange
+} else={
+  /ip pool set [find name=\$dhcpPool] ranges=\$poolRange
+}
+
+:if ([:len [/ip dhcp-server find name=\$dhcpServer]] = 0) do={
+  /ip dhcp-server add name=\$dhcpServer interface=\$bridgeName address-pool=\$dhcpPool lease-time=1h disabled=no
+} else={
+  /ip dhcp-server set [find name=\$dhcpServer] interface=\$bridgeName address-pool=\$dhcpPool disabled=no
+}
+
+:if ([:len [/ip dhcp-server network find address={$dhcpNetwork}]] = 0) do={
+  /ip dhcp-server network add address={$dhcpNetwork} gateway=\$lanGateway dns-server=\$lanGateway
+}
+
+# NAT
+:if ([:len [/ip firewall nat find comment="OnLiFi internet masquerade"]] = 0) do={
+  /ip firewall nat add chain=srcnat out-interface=\$wanInterface action=masquerade comment="OnLiFi internet masquerade"
+}
 
 # Add RADIUS server
-/radius add \\
-    service=hotspot,login \\
-    address={$serverIp} \\
-    secret="{$secret}" \\
-    timeout=3000ms \\
-    authentication-port=1812 \\
-    accounting-port=1813 \\
-    comment="Onlifi RADIUS Server"
+:if ([:len [/radius find comment="OnLiFi RADIUS Server"]] = 0) do={
+  /radius add service=hotspot,login address=\$radiusAddress secret=\$radiusSecret timeout=3000ms authentication-port=\$radiusAuthPort accounting-port=\$radiusAcctPort comment="OnLiFi RADIUS Server"
+} else={
+  /radius set [find comment="OnLiFi RADIUS Server"] service=hotspot,login address=\$radiusAddress secret=\$radiusSecret timeout=3000ms authentication-port=\$radiusAuthPort accounting-port=\$radiusAcctPort
+}
 
-# Set NAS-Identifier (CRITICAL - must match the registered identifier)
-# This is how the RADIUS server identifies which tenant this router belongs to
-/system identity set name="{$routerIdentifier}"
+# Hotspot profile and server
+:if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
+  /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+} else={
+  /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+}
 
-# Configure Hotspot to use RADIUS
-/ip hotspot profile set [find] \\
-    use-radius=yes \\
-    radius-accounting=yes \\
-    radius-interim-update=5m \\
-    nas-port-type=wireless-802.11
+:if ([:len [/ip hotspot user profile find name=\$userProfile]] = 0) do={
+  /ip hotspot user profile add name=\$userProfile shared-users=1 keepalive-timeout=2m status-autorefresh=1m
+}
 
-# Enable RADIUS for login (optional - for admin authentication)
-# /user aaa set use-radius=yes
+:if ([:len [/ip hotspot find name=\$hotspotName]] = 0) do={
+  /ip hotspot add name=\$hotspotName interface=\$bridgeName profile=\$hotspotProfile address-pool=\$dhcpPool disabled=no
+} else={
+  /ip hotspot set [find name=\$hotspotName] interface=\$bridgeName profile=\$hotspotProfile address-pool=\$dhcpPool disabled=no
+}
 
-:log info "Onlifi RADIUS configuration applied successfully"
+# Telemetry script
+/system script remove [find name=\$telemetryScriptName]
+/system script add name=\$telemetryScriptName policy=read,write,test source=":local dashboardUrl \\"\$telemetryUrl\\"; :local apiToken \\"\$telemetryToken\\"; :local routerIdentity [/system identity get name]; :local cpuVal [/system resource get cpu-load]; :local memTotal [/system resource get total-memory]; :local memFree [/system resource get free-memory]; :local memUsed (\\\$memTotal - \\\$memFree); :local activeUsers 0; :do { :set activeUsers [/ip hotspot active print count-only] } on-error={}; :local tx 0; :local rx 0; :foreach i in=[/interface find] do={ :do { :set tx (\\\$tx + [/interface get \\\$i tx-byte]); :set rx (\\\$rx + [/interface get \\\$i rx-byte]) } on-error={} }; :local json \\"{\\\\\\"router_identity\\\\\\":\\\\\\"\\" . \\\$routerIdentity . \\"\\\\\\",\\\\\\"cpu_load\\\\\\":\\" . \\\$cpuVal . \\",\\\\\\"memory_total_mb\\\\\\":\\" . (\\\$memTotal / 1048576) . \\",\\\\\\"memory_used_mb\\\\\\":\\" . (\\\$memUsed / 1048576) . \\",\\\\\\"active_connections\\\\\\":\\" . \\\$activeUsers . \\",\\\\\\"total_tx_bytes\\\\\\":\\" . \\\$tx . \\",\\\\\\"total_rx_bytes\\\\\\":\\" . \\\$rx . \\"}\\"; :local headers (\\"Authorization: Bearer \\" . \\\$apiToken . \\",Content-Type: application/json\\"); :do { /tool fetch url=\\\$dashboardUrl mode=http http-method=post http-data=\\\$json http-header-field=\\\$headers keep-result=no } on-error={ :log warning \\"OnLiFi telemetry post failed\\" }"
+
+:if ([:len [/system scheduler find name=\$telemetrySchedulerName]] = 0) do={
+  /system scheduler add name=\$telemetrySchedulerName start-time=startup interval=30s on-event="/system script run onlifi-telemetry"
+} else={
+  /system scheduler set [find name=\$telemetrySchedulerName] interval=30s on-event="/system script run onlifi-telemetry"
+}
+
+:log info "OnLiFi full router provisioning completed"
 :put "============================================"
-:put "Onlifi RADIUS Configuration Complete!"
+:put "OnLiFi Router Provisioning Complete"
 :put "============================================"
 :put "Router Identifier: {$routerIdentifier}"
-:put "RADIUS Server: {$serverIp}"
-:put "Auth Port: 1812"
-:put "Acct Port: 1813"
+:put "RADIUS Server: {$serverIp}:{$authPort}/{$acctPort}"
+:put "LAN Gateway: {$lanGateway}"
+:put "Hotspot: on {$hotspotDns}"
 :put ""
-:put "Your hotspot users can now authenticate"
-:put "using voucher codes from the Onlifi dashboard."
+:put "Users can now authenticate with OnLiFi voucher codes."
 :put "============================================"
 RSC;
+    }
+
+    private function dhcpNetworkFromCidr(string $cidr): string
+    {
+        [$ip, $prefix] = array_pad(explode('/', $cidr, 2), 2, '24');
+
+        if ($prefix !== '24') {
+            return $cidr;
+        }
+
+        $parts = explode('.', $ip);
+        if (count($parts) !== 4) {
+            return $cidr;
+        }
+
+        return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0/24";
+    }
+
+    private function getOrCreateProvisioningSite($nas, $tenant)
+    {
+        if (!$tenant) {
+            return null;
+        }
+
+        $name = $nas->shortname ?: 'Router ' . $nas->id;
+        $site = Site::where('tenant_id', $tenant->id)
+            ->where('name', $name)
+            ->first();
+
+        if (!$site) {
+            $site = Site::create([
+                'tenant_id' => $tenant->id,
+                'name' => $name,
+                'slug' => Str::slug($name . '-' . $nas->id),
+                'description' => 'Auto-created for router provisioning',
+                'is_active' => true,
+            ]);
+        }
+
+        return $site;
     }
     
     /**
