@@ -166,7 +166,7 @@ class CaptivePaymentService
         PlatformFee::recordFee($tenant->id, $externalRef, (float) ($response['amount'] ?: $transaction->amount), $response['network_ref'] ?? null);
         $voucher = app(VoucherService::class)->assignVoucherToTransaction($externalRef);
 
-        if (($voucher['success'] ?? false) && $transaction->msisdn) {
+        if (($voucher['success'] ?? false) && $transaction->msisdn && $tenant->sms_enabled) {
             app()->instance('tenant', $tenant);
             app(SmsService::class)->sendVoucherSMS($transaction->msisdn, $voucher['voucherCode'], $voucher['password'] ?? '');
         }

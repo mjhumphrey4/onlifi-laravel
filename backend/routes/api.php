@@ -132,6 +132,7 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/captive-portal/templates', [CaptivePortalController::class, 'saveTemplate']);
     Route::post('/captive-portal/templates/{template}/activate', [CaptivePortalController::class, 'activateTemplate']);
     Route::get('/sms-credits', [SmsCreditController::class, 'summary']);
+    Route::put('/sms-credits/plan', [SmsCreditController::class, 'updatePlan']);
     Route::post('/sms-credits/top-up', [SmsCreditController::class, 'topUp']);
     Route::get('/sms-credits/payment-status', [SmsCreditController::class, 'paymentStatus']);
 });
@@ -249,9 +250,9 @@ Route::middleware(['tenant'])->group(function () {
 
     Route::prefix('transactions')->group(function () {
         Route::get('/', [TransactionController::class, 'index']);
-        Route::get('/{id}', [TransactionController::class, 'show']);
         Route::get('/statistics', [TransactionController::class, 'statistics']);
         Route::get('/daily-report', [TransactionController::class, 'dailyReport']);
+        Route::get('/{id}', [TransactionController::class, 'show']);
     });
 
     Route::prefix('radius')->group(function () {

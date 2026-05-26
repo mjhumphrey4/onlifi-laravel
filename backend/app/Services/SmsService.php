@@ -36,6 +36,13 @@ class SmsService
         try {
             $tenant = app()->bound('tenant') ? app('tenant') : null;
             if ($tenant instanceof Tenant) {
+                if (!$tenant->sms_enabled) {
+                    return [
+                        'success' => false,
+                        'message' => 'SMS plan is disabled for this tenant',
+                    ];
+                }
+
                 $wallet = app(SmsCreditService::class)->wallet($tenant);
                 if ($wallet->credits < 1) {
                     return [

@@ -62,12 +62,24 @@ class TransactionController extends Controller
             'failed_transactions' => (clone $query)->failed()->count(),
             'total_revenue' => (clone $query)->successful()->sum('amount'),
             'average_transaction_value' => (clone $query)->successful()->avg('amount'),
-            'transactions_by_status' => Transaction::selectRaw('status, COUNT(*) as count, SUM(amount) as total')
+            'transactions_by_status' => (clone $query)->selectRaw('status, COUNT(*) as count, SUM(amount) as total')
                 ->groupBy('status')
                 ->get(),
-            'transactions_by_origin' => Transaction::selectRaw('origin_site, COUNT(*) as count, SUM(amount) as total')
+            'transactions_by_origin' => (clone $query)->selectRaw('origin_site, COUNT(*) as count, SUM(amount) as total')
                 ->whereNotNull('origin_site')
                 ->groupBy('origin_site')
+                ->get(),
+            'transactions_by_package' => (clone $query)->selectRaw('voucher_type, COUNT(*) as count, SUM(amount) as total')
+                ->whereNotNull('voucher_type')
+                ->groupBy('voucher_type')
+                ->orderByDesc('total')
+                ->get(),
+            'repeat_customers' => (clone $query)->selectRaw('msisdn, COUNT(*) as purchases, SUM(amount) as total_spent')
+                ->where('status', 'success')
+                ->groupBy('msisdn')
+                ->havingRaw('COUNT(*) > 1')
+                ->orderByDesc('purchases')
+                ->limit(10)
                 ->get(),
         ];
 

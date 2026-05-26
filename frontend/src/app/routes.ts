@@ -17,6 +17,7 @@ import { RadiusSetup } from './pages/RadiusSetup';
 import { Provisioning } from './pages/Provisioning';
 import { CaptivePortal } from './pages/CaptivePortal';
 import { SmsGateway } from './pages/SmsGateway';
+import { Reports } from './pages/Reports';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Users } from './pages/Users';
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
       { path: 'transactions', Component: Transactions },
       { path: 'withdrawals', Component: Withdrawals },
       { path: 'performance', Component: AnalyzePerformance },
+      { path: 'reports', Component: Reports },
       { path: 'captive-portal', Component: CaptivePortal },
       { path: 'sms-gateway', Component: SmsGateway },
       { path: 'voucher-stock', Component: VoucherStock },

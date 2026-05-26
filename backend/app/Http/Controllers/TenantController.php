@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Services\TenantService;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -44,6 +45,7 @@ class TenantController extends Controller
             $tenant->database = $tenant->database_name;
             $tenant->billing = $tenant->billingStatus();
             $tenant->sms_credits = $tenant->smsWallet?->credits ?? 0;
+            $tenant->sms_enabled = (bool) $tenant->sms_enabled;
             return $tenant;
         });
         
@@ -70,6 +72,7 @@ class TenantController extends Controller
 
         try {
             $tenant = $this->tenantService->createTenant($request->all());
+            app(EmailNotificationService::class)->sendSignupReceived($tenant);
 
             return response()->json([
                 'message' => 'Tenant created successfully',

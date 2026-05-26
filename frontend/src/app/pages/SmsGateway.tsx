@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { CreditCard, Loader2, MessageSquare, RefreshCw } from 'lucide-react';
-import { checkSmsCreditPaymentStatus, getSmsCredits, topUpSmsCredits } from '../utils/api';
+import { checkSmsCreditPaymentStatus, getSmsCredits, topUpSmsCredits, updateSmsPlan } from '../utils/api';
 
 export function SmsGateway() {
   const [summary, setSummary] = useState<any>(null);
@@ -57,6 +57,12 @@ export function SmsGateway() {
     }
   };
 
+  const togglePlan = async () => {
+    const next = !summary?.sms_enabled;
+    await updateSmsPlan(next);
+    setSummary({ ...summary, sms_enabled: next });
+  };
+
   if (loading) {
     return <div className="min-h-screen grid place-items-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
@@ -70,10 +76,15 @@ export function SmsGateway() {
           <h1 className="text-2xl font-semibold text-foreground">SMS Gateway</h1>
           <p className="text-muted-foreground mt-1">Manage SMS credits for voucher delivery and customer notifications.</p>
         </div>
-        <button onClick={load} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted">
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex gap-2">
+          <button onClick={togglePlan} className={`px-4 py-2 rounded-lg border ${summary?.sms_enabled ? 'border-green-500 text-green-600' : 'border-border text-muted-foreground'} hover:bg-muted`}>
+            {summary?.sms_enabled ? 'SMS Enabled' : 'SMS Disabled'}
+          </button>
+          <button onClick={load} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted">
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-[1fr_420px] gap-6">
@@ -123,10 +134,13 @@ export function SmsGateway() {
             Estimated credits: <strong>{estimatedCredits.toLocaleString()}</strong>
           </div>
           {message && <div className="rounded-lg border border-border p-3 text-sm">{message}</div>}
-          <button disabled={paying || !!paymentRef} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+          <button disabled={!summary?.sms_enabled || paying || !!paymentRef} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
             {paying || paymentRef ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
             {paymentRef ? 'Waiting for confirmation' : 'Top up with Yo Mobile Money'}
           </button>
+          {!summary?.sms_enabled && (
+            <p className="text-sm text-muted-foreground">Enable the SMS plan before buying credits or sending voucher SMS messages.</p>
+          )}
         </form>
       </div>
     </div>

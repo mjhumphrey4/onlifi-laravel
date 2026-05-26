@@ -19,6 +19,7 @@ class VoucherType extends Model
         'data_limit_mb',
         'speed_limit_kbps',
         'is_active',
+        'tenant_id',
     ];
 
     protected $casts = [

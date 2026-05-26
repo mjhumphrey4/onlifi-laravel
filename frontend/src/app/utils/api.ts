@@ -143,6 +143,7 @@ export const getCaptivePortalTemplates = () => get('/tenant/captive-portal/templ
 export const saveCaptivePortalTemplate = (data: Record<string, unknown>) => post('/tenant/captive-portal/templates', data);
 export const activateCaptivePortalTemplate = (id: number) => post(`/tenant/captive-portal/templates/${id}/activate`);
 export const getSmsCredits = () => get('/tenant/sms-credits');
+export const updateSmsPlan = (sms_enabled: boolean) => put('/tenant/sms-credits/plan', { sms_enabled });
 export const topUpSmsCredits = (data: Record<string, unknown>) => post('/tenant/sms-credits/top-up', data);
 export const checkSmsCreditPaymentStatus = (ref: string) => get(`/tenant/sms-credits/payment-status?ref=${encodeURIComponent(ref)}`);
 

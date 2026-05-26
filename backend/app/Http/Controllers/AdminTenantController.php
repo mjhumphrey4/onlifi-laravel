@@ -7,6 +7,7 @@ use App\Models\PlatformFee;
 use App\Models\RadiusNas;
 use App\Models\SmsWallet;
 use App\Services\TenantService;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -61,6 +62,7 @@ class AdminTenantController extends Controller
             'approved_by' => $admin->id,
             'trial_ends_at' => $tenant->trial_ends_at ?: now()->addDays($defaultTrialDays),
         ]);
+        app(EmailNotificationService::class)->sendActivationConfirmation($tenant->fresh('users'));
 
         $response = [
             'message' => 'Tenant approved successfully',
@@ -327,6 +329,7 @@ class AdminTenantController extends Controller
             $user->update([
                 'password' => bcrypt($request->password),
             ]);
+            app(EmailNotificationService::class)->sendPasswordResetNotice($tenant->fresh('users'));
 
             return response()->json([
                 'message' => 'Password reset successfully',
@@ -348,6 +351,7 @@ class AdminTenantController extends Controller
             'support_notes' => 'sometimes|nullable|string|max:5000',
             'trial_ends_at' => 'sometimes|nullable|date',
             'subscription_ends_at' => 'sometimes|nullable|date',
+            'sms_enabled' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -378,6 +382,10 @@ class AdminTenantController extends Controller
 
             if ($request->has('subscription_ends_at')) {
                 $updateData['subscription_ends_at'] = $request->subscription_ends_at;
+            }
+
+            if ($request->has('sms_enabled')) {
+                $updateData['sms_enabled'] = $request->boolean('sms_enabled');
             }
 
             $tenant->update($updateData);

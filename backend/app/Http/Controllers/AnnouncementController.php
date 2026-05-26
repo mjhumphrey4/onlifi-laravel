@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Announcement;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -35,6 +36,7 @@ class AnnouncementController extends Controller
             'tenant_ids' => 'required_if:target,specific|array',
             'tenant_ids.*' => 'exists:tenants,id',
             'is_active' => 'boolean',
+            'send_email' => 'boolean',
             'starts_at' => 'nullable|date',
             'ends_at' => 'nullable|date|after:starts_at',
         ]);
@@ -57,6 +59,10 @@ class AnnouncementController extends Controller
             'ends_at' => $request->ends_at,
             'created_by' => $request->user()->id,
         ]);
+
+        if ($request->boolean('send_email')) {
+            app(EmailNotificationService::class)->sendAnnouncement($announcement);
+        }
 
         return response()->json([
             'message' => 'Announcement created successfully',

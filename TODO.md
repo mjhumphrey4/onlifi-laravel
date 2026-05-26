@@ -13,3 +13,5 @@
 - Add captive portal end-to-end tests with MikroTik variables, mobile money payment confirmation, and automatic voucher login.
 - Add SMS delivery provider integration beyond the current Comms placeholder and track failed sends without consuming credits.
 - Add FreeRADIUS deployment checks that verify the Perl module, environment variables, dynamic clients, and tenant DB connectivity.
+- Add customer-facing forgot-password flows with signed reset links instead of only admin-triggered password reset notices.
+- Add a provider-specific SMS adapter once the final SMS API documentation is supplied.

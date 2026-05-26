@@ -152,7 +152,10 @@ export default function SystemSettings() {
       { key: 'smtp_host', label: 'SMTP Host', type: 'string', description: 'SMTP server hostname' },
       { key: 'smtp_port', label: 'SMTP Port', type: 'number', description: 'SMTP server port' },
       { key: 'smtp_username', label: 'SMTP Username', type: 'string', description: 'SMTP authentication username' },
+      { key: 'smtp_password', label: 'SMTP Password', type: 'string', description: 'SMTP authentication password' },
+      { key: 'smtp_encryption', label: 'SMTP Encryption', type: 'string', description: 'tls, ssl, or blank' },
       { key: 'smtp_from_address', label: 'From Address', type: 'string', description: 'Default sender email address' },
+      { key: 'smtp_from_name', label: 'From Name', type: 'string', description: 'Default sender name' },
     ],
     security: [
       { key: 'session_lifetime', label: 'Session Lifetime (minutes)', type: 'number', description: 'How long sessions remain active' },
@@ -161,6 +164,10 @@ export default function SystemSettings() {
     ],
     notifications: [
       { key: 'notify_new_signup', label: 'New Signup Notifications', type: 'boolean', description: 'Email admin on new signups' },
+      { key: 'notify_signup_email', label: 'Signup Email', type: 'boolean', description: 'Email tenant after signup' },
+      { key: 'notify_activation_email', label: 'Activation Email', type: 'boolean', description: 'Email tenant after approval' },
+      { key: 'notify_password_reset_email', label: 'Password Reset Email', type: 'boolean', description: 'Email tenant after password reset' },
+      { key: 'notify_announcement_email', label: 'Announcement Email', type: 'boolean', description: 'Allow announcements to be emailed' },
     ],
   };
 

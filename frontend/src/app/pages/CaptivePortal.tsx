@@ -114,6 +114,10 @@ export function CaptivePortal() {
                 <input value={design[field] || ''} onChange={(e) => setDesign({ ...design, [field]: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
               </label>
             ))}
+            <label className="block text-sm">
+              <span className="text-muted-foreground">logo URL</span>
+              <input value={design.logo_url || ''} onChange={(e) => setDesign({ ...design, logo_url: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
+            </label>
             {['primary_color', 'background_color', 'text_color'].map((field) => (
               <label key={field} className="flex items-center justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">{field.replace('_', ' ')}</span>
@@ -130,6 +134,7 @@ export function CaptivePortal() {
             <h2 className="font-semibold text-card-foreground mb-4">Preview</h2>
             <div className="rounded-lg border border-border p-6 min-h-[360px] grid place-items-center" style={previewStyle}>
               <div className="w-full max-w-sm bg-white text-slate-900 rounded-lg shadow-xl border border-slate-200 p-5">
+                {design.logo_url && <img src={design.logo_url} alt="Logo preview" className="max-h-16 max-w-40 object-contain mb-3" />}
                 <p className="text-xs uppercase tracking-wider text-slate-500">Your Business</p>
                 <h3 className="text-2xl font-semibold mt-2">{design.headline}</h3>
                 <p className="text-sm text-slate-500 mt-2">{design.subheadline}</p>

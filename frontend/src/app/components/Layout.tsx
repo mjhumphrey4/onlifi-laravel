@@ -24,6 +24,7 @@ import {
   Paintbrush,
   MessageSquare,
   Router,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
@@ -67,11 +68,20 @@ const menuItems: MenuItem[] = [
   { path: '/transactions',   label: 'Transactions',       icon: ArrowLeftRight, adminOnly: false },
   { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false },
   { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false },
-  { path: '/captive-portal',  label: 'Captive Page',       icon: Paintbrush, adminOnly: false },
+  { path: '/reports',        label: 'Reports',            icon: BarChart3, adminOnly: false },
   { path: '/sms-gateway',     label: 'SMS Gateway',        icon: MessageSquare, adminOnly: false },
-  { path: '/radius-setup',   label: 'RADIUS Setup',       icon: Server, adminOnly: false },
-  { path: '/provisioning',    label: 'Provisioning',       icon: Router, adminOnly: false },
-  { path: '/settings',       label: 'Settings',           icon: SettingsIcon, adminOnly: false },
+  {
+    path: '/settings',
+    label: 'Settings',
+    icon: SettingsIcon,
+    adminOnly: false,
+    children: [
+      { path: '/settings', label: 'General Settings', icon: SettingsIcon, adminOnly: false },
+      { path: '/captive-portal', label: 'Captive Page', icon: Paintbrush, adminOnly: false },
+      { path: '/radius-setup', label: 'RADIUS Setup', icon: Server, adminOnly: false },
+      { path: '/provisioning', label: 'Provisioning', icon: Router, adminOnly: false },
+    ],
+  },
 ];
 
 export function Layout() {

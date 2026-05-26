@@ -7,6 +7,7 @@ use App\Models\VoucherGroup;
 use App\Models\VoucherType;
 use App\Services\VoucherService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class VoucherController extends Controller
@@ -133,7 +134,14 @@ class VoucherController extends Controller
 
     public function getTypes()
     {
-        $types = VoucherType::orderBy('type_name')->get();
+        $query = VoucherType::query();
+        if (Schema::connection('tenant')->hasColumn('voucher_types', 'tenant_id') && app()->bound('tenant')) {
+            $query->where(function ($q) {
+                $q->where('tenant_id', app('tenant')->id)->orWhereNull('tenant_id');
+            });
+        }
+
+        $types = $query->orderBy('type_name')->get();
         return response()->json(['types' => $types]);
     }
 
@@ -155,7 +163,7 @@ class VoucherController extends Controller
             ], 422);
         }
 
-        $type = VoucherType::create([
+        $data = [
             'type_name' => $request->type_name,
             'duration_hours' => $request->duration_hours,
             'base_amount' => $request->base_amount,
@@ -163,7 +171,13 @@ class VoucherController extends Controller
             'data_limit_mb' => $request->data_limit_mb,
             'speed_limit_kbps' => $request->speed_limit_kbps,
             'is_active' => true,
-        ]);
+        ];
+
+        if (Schema::connection('tenant')->hasColumn('voucher_types', 'tenant_id') && app()->bound('tenant')) {
+            $data['tenant_id'] = app('tenant')->id;
+        }
+
+        $type = VoucherType::create($data);
 
         return response()->json([
             'message' => 'Voucher type created successfully',

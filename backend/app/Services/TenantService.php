@@ -37,6 +37,7 @@ class TenantService
                 'is_active' => $autoApprove,
                 'approved_at' => $autoApprove ? now() : null,
                 'trial_ends_at' => $autoApprove ? now()->addDays($defaultTrialDays) : null,
+                'sms_enabled' => true,
                 'settings' => $data['settings'] ?? null,
             ]);
 

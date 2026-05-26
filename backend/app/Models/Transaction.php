@@ -41,8 +41,18 @@ class Transaction extends Model
         return $query->where('status', 'failed');
     }
 
+    public function scopePending($query)
+    {
+        return $query->where('status', 'pending');
+    }
+
     public function scopeForSite($query, $site)
     {
         return $query->where('origin_site', $site);
+    }
+
+    public function voucher()
+    {
+        return $this->belongsTo(Voucher::class, 'voucher_code', 'voucher_code');
     }
 }

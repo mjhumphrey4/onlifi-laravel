@@ -41,6 +41,8 @@ class Tenant extends Model
         'support_notes',
         'trial_ends_at',
         'subscription_ends_at',
+        'sms_enabled',
+        'sms_provider_config',
     ];
 
     protected $hidden = [
@@ -58,6 +60,8 @@ class Tenant extends Model
         'minimum_disbursement' => 'decimal:2',
         'trial_ends_at' => 'datetime',
         'subscription_ends_at' => 'datetime',
+        'sms_enabled' => 'boolean',
+        'sms_provider_config' => 'array',
     ];
 
     public function users()

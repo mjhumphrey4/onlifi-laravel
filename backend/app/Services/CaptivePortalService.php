@@ -23,6 +23,7 @@ class CaptivePortalService
                     'headline' => 'Connect to WiFi',
                     'subheadline' => 'Buy a voucher with mobile money or enter your voucher code.',
                     'button_label' => 'Pay with Mobile Money',
+                    'logo_url' => '',
                 ],
             ],
             [
@@ -36,6 +37,7 @@ class CaptivePortalService
                     'headline' => 'Fast WiFi Access',
                     'subheadline' => 'Choose a package, confirm payment, and browse.',
                     'button_label' => 'Buy Voucher',
+                    'logo_url' => '',
                 ],
             ],
             [
@@ -49,6 +51,7 @@ class CaptivePortalService
                     'headline' => 'WiFi Login',
                     'subheadline' => 'Enter voucher or pay by mobile money.',
                     'button_label' => 'Pay Now',
+                    'logo_url' => '',
                 ],
             ],
         ];
@@ -154,6 +157,7 @@ class CaptivePortalService
             'headline' => 'Connect to WiFi',
             'subheadline' => 'Buy a voucher with mobile money or enter your voucher code.',
             'button_label' => 'Pay with Mobile Money',
+            'logo_url' => '',
         ], $config['template']['design'] ?? []);
 
         $jsonConfig = json_encode($config, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
@@ -163,6 +167,8 @@ class CaptivePortalService
         $headline = htmlspecialchars($design['headline'], ENT_QUOTES);
         $subheadline = htmlspecialchars($design['subheadline'], ENT_QUOTES);
         $buttonLabel = htmlspecialchars($design['button_label'], ENT_QUOTES);
+        $logoUrl = htmlspecialchars($design['logo_url'] ?? '', ENT_QUOTES);
+        $logoHtml = $logoUrl ? "<img src=\"{$logoUrl}\" alt=\"Logo\" class=\"logo\">" : '';
 
         return <<<HTML
 <!doctype html>
@@ -174,7 +180,7 @@ class CaptivePortalService
   <style>
     :root{--primary:{$primary};--bg:{$background};--text:{$text};}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:Arial,sans-serif;background:var(--bg);color:var(--text);display:grid;place-items:center;padding:18px}
-    .wrap{width:100%;max-width:440px;background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:12px;padding:22px;box-shadow:0 20px 50px rgba(15,23,42,.14)}
+    .wrap{width:100%;max-width:440px;background:#fff;border:1px solid rgba(15,23,42,.12);border-radius:12px;padding:22px;box-shadow:0 20px 50px rgba(15,23,42,.14)}.logo{max-width:150px;max-height:70px;object-fit:contain;margin-bottom:12px}
     h1{margin:0 0 6px;font-size:26px}.muted{color:#64748b;font-size:14px;line-height:1.45}.tabs{display:flex;gap:8px;margin:18px 0}
     button,.tab{border:0;border-radius:8px;padding:11px 13px;font-weight:700;cursor:pointer}.tab{flex:1;background:#e2e8f0}.tab.active,button.primary{background:var(--primary);color:#fff}
     input,select{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;margin:8px 0 12px;font-size:15px}.row{display:grid;gap:10px}.hide{display:none}.msg{font-size:14px;margin-top:10px}.ok{color:#047857}.err{color:#b91c1c}
@@ -184,6 +190,7 @@ class CaptivePortalService
 </head>
 <body>
   <div class="wrap">
+    {$logoHtml}
     <div class="tenant" id="tenantName"></div>
     <h1>{$headline}</h1>
     <p class="muted">{$subheadline}</p>

@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, RefreshCw, Users, ArrowRight, Server, Wifi, Activity, Cpu, HardDrive, ArrowUp, ArrowDown } from 'lucide-react';
+import { DollarSign, TrendingUp, RefreshCw, Users, ArrowRight, Server, Activity, Cpu, HardDrive, ArrowUp, ArrowDown, CalendarDays } from 'lucide-react';
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
-import { apiStats, apiTransactions, getTelemetryStats } from '../utils/api';
+import { apiStats, getTelemetryStats } from '../utils/api';
 
 interface SiteStat {
   total_amount: number;
@@ -48,6 +48,16 @@ interface Client {
   status: string;
 }
 
+type DateFilter = 'today' | 'yesterday' | 'week' | 'month' | 'all';
+
+const DATE_FILTERS: { id: DateFilter; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: 'week', label: 'This Week' },
+  { id: 'month', label: 'This Month' },
+  { id: 'all', label: 'All' },
+];
+
 const SITE_COLORS: Record<string, string> = {
   Enock:   'from-blue-600 to-blue-700',
   Richard: 'from-emerald-600 to-emerald-700',
@@ -75,6 +85,7 @@ export function Dashboard() {
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('today');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [deviceStats, setDeviceStats] = useState<DeviceStats>({ total_routers: 0, online_routers: 0, total_clients: 0, active_connections: 0, avg_cpu: 0, avg_memory: 0, bandwidth_up: 0, bandwidth_down: 0 });
 
@@ -88,17 +99,64 @@ export function Dashboard() {
     return headers;
   };
 
+  const toDateInput = (date: Date) => date.toISOString().slice(0, 10);
+
+  const getDateRange = (filter: DateFilter) => {
+    const now = new Date();
+    const start = new Date(now);
+    const end = new Date(now);
+
+    if (filter === 'all') return {};
+
+    if (filter === 'yesterday') {
+      start.setDate(now.getDate() - 1);
+      end.setDate(now.getDate() - 1);
+    }
+
+    if (filter === 'week') {
+      const day = now.getDay() || 7;
+      start.setDate(now.getDate() - day + 1);
+    }
+
+    if (filter === 'month') {
+      start.setDate(1);
+    }
+
+    return {
+      from_date: toDateInput(start),
+      to_date: toDateInput(end),
+    };
+  };
+
   const load = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
       
-      // Fetch stats and transactions
-      const [statsRes, txRes] = await Promise.all([
+      const range = getDateRange(dateFilter);
+      const params = new URLSearchParams({ per_page: '20', ...range });
+
+      // Fetch stats and filtered transactions
+      const [statsRes, txResponse] = await Promise.all([
         apiStats(),
-        apiTransactions({ limit: 20 }),
+        fetch(`/api/transactions?${params.toString()}`, { headers }),
       ]);
-      setSites(statsRes.sites ?? {});
-      setTxs(txRes.transactions ?? []);
+      const txRes = txResponse.ok ? await txResponse.json() : { data: [] };
+      const transactions = txRes.transactions ?? txRes.data ?? [];
+      setTxs(transactions);
+
+      const groupedSites = transactions.reduce((acc: Record<string, SiteStat>, tx: TxRow) => {
+        const site = tx.origin_site || 'Default Site';
+        const amount = tx.status === 'success' ? parseFloat(tx.amount || '0') : 0;
+        if (!acc[site]) {
+          acc[site] = { total_amount: 0, today_amount: 0, week_amount: 0, withdrawn: 0, pending_withdraw: 0, balance: 0, total_sales: 0 };
+        }
+        acc[site].total_amount += amount;
+        acc[site].today_amount += amount;
+        acc[site].balance += amount;
+        acc[site].total_sales += tx.status === 'success' ? 1 : 0;
+        return acc;
+      }, {});
+      setSites(Object.keys(groupedSites).length ? groupedSites : (statsRes.sites ?? {}));
 
       // Fetch active clients from radacct (active hotspot users)
       let activeClientCount = 0;
@@ -154,7 +212,7 @@ export function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dateFilter]);
 
   useEffect(() => {
     load();
@@ -163,8 +221,8 @@ export function Dashboard() {
   }, [load]);
 
   const siteList = Object.entries(sites);
-  const totalEarnings   = siteList.reduce((s, [, v]) => s + v.total_amount,  0);
-  const todayEarnings   = siteList.reduce((s, [, v]) => s + v.today_amount,  0);
+  const filteredEarnings = siteList.reduce((s, [, v]) => s + v.total_amount, 0);
+  const successfulPurchases = txs.filter((tx) => tx.status === 'success').length;
 
   if (loading) {
     return (
@@ -185,6 +243,26 @@ export function Dashboard() {
           <RefreshCw className="w-3 h-3" />
           {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading…'}
         </div>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mr-1">
+          <CalendarDays className="w-4 h-4" />
+          Filter
+        </div>
+        {DATE_FILTERS.map((filter) => (
+          <button
+            key={filter.id}
+            onClick={() => setDateFilter(filter.id)}
+            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+              dateFilter === filter.id
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-card border-border text-card-foreground hover:bg-muted'
+            }`}
+          >
+            {filter.label}
+          </button>
+        ))}
       </div>
 
       {/* Network Status - Compact Widget */}
@@ -233,9 +311,10 @@ export function Dashboard() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <StatsCard title="Today's Earnings" value={fmt(todayEarnings)} icon={DollarSign} trend={{ value: 'Live', isPositive: true }} />
-        <StatsCard title="Total Earnings" value={fmt(totalEarnings)} icon={TrendingUp} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <StatsCard title={`${DATE_FILTERS.find((f) => f.id === dateFilter)?.label} Earnings`} value={fmt(filteredEarnings)} icon={DollarSign} trend={{ value: 'Live', isPositive: true }} />
+        <StatsCard title="Successful Purchases" value={successfulPurchases.toLocaleString()} icon={Users} />
+        <StatsCard title="Transactions Loaded" value={txs.length.toLocaleString()} icon={TrendingUp} />
       </div>
 
       {/* Per-site cards (admin sees all, user sees their own) */}
@@ -252,7 +331,7 @@ export function Dashboard() {
                 <p className="text-2xl font-bold mb-3">{fmt(stat.total_amount)}</p>
                 <div className="space-y-1 text-xs bg-white/10 rounded-lg p-3">
                   <div className="flex justify-between">
-                    <span className="opacity-80">Today</span>
+                    <span className="opacity-80">{DATE_FILTERS.find((f) => f.id === dateFilter)?.label}</span>
                     <span className="font-semibold">{fmt(stat.today_amount)}</span>
                   </div>
                   <div className="flex justify-between border-t border-white/20 pt-1 mt-1">
