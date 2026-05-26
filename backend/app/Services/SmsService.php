@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Tenant;
 use Illuminate\Support\Facades\Log;
 
 class SmsService
@@ -33,8 +34,23 @@ class SmsService
     public function sendSMS(string $msisdn, string $message): array
     {
         try {
+            $tenant = app()->bound('tenant') ? app('tenant') : null;
+            if ($tenant instanceof Tenant) {
+                $wallet = app(SmsCreditService::class)->wallet($tenant);
+                if ($wallet->credits < 1) {
+                    return [
+                        'success' => false,
+                        'message' => 'Insufficient SMS credits',
+                    ];
+                }
+            }
+
             if ($this->provider === 'comms') {
-                return $this->sendViaComms($msisdn, $message);
+                $result = $this->sendViaComms($msisdn, $message);
+                if (($result['success'] ?? false) && $tenant instanceof Tenant) {
+                    app(SmsCreditService::class)->consume($tenant);
+                }
+                return $result;
             }
 
             Log::warning("SMS provider not configured, message not sent", [

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Tenant;
 use App\Models\PlatformFee;
 use App\Models\RadiusNas;
+use App\Models\SmsWallet;
 use App\Services\TenantService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -39,6 +40,7 @@ class AdminTenantController extends Controller
 
         $admin = $request->user();
         $dbProvisioningWarning = null;
+        $defaultTrialDays = (int) \App\Models\SystemSetting::get('default_trial_days', 15);
 
         // Try to provision database first, before marking as approved
         try {
@@ -57,6 +59,7 @@ class AdminTenantController extends Controller
             'is_active' => true,
             'approved_at' => now(),
             'approved_by' => $admin->id,
+            'trial_ends_at' => $tenant->trial_ends_at ?: now()->addDays($defaultTrialDays),
         ]);
 
         $response = [
@@ -116,6 +119,25 @@ class AdminTenantController extends Controller
             'suspended_tenants' => Tenant::where('status', 'suspended')->count(),
             'active_tenants' => Tenant::where('is_active', true)->count(),
             'approved_active_tenants' => Tenant::where('status', 'approved')->where('is_active', true)->count(),
+            'trial_tenants' => Tenant::where('status', 'approved')
+                ->whereNotNull('trial_ends_at')
+                ->where('trial_ends_at', '>', now())
+                ->count(),
+            'subscribed_tenants' => Tenant::where('status', 'approved')
+                ->whereNotNull('subscription_ends_at')
+                ->where('subscription_ends_at', '>', now())
+                ->count(),
+            'expired_billing_tenants' => Tenant::where('status', 'approved')
+                ->where('is_active', true)
+                ->where(function ($query) {
+                    $query->whereNull('subscription_ends_at')
+                        ->orWhere('subscription_ends_at', '<=', now());
+                })
+                ->where(function ($query) {
+                    $query->whereNull('trial_ends_at')
+                        ->orWhere('trial_ends_at', '<=', now());
+                })
+                ->count(),
             'tenants_with_fee_overrides' => Tenant::whereNotNull('collection_fee_percent')
                 ->orWhereNotNull('disbursement_fee_percent')
                 ->orWhereNotNull('minimum_disbursement')
@@ -157,6 +179,7 @@ class AdminTenantController extends Controller
                 'is_active' => true,
                 'approved_at' => now(),
                 'approved_by' => $request->user()?->id,
+                'trial_ends_at' => $tenant->trial_ends_at ?: now()->addDays((int) \App\Models\SystemSetting::get('default_trial_days', 15)),
             ]);
             $actions[] = 'tenant_activated';
         }
@@ -175,6 +198,12 @@ class AdminTenantController extends Controller
             'recent_signups' => Tenant::orderBy('created_at', 'desc')->take(10)->get(),
             'recent_approvals' => Tenant::where('status', 'approved')
                 ->orderBy('approved_at', 'desc')
+                ->take(10)
+                ->get(),
+            'expiring_trials' => Tenant::where('status', 'approved')
+                ->whereNotNull('trial_ends_at')
+                ->whereBetween('trial_ends_at', [now(), now()->addDays((int) \App\Models\SystemSetting::get('trial_expiry_days', 3))])
+                ->orderBy('trial_ends_at')
                 ->take(10)
                 ->get(),
             'recent_repairs' => [],
@@ -317,6 +346,8 @@ class AdminTenantController extends Controller
             'name' => 'sometimes|string|max:255',
             'domain' => 'sometimes|nullable|string|max:255',
             'support_notes' => 'sometimes|nullable|string|max:5000',
+            'trial_ends_at' => 'sometimes|nullable|date',
+            'subscription_ends_at' => 'sometimes|nullable|date',
         ]);
 
         if ($validator->fails()) {
@@ -341,6 +372,14 @@ class AdminTenantController extends Controller
                 $updateData['support_notes'] = $request->support_notes;
             }
 
+            if ($request->has('trial_ends_at')) {
+                $updateData['trial_ends_at'] = $request->trial_ends_at;
+            }
+
+            if ($request->has('subscription_ends_at')) {
+                $updateData['subscription_ends_at'] = $request->subscription_ends_at;
+            }
+
             $tenant->update($updateData);
 
             return response()->json([
@@ -353,5 +392,28 @@ class AdminTenantController extends Controller
                 'message' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function adjustSmsCredits(Request $request, Tenant $tenant)
+    {
+        $validator = Validator::make($request->all(), [
+            'credits' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $wallet = SmsWallet::firstOrCreate(['tenant_id' => $tenant->id], ['credits' => 0]);
+        $newBalance = max(0, $wallet->credits + (int) $request->credits);
+        $wallet->update(['credits' => $newBalance]);
+
+        return response()->json([
+            'message' => 'SMS credits adjusted successfully',
+            'credits' => $wallet->fresh()->credits,
+        ]);
     }
 }

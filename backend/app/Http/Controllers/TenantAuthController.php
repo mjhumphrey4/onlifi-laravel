@@ -104,6 +104,7 @@ class TenantAuthController extends Controller
                 'name' => $tenant->name,
                 'slug' => $tenant->slug,
                 'domain' => $tenant->domain,
+                'billing' => $tenant->billingStatus(),
             ],
         ]);
     }
@@ -138,6 +139,7 @@ class TenantAuthController extends Controller
                 'domain' => $tenant->domain,
                 'is_active' => $tenant->is_active,
                 'settings' => $tenant->settings,
+                'billing' => $tenant->billingStatus(),
             ],
         ]);
     }

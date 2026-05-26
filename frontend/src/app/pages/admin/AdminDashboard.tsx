@@ -12,6 +12,9 @@ interface Statistics {
   suspended_tenants: number;
   active_tenants: number;
   approved_active_tenants: number;
+  trial_tenants: number;
+  subscribed_tenants: number;
+  expired_billing_tenants: number;
   tenants_with_fee_overrides: number;
   registered_radius_routers: number;
   platform_fees_collected: number;
@@ -190,12 +193,29 @@ export default function AdminDashboard() {
       {/* Secondary Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          title="Approved Active"
-          value={stats?.approved_active_tenants || 0}
+          title="On Trial"
+          value={stats?.trial_tenants || 0}
           icon={TrendingUp}
-          description="Ready to use the platform"
+          description="Currently inside trial"
           color="text-purple-600"
           bgColor="bg-purple-500"
+        />
+        <StatCard
+          title="Subscribed"
+          value={stats?.subscribed_tenants || 0}
+          icon={UserCheck}
+          description="Paid billing period active"
+          color="text-green-600"
+          bgColor="bg-green-500"
+        />
+        <StatCard
+          title="Billing Expired"
+          value={stats?.expired_billing_tenants || 0}
+          icon={AlertCircle}
+          description="Dashboard locked only"
+          color="text-red-600"
+          bgColor="bg-red-500"
+          onClick={() => navigate('/admin/tenants')}
         />
         <StatCard
           title="RADIUS Routers"

@@ -92,10 +92,11 @@ export const getTenant = (id: number) => get(`/super-admin/tenants/${id}`);
 export const updateTenant = (id: number, data: Record<string, unknown>) => put(`/super-admin/tenants/${id}`, data);
 export const deleteTenant = (id: number) => del(`/super-admin/tenants/${id}`);
 export const approveTenant = (id: number) => post(`/super-admin/tenants/${id}/approve`);
-export const rejectTenant = (id: number, reason: string) => post(`/super-admin/tenants/${id}/reject`, { rejection_reason: reason });
+export const rejectTenant = (id: number, reason: string) => post(`/super-admin/tenants/${id}/reject`, { reason });
 export const suspendTenant = (id: number) => post(`/super-admin/tenants/${id}/suspend`);
 export const activateTenant = (id: number) => post(`/super-admin/tenants/${id}/activate`);
 export const getTenantStats = (id: number) => get(`/super-admin/tenants/${id}/stats`);
+export const extendTenantTrial = (id: number, days: number) => post(`/super-admin/tenants/${id}/extend-trial`, { days });
 
 // ============ ANNOUNCEMENTS (Admin) ============
 export const getAnnouncements = () => get('/super-admin/announcements');
@@ -135,6 +136,15 @@ export const tenantLogin = (email: string, password: string, twoFactorCode?: str
 export const tenantLogout = () => post('/tenant/logout');
 
 export const tenantMe = () => get('/tenant/me');
+export const getTenantBillingStatus = () => get('/tenant/billing/status');
+export const initiateSubscriptionPayment = (data: Record<string, unknown>) => post('/tenant/billing/subscribe', data);
+export const checkSubscriptionPaymentStatus = (ref: string) => get(`/tenant/billing/payment-status?ref=${encodeURIComponent(ref)}`);
+export const getCaptivePortalTemplates = () => get('/tenant/captive-portal/templates');
+export const saveCaptivePortalTemplate = (data: Record<string, unknown>) => post('/tenant/captive-portal/templates', data);
+export const activateCaptivePortalTemplate = (id: number) => post(`/tenant/captive-portal/templates/${id}/activate`);
+export const getSmsCredits = () => get('/tenant/sms-credits');
+export const topUpSmsCredits = (data: Record<string, unknown>) => post('/tenant/sms-credits/top-up', data);
+export const checkSmsCreditPaymentStatus = (ref: string) => get(`/tenant/sms-credits/payment-status?ref=${encodeURIComponent(ref)}`);
 
 export const tenantChangePassword = (current_password: string, new_password: string, new_password_confirmation: string) =>
   post('/tenant/change-password', { current_password, new_password, new_password_confirmation });

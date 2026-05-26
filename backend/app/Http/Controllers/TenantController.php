@@ -42,6 +42,8 @@ class TenantController extends Controller
         $tenants->getCollection()->transform(function ($tenant) {
             $tenant->primary_email = $tenant->users->first()?->email;
             $tenant->database = $tenant->database_name;
+            $tenant->billing = $tenant->billingStatus();
+            $tenant->sms_credits = $tenant->smsWallet?->credits ?? 0;
             return $tenant;
         });
         
@@ -155,6 +157,34 @@ class TenantController extends Controller
 
         return response()->json([
             'message' => 'Tenant activated successfully',
+        ]);
+    }
+
+    public function extendTrial(Request $request, Tenant $tenant)
+    {
+        $validator = Validator::make($request->all(), [
+            'days' => 'required|integer|min:1|max:365',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $startsAt = $tenant->trial_ends_at && $tenant->trial_ends_at->greaterThan(now())
+            ? $tenant->trial_ends_at->copy()
+            : now();
+
+        $tenant->update([
+            'trial_ends_at' => $startsAt->addDays((int) $request->days),
+            'is_active' => true,
+        ]);
+
+        return response()->json([
+            'message' => 'Trial extended successfully',
+            'tenant' => $tenant->fresh(),
         ]);
     }
 

@@ -21,9 +21,13 @@ import {
   Settings as SettingsIcon,
   Bell,
   Plus,
+  Paintbrush,
+  MessageSquare,
+  Router,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
+import { BillingGate } from './BillingGate';
 
 interface Announcement {
   id: number;
@@ -63,7 +67,10 @@ const menuItems: MenuItem[] = [
   { path: '/transactions',   label: 'Transactions',       icon: ArrowLeftRight, adminOnly: false },
   { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false },
   { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false },
+  { path: '/captive-portal',  label: 'Captive Page',       icon: Paintbrush, adminOnly: false },
+  { path: '/sms-gateway',     label: 'SMS Gateway',        icon: MessageSquare, adminOnly: false },
   { path: '/radius-setup',   label: 'RADIUS Setup',       icon: Server, adminOnly: false },
+  { path: '/provisioning',    label: 'Provisioning',       icon: Router, adminOnly: false },
   { path: '/settings',       label: 'Settings',           icon: SettingsIcon, adminOnly: false },
 ];
 
@@ -479,7 +486,9 @@ export function Layout() {
           </>
         )}
 
-        <Outlet />
+        <BillingGate>
+          <Outlet />
+        </BillingGate>
       </main>
 
       {/* Add New Site Modal */}

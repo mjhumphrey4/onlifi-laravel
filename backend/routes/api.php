@@ -20,6 +20,9 @@ use App\Http\Controllers\TenantAuthController;
 use App\Http\Controllers\TelemetryController;
 use App\Http\Controllers\RadiusAccountingController;
 use App\Http\Controllers\TwoFactorController;
+use App\Http\Controllers\SubscriptionBillingController;
+use App\Http\Controllers\CaptivePortalController;
+use App\Http\Controllers\SmsCreditController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -27,6 +30,17 @@ Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 Route::post('/tenant/login', [TenantAuthController::class, 'login']);
 
 Route::get('/system/settings/public', [SystemSettingController::class, 'publicSettings']);
+Route::post('/billing/ipn', [SubscriptionBillingController::class, 'ipn']);
+Route::post('/billing/failure', [SubscriptionBillingController::class, 'failure']);
+Route::get('/captive/config/{token}', [CaptivePortalController::class, 'config']);
+Route::get('/captive/hotspot/{token}/{file}', [CaptivePortalController::class, 'hotspotFile'])
+    ->where('file', 'login\.html|status\.html|alogin\.html');
+Route::post('/captive/pay', [CaptivePortalController::class, 'pay']);
+Route::get('/captive/payment-status', [CaptivePortalController::class, 'paymentStatus']);
+Route::post('/captive/ipn', [CaptivePortalController::class, 'ipn']);
+Route::post('/captive/failure', [CaptivePortalController::class, 'failure']);
+Route::post('/sms-credits/ipn', [SmsCreditController::class, 'ipn']);
+Route::post('/sms-credits/failure', [SmsCreditController::class, 'failure']);
 
 // Public telemetry endpoint for routers (authenticated via API token in request)
 Route::post('/telemetry', [TelemetryController::class, 'receive']);
@@ -63,8 +77,10 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
         Route::post('/{tenant}/reject', [AdminTenantController::class, 'reject']);
         Route::post('/{tenant}/suspend', [TenantController::class, 'suspend']);
         Route::post('/{tenant}/activate', [TenantController::class, 'activate']);
+        Route::post('/{tenant}/extend-trial', [TenantController::class, 'extendTrial']);
         Route::post('/{tenant}/reset-password', [AdminTenantController::class, 'resetPassword']);
         Route::post('/{tenant}/repair', [AdminTenantController::class, 'repairTenant']);
+        Route::post('/{tenant}/sms-credits/adjust', [AdminTenantController::class, 'adjustSmsCredits']);
         Route::post('/{tenant}/regenerate-credentials', [TenantController::class, 'regenerateCredentials']);
         Route::get('/{tenant}/stats', [TenantController::class, 'stats']);
         Route::get('/{tenant}/database', [AdminTenantController::class, 'viewDatabase']);
@@ -109,6 +125,15 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/2fa/setup', [TwoFactorController::class, 'setup']);
     Route::post('/2fa/confirm', [TwoFactorController::class, 'confirm']);
     Route::post('/2fa/disable', [TwoFactorController::class, 'disable']);
+    Route::get('/billing/status', [SubscriptionBillingController::class, 'status']);
+    Route::post('/billing/subscribe', [SubscriptionBillingController::class, 'subscribe']);
+    Route::get('/billing/payment-status', [SubscriptionBillingController::class, 'paymentStatus']);
+    Route::get('/captive-portal/templates', [CaptivePortalController::class, 'templates']);
+    Route::post('/captive-portal/templates', [CaptivePortalController::class, 'saveTemplate']);
+    Route::post('/captive-portal/templates/{template}/activate', [CaptivePortalController::class, 'activateTemplate']);
+    Route::get('/sms-credits', [SmsCreditController::class, 'summary']);
+    Route::post('/sms-credits/top-up', [SmsCreditController::class, 'topUp']);
+    Route::get('/sms-credits/payment-status', [SmsCreditController::class, 'paymentStatus']);
 });
 
 // Active announcements for all authenticated users
@@ -137,7 +162,7 @@ Route::middleware(['tenant'])->group(function () {
     });
 
     // Tenant Dashboard
-    Route::prefix('dashboard')->group(function () {
+    Route::middleware('tenant.billing')->prefix('dashboard')->group(function () {
         Route::get('/stats', [TenantDashboardController::class, 'getRealtimeStats']);
         Route::get('/realtime', [TenantDashboardController::class, 'getRealtimeStats']);
         Route::get('/active-users', [TenantDashboardController::class, 'getActiveUsers']);

@@ -14,6 +14,9 @@ import { VoucherTypes } from './pages/VoucherTypes';
 import { VoucherTemplates } from './pages/VoucherTemplates';
 import { Settings } from './pages/Settings';
 import { RadiusSetup } from './pages/RadiusSetup';
+import { Provisioning } from './pages/Provisioning';
+import { CaptivePortal } from './pages/CaptivePortal';
+import { SmsGateway } from './pages/SmsGateway';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { Users } from './pages/Users';
@@ -37,6 +40,8 @@ export const router = createBrowserRouter([
       { path: 'transactions', Component: Transactions },
       { path: 'withdrawals', Component: Withdrawals },
       { path: 'performance', Component: AnalyzePerformance },
+      { path: 'captive-portal', Component: CaptivePortal },
+      { path: 'sms-gateway', Component: SmsGateway },
       { path: 'voucher-stock', Component: VoucherStock },
       { path: 'import-vouchers', Component: ImportVouchers },
       { path: 'clients', Component: Clients },
@@ -46,6 +51,7 @@ export const router = createBrowserRouter([
       { path: 'voucher-templates', Component: VoucherTemplates },
       { path: 'settings', Component: Settings },
       { path: 'radius-setup', Component: RadiusSetup },
+      { path: 'provisioning', Component: Provisioning },
       { path: 'users', Component: Users },
     ],
   },

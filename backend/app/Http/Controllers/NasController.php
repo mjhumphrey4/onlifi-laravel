@@ -358,6 +358,9 @@ class NasController extends Controller
         $poolRange = (string) SystemSetting::get('router_default_dhcp_pool', '10.10.0.10-10.10.0.254');
         $dnsServers = (string) SystemSetting::get('router_default_dns_servers', '1.1.1.1,8.8.8.8');
         $hotspotDns = (string) SystemSetting::get('router_default_hotspot_dns', 'wifi.onlifi.local');
+        $appHost = parse_url(config('app.url'), PHP_URL_HOST) ?: $serverIp;
+        $hotspotBaseUrl = rtrim(config('app.url'), '/') . "/api/captive/hotspot/{$nas->provisioning_token}";
+        $portalConfigUrl = rtrim(config('app.url'), '/') . "/api/captive/config/{$nas->provisioning_token}";
 
         return <<<RSC
 # ============================================
@@ -393,6 +396,9 @@ class NasController extends Controller
 :local routerIdentifier "{$routerIdentifier}"
 :local telemetryUrl "{$telemetryUrl}"
 :local telemetryToken "{$telemetryToken}"
+:local appHost "{$appHost}"
+:local hotspotBaseUrl "{$hotspotBaseUrl}"
+:local portalConfigUrl "{$portalConfigUrl}"
 :local telemetryScriptName "onlifi-telemetry"
 :local telemetrySchedulerName "onlifi-telemetry-scheduler"
 
@@ -476,6 +482,18 @@ class NasController extends Controller
 } else={
   /ip hotspot set [find name=\$hotspotName] interface=\$bridgeName profile=\$hotspotProfile address-pool=\$dhcpPool disabled=no
 }
+
+# Captive portal files and payment API allow-list
+:do { /file make-directory hotspot } on-error={}
+:if ([:len [/ip hotspot walled-garden find comment="OnLiFi API access"]] = 0) do={
+  /ip hotspot walled-garden add dst-host=\$appHost action=allow comment="OnLiFi API access"
+}
+:if ([:len [/ip hotspot walled-garden find dst-host=\$hotspotDnsName]] = 0) do={
+  /ip hotspot walled-garden add dst-host=\$hotspotDnsName action=allow comment="OnLiFi local captive host"
+}
+:do { /tool fetch url=(\$hotspotBaseUrl . "/login.html") mode=http dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html" }
+:do { /tool fetch url=(\$hotspotBaseUrl . "/status.html") mode=http dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html" }
+:do { /tool fetch url=(\$hotspotBaseUrl . "/alogin.html") mode=http dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html" }
 
 # Telemetry script
 /system script remove [find name=\$telemetryScriptName]

@@ -72,11 +72,12 @@ sub get_tenant_db {
     
     # Look up by router_identifier (unique per router)
     my $sth = $dbh->prepare(q{
-        SELECT t.database_name, t.database_host, t.database_username, t.database_password
+        SELECT t.database_name, t.database_host, t.database_port, t.database_username, t.database_password
         FROM nas n
         JOIN tenants t ON n.tenant_id = t.id
         WHERE n.router_identifier = ?
         AND t.is_active = 1
+        AND t.status = 'approved'
     });
     
     $sth->execute($router_identifier);
@@ -114,7 +115,7 @@ sub authorize {
     
     # Connect to tenant database
     my $dbh = DBI->connect(
-        "DBI:mysql:database=$tenant->{database_name};host=$tenant->{database_host}",
+        "DBI:mysql:database=$tenant->{database_name};host=$tenant->{database_host};port=" . ($tenant->{database_port} // 3306),
         $tenant->{database_username},
         $tenant->{database_password},
         { RaiseError => 0, PrintError => 0 }
@@ -203,7 +204,7 @@ sub accounting {
     }
     
     my $dbh = DBI->connect(
-        "DBI:mysql:database=$tenant->{database_name};host=$tenant->{database_host}",
+        "DBI:mysql:database=$tenant->{database_name};host=$tenant->{database_host};port=" . ($tenant->{database_port} // 3306),
         $tenant->{database_username},
         $tenant->{database_password},
         { RaiseError => 0, PrintError => 0 }
@@ -358,7 +359,7 @@ sub post_auth {
     return RLM_MODULE_NOOP unless $tenant;
     
     my $dbh = DBI->connect(
-        "DBI:mysql:database=$tenant->{database_name};host=$tenant->{database_host}",
+        "DBI:mysql:database=$tenant->{database_name};host=$tenant->{database_host};port=" . ($tenant->{database_port} // 3306),
         $tenant->{database_username},
         $tenant->{database_password},
         { RaiseError => 0, PrintError => 0 }
