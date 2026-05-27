@@ -50,8 +50,9 @@ class SmsCreditService
 
         $this->yoAPI->set_external_reference($externalRef);
         $this->yoAPI->set_nonblocking('TRUE');
-        $this->yoAPI->set_instant_notification_url(config('app.url') . '/api/sms-credits/ipn');
-        $this->yoAPI->set_failure_notification_url(config('app.url') . '/api/sms-credits/failure');
+        $apiBaseUrl = rtrim((string) SystemSetting::get('api_base_url', config('app.api_url', config('app.url'))), '/');
+        $this->yoAPI->set_instant_notification_url($apiBaseUrl . '/api/sms-credits/ipn');
+        $this->yoAPI->set_failure_notification_url($apiBaseUrl . '/api/sms-credits/failure');
 
         $response = $this->yoAPI->ac_deposit_funds(
             $payment->msisdn,

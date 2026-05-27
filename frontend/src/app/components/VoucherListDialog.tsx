@@ -44,6 +44,8 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
         'Accept': 'application/json',
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      const siteId = localStorage.getItem('selected_site_id');
+      if (siteId) headers['X-Site-ID'] = siteId;
 
       let url = `/api/vouchers?group_id=${group.id}`;
       if (statusFilter !== 'all') {

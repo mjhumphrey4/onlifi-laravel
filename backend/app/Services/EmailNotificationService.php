@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Announcement;
 use App\Models\SystemSetting;
 use App\Models\Tenant;
+use App\Models\TenantUser;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -67,6 +68,29 @@ class EmailNotificationService
             'Your OnLiFi password was reset',
             "Hello {$tenant->name},\n\nAn administrator reset your OnLiFi account password. If you did not request this, contact support immediately."
         );
+    }
+
+    public function sendForgotPasswordLink(TenantUser $user, string $token): void
+    {
+        if (!SystemSetting::get('notify_password_reset_email', true) || !$user->email) {
+            return;
+        }
+
+        $this->configureMailer();
+        $dashboardUrl = rtrim((string) SystemSetting::get('dashboard_url', config('app.frontend_url')), '/');
+        $resetUrl = $dashboardUrl . '/reset-password?token=' . urlencode($token) . '&email=' . urlencode($user->email);
+        $body = "Hello {$user->name},\n\nWe received a request to reset your OnLiFi password.\n\nOpen this link to set a new password:\n{$resetUrl}\n\nThis link expires in 60 minutes. If you did not request it, ignore this email.";
+
+        try {
+            Mail::raw($body, function ($message) use ($user) {
+                $message->to($user->email)->subject('Reset your OnLiFi password');
+            });
+        } catch (\Throwable $e) {
+            Log::warning('Forgot password email failed', [
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function sendAnnouncement(Announcement $announcement): void

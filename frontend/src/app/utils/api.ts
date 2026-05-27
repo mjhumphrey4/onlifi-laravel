@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.onlifi.com/api';
 
 // Get auth token from localStorage
 function getAuthToken(): string | null {
@@ -17,19 +17,28 @@ function buildHeaders(includeAuth = true): HeadersInit {
       headers['Authorization'] = `Bearer ${token}`;
     }
   }
+  const siteId = localStorage.getItem('selected_site_id');
+  if (siteId) {
+    headers['X-Site-ID'] = siteId;
+  }
   return headers;
 }
 
 // Generic request function for Laravel API
 async function request<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  includeAuth = true
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  const mergedHeaders = {
+    ...buildHeaders(includeAuth),
+    ...(options.headers || {}),
+  };
   const res = await fetch(url, {
     credentials: 'include',
-    headers: buildHeaders(),
     ...options,
+    headers: mergedHeaders,
   });
 
   // Check if response has content
@@ -63,6 +72,11 @@ async function request<T = any>(
 const get = <T = any>(endpoint: string) => request<T>(endpoint, { method: 'GET' });
 const post = <T = any>(endpoint: string, body?: Record<string, unknown>) =>
   request<T>(endpoint, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
+const postPublic = <T = any>(endpoint: string, body?: Record<string, unknown>) =>
+  request<T>(endpoint, {
+    method: 'POST',
+    body: body ? JSON.stringify(body) : undefined,
+  }, false);
 const put = <T = any>(endpoint: string, body?: Record<string, unknown>) =>
   request<T>(endpoint, { method: 'PUT', body: body ? JSON.stringify(body) : undefined });
 const del = <T = any>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' });
@@ -133,6 +147,10 @@ export const tenantLogin = (email: string, password: string, twoFactorCode?: str
     ...(twoFactorToken ? { two_factor_token: twoFactorToken } : {}),
   });
 
+export const tenantForgotPassword = (email: string) => postPublic('/tenant/forgot-password', { email });
+export const tenantResetPassword = (email: string, token: string, password: string, password_confirmation: string) =>
+  postPublic('/tenant/reset-password', { email, token, password, password_confirmation });
+
 export const tenantLogout = () => post('/tenant/logout');
 
 export const tenantMe = () => get('/tenant/me');
@@ -142,7 +160,7 @@ export const checkSubscriptionPaymentStatus = (ref: string) => get(`/tenant/bill
 export const getCaptivePortalTemplates = () => get('/tenant/captive-portal/templates');
 export const saveCaptivePortalTemplate = (data: Record<string, unknown>) => post('/tenant/captive-portal/templates', data);
 export const activateCaptivePortalTemplate = (id: number) => post(`/tenant/captive-portal/templates/${id}/activate`);
-export const getSmsCredits = () => get('/tenant/sms-credits');
+export const getSmsCredits = (page = 1) => get(`/tenant/sms-credits?page=${page}&per_page=15`);
 export const updateSmsPlan = (sms_enabled: boolean) => put('/tenant/sms-credits/plan', { sms_enabled });
 export const topUpSmsCredits = (data: Record<string, unknown>) => post('/tenant/sms-credits/top-up', data);
 export const checkSmsCreditPaymentStatus = (ref: string) => get(`/tenant/sms-credits/payment-status?ref=${encodeURIComponent(ref)}`);

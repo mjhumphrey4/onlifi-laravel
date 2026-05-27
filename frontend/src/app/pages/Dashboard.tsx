@@ -3,6 +3,7 @@ import { DollarSign, TrendingUp, RefreshCw, Users, ArrowRight, Server, Activity,
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
+import { useSite } from '../context/SiteContext';
 import { apiStats, getTelemetryStats } from '../utils/api';
 
 interface SiteStat {
@@ -81,6 +82,7 @@ function statusStyle(s: string) {
 
 export function Dashboard() {
   const { user, isAdmin } = useAuth();
+  const { selectedSite } = useSite();
   const [sites, setSites] = useState<Record<string, SiteStat>>({});
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -96,6 +98,7 @@ export function Dashboard() {
       'Accept': 'application/json',
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (selectedSite?.id) headers['X-Site-ID'] = String(selectedSite.id);
     return headers;
   };
 
@@ -212,7 +215,7 @@ export function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [dateFilter]);
+  }, [dateFilter, selectedSite?.id]);
 
   useEffect(() => {
     load();
@@ -237,7 +240,9 @@ export function Dashboard() {
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-2xl sm:text-3xl text-foreground mb-1">Welcome back, {user?.name}!</h1>
-          <p className="text-sm text-muted-foreground">Here's what's happening with your WIFI Network.</p>
+          <p className="text-sm text-muted-foreground">
+            {selectedSite ? `Managing ${selectedSite.name}` : "Here's what's happening with your WIFI Network."}
+          </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RefreshCw className="w-3 h-3" />

@@ -46,6 +46,8 @@ export function VoucherGroupCard({ group, onDelete, isDeleting }: VoucherGroupCa
           'Accept': 'application/json',
         };
         if (token) headers['Authorization'] = `Bearer ${token}`;
+        const siteId = localStorage.getItem('selected_site_id');
+        if (siteId) headers['X-Site-ID'] = siteId;
 
         const response = await fetch(`/api/vouchers?group_id=${group.id}&status=unused`, { headers });
         if (response.ok) {

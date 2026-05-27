@@ -44,8 +44,9 @@ class SubscriptionBillingService
 
         $this->yoAPI->set_external_reference($externalRef);
         $this->yoAPI->set_nonblocking('TRUE');
-        $this->yoAPI->set_instant_notification_url(config('app.url') . '/api/billing/ipn');
-        $this->yoAPI->set_failure_notification_url(config('app.url') . '/api/billing/failure');
+        $apiBaseUrl = rtrim((string) SystemSetting::get('api_base_url', config('app.api_url', config('app.url'))), '/');
+        $this->yoAPI->set_instant_notification_url($apiBaseUrl . '/api/billing/ipn');
+        $this->yoAPI->set_failure_notification_url($apiBaseUrl . '/api/billing/failure');
 
         $response = $this->yoAPI->ac_deposit_funds($msisdn, $amount, $narrative);
 

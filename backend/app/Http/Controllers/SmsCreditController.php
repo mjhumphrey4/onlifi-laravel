@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SmsCreditTransaction;
+use App\Models\SmsLog;
 use App\Models\SystemSetting;
 use App\Services\SmsCreditService;
 use Illuminate\Http\Request;
@@ -14,12 +15,19 @@ class SmsCreditController extends Controller
     {
         $tenant = $request->user()->tenant;
         $wallet = $credits->wallet($tenant);
+        $perPage = min((int) $request->query('per_page', 15), 50);
+        $logs = SmsLog::where('tenant_id', $tenant->id)
+            ->latest()
+            ->paginate($perPage);
 
         return response()->json([
             'credits' => $wallet->credits,
             'sms_enabled' => (bool) $tenant->sms_enabled,
             'credit_price' => (float) SystemSetting::get('sms_credit_price', 35),
             'currency' => (string) SystemSetting::get('tenant_subscription_currency', 'UGX'),
+            'sent_count' => SmsLog::where('tenant_id', $tenant->id)->where('status', 'sent')->count(),
+            'total_count' => SmsLog::where('tenant_id', $tenant->id)->count(),
+            'logs' => $logs,
             'recent_transactions' => SmsCreditTransaction::where('tenant_id', $tenant->id)
                 ->latest()
                 ->limit(10)

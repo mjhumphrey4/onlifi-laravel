@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CalendarDays, DollarSign, RefreshCw, Repeat, Users } from 'lucide-react';
+import { useSite } from '../context/SiteContext';
 
 type DateFilter = 'today' | 'yesterday' | 'week' | 'month' | 'all';
 
@@ -18,6 +19,7 @@ export function Reports() {
   const [stats, setStats] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { selectedSite } = useSite();
 
   const range = useMemo(() => {
     const now = new Date();
@@ -42,7 +44,8 @@ export function Reports() {
   const load = async () => {
     setLoading(true);
     const token = localStorage.getItem('tenant_token');
-    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+    if (selectedSite?.id) headers['X-Site-ID'] = String(selectedSite.id);
     const params = new URLSearchParams(range as Record<string, string>);
     const txParams = new URLSearchParams({ per_page: '200', ...(range as Record<string, string>) });
 
@@ -61,7 +64,7 @@ export function Reports() {
 
   useEffect(() => {
     load();
-  }, [filter]);
+  }, [filter, selectedSite?.id]);
 
   const uniqueCustomers = new Set(transactions.map((tx) => tx.msisdn).filter(Boolean)).size;
   const successRate = stats?.total_transactions
@@ -73,7 +76,9 @@ export function Reports() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Reports</h1>
-          <p className="text-muted-foreground mt-1">Analytics, revenue movement, and customer purchase behavior.</p>
+          <p className="text-muted-foreground mt-1">
+            {selectedSite ? `Analytics for ${selectedSite.name}.` : 'Analytics, revenue movement, and customer purchase behavior.'}
+          </p>
         </div>
         <button onClick={load} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

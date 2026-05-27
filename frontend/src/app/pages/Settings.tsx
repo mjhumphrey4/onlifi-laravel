@@ -3,6 +3,8 @@ import { Download, Server, Copy, Check, Settings as SettingsIcon, RefreshCw, Bui
 import { useAuth } from '../context/AuthContext';
 import { TwoFactorPanel } from '../components/TwoFactorPanel';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.onlifi.com/api';
+
 interface Site {
   id: number;
   name: string;
@@ -21,7 +23,7 @@ export function Settings() {
   const [loadingToken, setLoadingToken] = useState(false);
   
   // Admin configurable telemetry URL
-  const [telemetryUrl, setTelemetryUrl] = useState(() => `${window.location.origin}/api/telemetry`);
+  const [telemetryUrl, setTelemetryUrl] = useState(() => `${API_BASE}/telemetry`);
   const [showUrlConfig, setShowUrlConfig] = useState(false);
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export function Settings() {
 
   const loadSites = async () => {
     try {
-      const response = await fetch('/api/sites', { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE}/sites`, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         const siteList = data.sites || [];
@@ -69,7 +71,7 @@ export function Settings() {
   const loadSiteToken = async (siteId: number) => {
     try {
       setLoadingToken(true);
-      const response = await fetch(`/api/sites/${siteId}/token`, { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE}/sites/${siteId}/token`, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setSiteToken(data.api_token || '');
@@ -85,7 +87,7 @@ export function Settings() {
     if (!selectedSite) return;
     try {
       setLoadingToken(true);
-      const response = await fetch(`/api/sites/${selectedSite.id}/regenerate-token`, {
+      const response = await fetch(`${API_BASE}/sites/${selectedSite.id}/regenerate-token`, {
         method: 'POST',
         headers: getAuthHeaders(),
       });
@@ -107,7 +109,7 @@ export function Settings() {
   const loadRouters = async () => {
     try {
       const headers = getAuthHeaders();
-      const response = await fetch('/api/routers', { headers });
+      const response = await fetch(`${API_BASE}/routers`, { headers });
       
       if (response.ok) {
         const data = await response.json();
@@ -141,6 +143,7 @@ export function Settings() {
 
 #---------- CONFIGURATION ----------
 :local dashboardUrl "${telemetryUrl}"
+:local fetchMode "${telemetryUrl.startsWith('https://') ? 'https' : 'http'}"
 :local routerName "${selectedRouter || '[system identity get name]'}"
 :local apiToken "${siteToken || 'TOKEN_NOT_LOADED'}"
 :local siteSlug "${selectedSite?.slug || 'default'}"
@@ -284,7 +287,7 @@ export function Settings() {
   
   :local fetchError ""
   :do {
-    /tool fetch url=\$dashboardUrl mode=http http-method=post \\
+    /tool fetch url=\$dashboardUrl mode=\$fetchMode http-method=post \\
       http-data=\$reportJson \\
       http-header-field=\$headers \\
       keep-result=no
@@ -374,7 +377,7 @@ export function Settings() {
                 type="url"
                 value={telemetryUrl}
                 onChange={(e) => setTelemetryUrl(e.target.value)}
-                placeholder="http://your-server.com/api/telemetry"
+                placeholder="https://api.onlifi.com/api/telemetry"
                 className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
               <p className="text-xs text-muted-foreground mt-1">

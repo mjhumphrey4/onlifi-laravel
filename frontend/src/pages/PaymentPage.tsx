@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 
 const CURRENT_ORIGIN_SITE = 'SiteA';
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.onlifi.com/api';
 
 interface PaymentStatus {
   type: 'info' | 'success' | 'error' | null;

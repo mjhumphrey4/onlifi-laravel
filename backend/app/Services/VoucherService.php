@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\Voucher;
 use App\Models\VoucherGroup;
 use App\Models\Transaction;
+use App\Support\SiteScope;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class VoucherService
@@ -40,6 +42,7 @@ class VoucherService
                     $query->where('group_name', 'LIKE', "%{$voucherType}%");
                 }
             })
+            ->when(Schema::connection('tenant')->hasColumn('vouchers', 'site_id') && $transaction->site_id, fn ($query) => $query->where('site_id', $transaction->site_id))
             ->first();
 
         if (!$voucher) {
@@ -77,17 +80,26 @@ class VoucherService
 
     private function createVoucherForTransaction(Transaction $transaction): ?Voucher
     {
-        $group = VoucherGroup::where('price', $transaction->amount)->first();
+        $group = VoucherGroup::where('price', $transaction->amount)
+            ->when(Schema::connection('tenant')->hasColumn('voucher_groups', 'site_id') && $transaction->site_id, fn ($query) => $query->where('site_id', $transaction->site_id))
+            ->first();
 
         if (!$group) {
-            $group = VoucherGroup::create([
+            $groupData = [
                 'group_name' => 'Auto_' . $transaction->amount . '_UGX',
                 'description' => 'Auto-generated voucher group',
                 'profile_name' => 'default',
                 'validity_hours' => $this->getValidityHoursFromAmount($transaction->amount),
                 'price' => $transaction->amount,
                 'created_by' => 'system',
-            ]);
+            ];
+
+            if (Schema::connection('tenant')->hasColumn('voucher_groups', 'site_id') && $transaction->site_id) {
+                $groupData['site_id'] = $transaction->site_id;
+            }
+            $groupData = SiteScope::tenantCompatColumns('voucher_groups', $groupData);
+
+            $group = VoucherGroup::create($groupData);
         }
 
         return $this->createVoucher($group);
@@ -97,7 +109,7 @@ class VoucherService
     {
         $code = $this->generateVoucherCode();
         
-        $voucher = Voucher::create([
+        $voucherData = [
             'voucher_code' => $code,
             'password' => $code,  // Same as voucher_code for single-entry authentication
             'group_id' => $group->id,
@@ -106,8 +118,16 @@ class VoucherService
             'data_limit_mb' => $group->data_limit_mb,
             'speed_limit_kbps' => $group->speed_limit_kbps,
             'price' => $group->price,
+            'site_id' => $group->site_id ?? null,
             'status' => 'unused',
-        ]);
+        ];
+
+        $voucherData = SiteScope::tenantCompatColumns('vouchers', $voucherData);
+        if (!Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
+            unset($voucherData['site_id']);
+        }
+
+        $voucher = Voucher::create($voucherData);
 
         $radiusService = app(FreeRadiusService::class);
         $radiusService->syncVoucherToRadius([
@@ -195,7 +215,7 @@ class VoucherService
 
     public function generateVoucherBatch(array $data): array
     {
-        $group = VoucherGroup::create([
+        $groupData = [
             'group_name' => $data['group_name'],
             'description' => $data['description'] ?? null,
             'profile_name' => $data['profile_name'],
@@ -204,8 +224,16 @@ class VoucherService
             'speed_limit_kbps' => $data['speed_limit_kbps'] ?? null,
             'price' => $data['price'],
             'sales_point_id' => $data['sales_point_id'] ?? null,
+            'site_id' => $data['site_id'] ?? null,
             'created_by' => $data['created_by'] ?? 'admin',
-        ]);
+        ];
+
+        $groupData = SiteScope::tenantCompatColumns('voucher_groups', $groupData);
+        if (!Schema::connection('tenant')->hasColumn('voucher_groups', 'site_id')) {
+            unset($groupData['site_id']);
+        }
+
+        $group = VoucherGroup::create($groupData);
 
         $count = $data['count'] ?? 10;
         $codeFormat = $data['code_format'] ?? 'mixed'; // numbers, letters, mixed
@@ -234,10 +262,16 @@ class VoucherService
                 'speed_limit_kbps' => $group->speed_limit_kbps,
                 'price' => $group->price,
                 'sales_point_id' => $group->sales_point_id,
+                'site_id' => $group->site_id ?? null,
                 'status' => 'unused',
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
+
+            $vouchersData[array_key_last($vouchersData)] = SiteScope::tenantCompatColumns('vouchers', $vouchersData[array_key_last($vouchersData)]);
+            if (!Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
+                unset($vouchersData[array_key_last($vouchersData)]['site_id']);
+            }
         }
 
         Log::info("Generated all voucher codes", ['count' => count($vouchersData)]);

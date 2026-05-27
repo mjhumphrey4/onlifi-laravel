@@ -6,6 +6,7 @@ use App\Models\Voucher;
 use App\Models\VoucherGroup;
 use App\Models\VoucherType;
 use App\Services\VoucherService;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
@@ -22,6 +23,8 @@ class VoucherController extends Controller
     public function index(Request $request)
     {
         $query = Voucher::with(['group', 'salesPoint']);
+        $site = SiteScope::selectedSite($request);
+        SiteScope::applyToTenantTable($query, 'vouchers', $site);
 
         if ($request->has('status')) {
             $query->where('status', $request->status);
@@ -71,7 +74,14 @@ class VoucherController extends Controller
         }
 
         try {
-            $result = $this->voucherService->generateVoucherBatch($request->all());
+            $data = $request->all();
+            $site = SiteScope::selectedSite($request);
+            if ($site) {
+                $data['site_id'] = $site->id;
+                $data['site_name'] = $site->name;
+            }
+
+            $result = $this->voucherService->generateVoucherBatch($data);
             return response()->json($result);
         } catch (\Exception $e) {
             \Log::error('Voucher generation failed', [
@@ -229,7 +239,17 @@ class VoucherController extends Controller
 
     public function getGroups()
     {
-        $groups = VoucherGroup::with('salesPoint')
+        $site = SiteScope::selectedSite(request());
+        $query = VoucherGroup::with('salesPoint');
+        SiteScope::applyToTenantTable($query, 'voucher_groups', $site);
+
+        if (Schema::connection('tenant')->hasColumn('voucher_groups', 'tenant_id') && app()->bound('tenant')) {
+            $query->where(function ($q) {
+                $q->where('tenant_id', app('tenant')->id)->orWhereNull('tenant_id');
+            });
+        }
+
+        $groups = $query
             ->withCount([
                 'vouchers as total_vouchers',
                 'vouchers as unused_count' => function ($query) {
@@ -250,20 +270,26 @@ class VoucherController extends Controller
 
     public function statistics()
     {
+        $site = SiteScope::selectedSite(request());
+        $voucherQuery = Voucher::query();
+        SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
+
         // Overall statistics
         $stats = [
-            'total_vouchers' => Voucher::count(),
-            'unused_vouchers' => Voucher::unused()->count(),
-            'used_vouchers' => Voucher::used()->count(),
-            'expired_vouchers' => Voucher::expired()->count(),
-            'total_revenue' => Voucher::used()->sum('price'),
-            'vouchers_by_status' => Voucher::selectRaw('status, COUNT(*) as count')
+            'total_vouchers' => (clone $voucherQuery)->count(),
+            'unused_vouchers' => (clone $voucherQuery)->unused()->count(),
+            'used_vouchers' => (clone $voucherQuery)->used()->count(),
+            'expired_vouchers' => (clone $voucherQuery)->expired()->count(),
+            'total_revenue' => (clone $voucherQuery)->used()->sum('price'),
+            'vouchers_by_status' => (clone $voucherQuery)->selectRaw('status, COUNT(*) as count')
                 ->groupBy('status')
                 ->get(),
         ];
 
         // Daily statistics (last 30 days)
-        $stats['daily'] = Voucher::selectRaw('DATE(first_used_at) as date, COUNT(*) as vouchers_used, SUM(price) as revenue, COUNT(DISTINCT used_by_mac) as unique_devices')
+        $dailyQuery = Voucher::selectRaw('DATE(first_used_at) as date, COUNT(*) as vouchers_used, SUM(price) as revenue, COUNT(DISTINCT used_by_mac) as unique_devices');
+        SiteScope::applyToTenantTable($dailyQuery, 'vouchers', $site);
+        $stats['daily'] = $dailyQuery
             ->whereNotNull('first_used_at')
             ->where('first_used_at', '>=', now()->subDays(30))
             ->groupBy('date')
@@ -280,9 +306,11 @@ class VoucherController extends Controller
 
         // Statistics by sales point - use try/catch to handle missing tables gracefully
         try {
-            $stats['by_sales_point'] = VoucherGroup::join('vouchers', 'voucher_groups.id', '=', 'vouchers.group_id')
+            $salesQuery = VoucherGroup::join('vouchers', 'voucher_groups.id', '=', 'vouchers.group_id')
                 ->join('voucher_sales_points', 'voucher_groups.sales_point_id', '=', 'voucher_sales_points.id')
-                ->selectRaw('voucher_sales_points.id, voucher_sales_points.name, COUNT(vouchers.id) as total_vouchers, SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used, SUM(CASE WHEN vouchers.status = "used" THEN vouchers.price ELSE 0 END) as revenue')
+                ->selectRaw('voucher_sales_points.id, voucher_sales_points.name, COUNT(vouchers.id) as total_vouchers, SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used, SUM(CASE WHEN vouchers.status = "used" THEN vouchers.price ELSE 0 END) as revenue');
+            SiteScope::applyToTenantTable($salesQuery, 'voucher_groups', $site);
+            $stats['by_sales_point'] = $salesQuery
                 ->groupBy('voucher_sales_points.id', 'voucher_sales_points.name')
                 ->get()
                 ->map(function ($point) {

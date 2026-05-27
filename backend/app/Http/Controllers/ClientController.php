@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ClientController extends Controller
 {
@@ -17,7 +19,8 @@ class ClientController extends Controller
         try {
             // Query clients from tenant database
             // This assumes you have a clients or hotspot_users table
-            $clients = DB::connection('tenant')
+            $site = SiteScope::selectedSite($request);
+            $query = DB::connection('tenant')
                 ->table('hotspot_users')
                 ->select([
                     'id',
@@ -38,7 +41,15 @@ class ClientController extends Controller
                     DB::raw('CASE WHEN last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN "online" ELSE "offline" END as status'),
                     DB::raw('COALESCE((SELECT SUM(amount) FROM transactions WHERE transactions.msisdn = hotspot_users.username), 0) as total_spent'),
                     DB::raw('(SELECT COUNT(*) FROM sessions WHERE sessions.mac_address = hotspot_users.mac_address) as total_sessions'),
-                ])
+                ]);
+
+            if ($site && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
+                $query->where('site_id', $site->id);
+            } elseif ($site && Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+                $query->where('router_name', $site->name);
+            }
+
+            $clients = $query
                 ->orderBy('last_seen', 'desc')
                 ->limit($limit)
                 ->get();

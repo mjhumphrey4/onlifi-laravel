@@ -3,10 +3,14 @@
 namespace App\Services;
 
 use App\Models\PlatformFee;
+use App\Models\Site;
+use App\Models\SystemSetting;
 use App\Models\Tenant;
 use App\Models\Transaction;
+use App\Support\SiteScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class CaptivePaymentService
 {
@@ -56,22 +60,33 @@ class CaptivePaymentService
         $externalRef = sprintf('CAP_%d_%d_%s', $tenant->id, time(), uniqid());
         $msisdn = $this->normalizeMsisdn($data['msisdn']);
 
-        $transaction = Transaction::create([
+        $site = Site::where('tenant_id', $tenant->id)->where('name', $nas->shortname)->first();
+
+        $transactionData = [
             'external_ref' => $externalRef,
             'msisdn' => $msisdn,
             'amount' => $data['amount'],
             'status' => 'pending',
             'origin_site' => $nas->shortname,
+            'site_id' => $site?->id,
             'client_mac' => $data['client_mac'] ?? null,
             'email' => $data['email'] ?? null,
             'voucher_type' => $data['voucher_type'] ?? null,
             'origin_url' => $data['origin_url'] ?? null,
-        ]);
+        ];
+
+        $transactionData = SiteScope::tenantCompatColumns('transactions', $transactionData);
+        if (!Schema::connection('tenant')->hasColumn('transactions', 'site_id')) {
+            unset($transactionData['site_id']);
+        }
+
+        $transaction = Transaction::create($transactionData);
 
         $this->yoAPI->set_external_reference($externalRef);
         $this->yoAPI->set_nonblocking('TRUE');
-        $this->yoAPI->set_instant_notification_url(config('app.url') . '/api/captive/ipn');
-        $this->yoAPI->set_failure_notification_url(config('app.url') . '/api/captive/failure');
+        $apiBaseUrl = rtrim((string) SystemSetting::get('api_base_url', config('app.api_url', config('app.url'))), '/');
+        $this->yoAPI->set_instant_notification_url($apiBaseUrl . '/api/captive/ipn');
+        $this->yoAPI->set_failure_notification_url($apiBaseUrl . '/api/captive/failure');
 
         $response = $this->yoAPI->ac_deposit_funds(
             $msisdn,

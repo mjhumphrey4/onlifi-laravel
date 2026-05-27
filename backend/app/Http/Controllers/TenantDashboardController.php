@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\MikrotikRouter;
+use App\Models\SystemSetting;
 use App\Models\Transaction;
 use App\Models\Voucher;
 use App\Services\MikrotikService;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class TenantDashboardController extends Controller
 {
@@ -17,9 +20,14 @@ class TenantDashboardController extends Controller
         $this->mikrotikService = $mikrotikService;
     }
 
-    public function getRealtimeStats()
+    public function getRealtimeStats(Request $request)
     {
-        $routers = MikrotikRouter::where('is_active', true)->get();
+        $site = SiteScope::selectedSite($request);
+        $routerQuery = MikrotikRouter::where('is_active', true);
+        if ($site && Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+            $routerQuery->where('site_id', $site->id);
+        }
+        $routers = $routerQuery->get();
         
         $totalActiveUsers = 0;
         $routerStats = [];
@@ -41,16 +49,20 @@ class TenantDashboardController extends Controller
             ];
         }
 
-        $todayTransactions = Transaction::whereDate('created_at', today())
+        $transactionQuery = Transaction::whereDate('created_at', today());
+        SiteScope::applyToTenantTable($transactionQuery, 'transactions', $site, 'origin_site');
+        $todayTransactions = (clone $transactionQuery)
             ->where('status', 'success')
             ->count();
 
-        $todayRevenue = Transaction::whereDate('created_at', today())
+        $todayRevenue = (clone $transactionQuery)
             ->where('status', 'success')
             ->sum('amount');
 
-        $activeVouchers = Voucher::where('status', 'active')->count();
-        $unusedVouchers = Voucher::where('status', 'unused')->count();
+        $voucherQuery = Voucher::query();
+        SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
+        $activeVouchers = (clone $voucherQuery)->where('status', 'active')->count();
+        $unusedVouchers = (clone $voucherQuery)->where('status', 'unused')->count();
 
         return response()->json([
             'total_active_users' => $totalActiveUsers,
@@ -139,11 +151,12 @@ class TenantDashboardController extends Controller
         }
 
         // Use the public telemetry endpoint with Bearer token auth
-        $apiUrl = rtrim(config('app.url'), '/') . '/api/telemetry';
+        $apiBaseUrl = rtrim((string) SystemSetting::get('api_base_url', config('app.api_url', config('app.url'))), '/');
+        $apiUrl = $apiBaseUrl . '/api/telemetry';
         $apiToken = $site->api_token;
         $routerIdentity = $router->name;
 
-        $script = $this->generateRouterScript($apiUrl, $apiToken, $routerIdentity, $site->name);
+        $script = $this->generateRouterScript($apiUrl, str_starts_with($apiUrl, 'https://') ? 'https' : 'http', $apiToken, $routerIdentity, $site->name);
 
         return response($script)
             ->header('Content-Type', 'text/plain')
@@ -182,7 +195,7 @@ class TenantDashboardController extends Controller
         return $site;
     }
 
-    private function generateRouterScript($apiUrl, $apiToken, $routerIdentity, $siteName): string
+    private function generateRouterScript($apiUrl, $fetchMode, $apiToken, $routerIdentity, $siteName): string
     {
         return <<<RSC
 # ============================================
@@ -200,6 +213,7 @@ class TenantDashboardController extends Controller
 
 #---------- CONFIGURATION ----------
 :local dashboardUrl "{$apiUrl}"
+:local fetchMode "{$fetchMode}"
 :local apiToken "{$apiToken}"
 :local routerIdentity "{$routerIdentity}"
 :local schedulerName "onlifi-telemetry-scheduler"
@@ -353,7 +367,7 @@ class TenantDashboardController extends Controller
 
   # POST telemetry to API with Bearer token
   :do {
-    /tool fetch url=\$dashboardUrl mode=http http-method=post http-data=\$reportJson http-header-field="Authorization: Bearer \$apiToken,Content-Type: application/json" keep-result=no
+    /tool fetch url=\$dashboardUrl mode=\$fetchMode http-method=post http-data=\$reportJson http-header-field="Authorization: Bearer \$apiToken,Content-Type: application/json" keep-result=no
     :log info "OnLiFi telemetry: Data posted successfully"
     :put "SUCCESS: Telemetry posted to dashboard"
   } on-error={

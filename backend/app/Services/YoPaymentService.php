@@ -81,8 +81,9 @@ class YoPaymentService
         $this->yoAPI->set_external_reference($externalRef);
         $this->yoAPI->set_nonblocking("TRUE");
         
-        $ipnUrl = config('app.url') . '/api/payments/ipn';
-        $failureUrl = config('app.url') . '/api/payments/failure';
+        $apiBaseUrl = rtrim((string) SystemSetting::get('api_base_url', config('app.api_url', config('app.url'))), '/');
+        $ipnUrl = $apiBaseUrl . '/api/payments/ipn';
+        $failureUrl = $apiBaseUrl . '/api/payments/failure';
         
         $this->yoAPI->set_instant_notification_url($ipnUrl);
         $this->yoAPI->set_failure_notification_url($failureUrl);

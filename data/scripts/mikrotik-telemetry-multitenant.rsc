@@ -11,10 +11,11 @@
 # 5. Script will auto-create scheduler to run every 5 minutes
 #
 # IMPORTANT: Update dashboardUrl to your actual domain/IP!
-# Example: https://yourdomain.com/api/telemetry
+# Example: https://api.onlifi.com/api/telemetry
 
 #---------- CONFIGURATION ----------
-:local dashboardUrl "https://yourdomain.com/api/telemetry"
+:local dashboardUrl "https://api.onlifi.com/api/telemetry"
+:local fetchMode "https"
 :local apiToken "YOUR_SITE_API_TOKEN_HERE"
 :local schedulerName "onlifi-telemetry-scheduler"
 
@@ -171,7 +172,7 @@
 
   # POST telemetry to API with Bearer token authentication
   :do {
-    /tool fetch url=$dashboardUrl mode=http http-method=post http-data=$reportJson http-header-field="Authorization: Bearer $apiToken,Content-Type: application/json" keep-result=no
+    /tool fetch url=$dashboardUrl mode=$fetchMode http-method=post http-data=$reportJson http-header-field="Authorization: Bearer $apiToken,Content-Type: application/json" keep-result=no
     :log info "OnLiFi telemetry: data posted successfully"
     :put "SUCCESS: Telemetry posted to dashboard"
   } on-error={

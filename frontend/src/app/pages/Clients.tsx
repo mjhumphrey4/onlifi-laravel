@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, RefreshCw, Wifi, HardDrive, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { useSite } from '../context/SiteContext';
 
 interface Client {
   id: number;
@@ -20,6 +21,7 @@ interface Client {
 }
 
 export function Clients() {
+  const { selectedSite } = useSite();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,6 +34,8 @@ export function Clients() {
       'Accept': 'application/json',
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    const siteId = localStorage.getItem('selected_site_id');
+    if (siteId) headers['X-Site-ID'] = siteId;
     return headers;
   };
 
@@ -60,7 +64,7 @@ export function Clients() {
     loadClients();
     const interval = setInterval(() => loadClients(), 30000); // Auto-refresh every 30s
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedSite?.id]);
 
   const formatUptime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);

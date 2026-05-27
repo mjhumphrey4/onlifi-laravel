@@ -3,6 +3,7 @@ import { Ticket, Plus, Users, TrendingUp, Package, Filter, Search, Download, Pri
 import { CreateVoucherDialog } from '../components/CreateVoucherDialog';
 import { VoucherGroupCard } from '../components/VoucherGroupCard';
 import { SalesPointsDialog } from '../components/SalesPointsDialog';
+import { useSite } from '../context/SiteContext';
 
 interface VoucherGroup {
   id: number;
@@ -45,6 +46,7 @@ interface VoucherStats {
 }
 
 export function Vouchers() {
+  const { selectedSite } = useSite();
   const [groups, setGroups] = useState<VoucherGroup[]>([]);
   const [stats, setStats] = useState<VoucherStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,7 +58,7 @@ export function Vouchers() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedSite?.id]);
 
   const loadData = async () => {
     try {
@@ -67,6 +69,8 @@ export function Vouchers() {
         'Accept': 'application/json',
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      const siteId = localStorage.getItem('selected_site_id');
+      if (siteId) headers['X-Site-ID'] = siteId;
 
       const [groupsRes, statsRes] = await Promise.all([
         fetch('/api/vouchers/groups', { headers }),
@@ -118,6 +122,8 @@ export function Vouchers() {
         'Accept': 'application/json',
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      const siteId = localStorage.getItem('selected_site_id');
+      if (siteId) headers['X-Site-ID'] = siteId;
 
       const res = await fetch(`/api/vouchers/groups/${groupId}`, {
         method: 'DELETE',

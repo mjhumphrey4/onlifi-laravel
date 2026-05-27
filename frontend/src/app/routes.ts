@@ -20,6 +20,8 @@ import { SmsGateway } from './pages/SmsGateway';
 import { Reports } from './pages/Reports';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
 import { Users } from './pages/Users';
 
 // Admin pages
@@ -59,6 +61,8 @@ export const router = createBrowserRouter([
   },
   { path: '/login', Component: Login },
   { path: '/signup', Component: Signup },
+  { path: '/forgot-password', Component: ForgotPassword },
+  { path: '/reset-password', Component: ResetPassword },
 
   // Admin Routes with AdminLayout
   { path: '/admin/login', Component: AdminLogin },

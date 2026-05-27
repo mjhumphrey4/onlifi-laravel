@@ -6,6 +6,7 @@ use App\Models\CaptivePortalTemplate;
 use App\Models\SystemSetting;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class CaptivePortalService
 {
@@ -125,9 +126,16 @@ class CaptivePortalService
             ],
             'template' => $this->activeTemplateForTenant($tenant),
             'api' => [
-                'base_url' => rtrim(config('app.url'), '/'),
-                'pay_url' => rtrim(config('app.url'), '/') . '/api/captive/pay',
-                'status_url' => rtrim(config('app.url'), '/') . '/api/captive/payment-status',
+                'base_url' => $this->apiBaseUrl(),
+                'pay_url' => $this->apiBaseUrl() . '/api/captive/pay',
+                'status_url' => $this->apiBaseUrl() . '/api/captive/payment-status',
+            ],
+            'manual_payment' => [
+                'site_name' => $nas->shortname ?: $tenant->name,
+                'site_slug' => $this->paymentSiteSlug($nas->shortname ?: $tenant->name ?: $tenant->slug),
+                'initiate_url' => $this->manualPaymentUrl($nas->shortname ?: $tenant->name ?: $tenant->slug),
+                'check_status_url' => $this->manualPaymentUrl($nas->shortname ?: $tenant->name ?: $tenant->slug, 'check_status.php'),
+                'voucher_lookup_url' => $this->manualPaymentUrl($nas->shortname ?: $tenant->name ?: $tenant->slug, 'look/voucher-lookup.php'),
             ],
             'packages' => $packages->values(),
         ];
@@ -150,6 +158,16 @@ class CaptivePortalService
 
     private function loginHtml(array $config): string
     {
+        $template = $this->loadManualLoginTemplate();
+        if ($template) {
+            return $this->renderManualLoginTemplate($template, $config);
+        }
+
+        return $this->defaultManualLoginHtml($config);
+    }
+
+    private function defaultManualLoginHtml(array $config): string
+    {
         $design = array_merge([
             'primary_color' => '#2563eb',
             'background_color' => '#f8fafc',
@@ -169,6 +187,9 @@ class CaptivePortalService
         $buttonLabel = htmlspecialchars($design['button_label'], ENT_QUOTES);
         $logoUrl = htmlspecialchars($design['logo_url'] ?? '', ENT_QUOTES);
         $logoHtml = $logoUrl ? "<img src=\"{$logoUrl}\" alt=\"Logo\" class=\"logo\">" : '';
+        $siteName = htmlspecialchars($config['manual_payment']['site_name'], ENT_QUOTES);
+        $siteSlug = htmlspecialchars($config['manual_payment']['site_slug'], ENT_QUOTES);
+        $initiateUrl = htmlspecialchars($config['manual_payment']['initiate_url'], ENT_QUOTES);
 
         return <<<HTML
 <!doctype html>
@@ -196,9 +217,20 @@ class CaptivePortalService
     <p class="muted">{$subheadline}</p>
     <div class="tabs"><button class="tab active" onclick="showTab('pay')">Mobile Money</button><button class="tab" onclick="showTab('voucher')">Voucher</button></div>
     <section id="payTab">
-      <div id="packages"></div>
+      <form id="paymentForm" action="{$initiateUrl}" method="post">
+        <input type="hidden" name="Site-Name" value="{$siteName}">
+        <input type="hidden" name="site_name" value="{$siteName}">
+        <input type="hidden" name="site_slug" value="{$siteSlug}">
+        <input type="hidden" name="mac" value="\$(mac)">
+        <input type="hidden" name="origin_url" value="\$(link-orig)">
+        <input type="hidden" name="link_login_only" value="\$(link-login-only)">
+        <div id="packages"></div>
+        <input type="hidden" id="packageName" name="package" value="">
+        <input type="hidden" id="amount" name="amount" value="">
       <input id="phone" inputmode="tel" placeholder="Mobile money number e.g. 2567XXXXXXXX">
-      <button class="primary" style="width:100%" onclick="startPayment()">{$buttonLabel}</button>
+        <input type="hidden" id="msisdn" name="msisdn" value="">
+        <button class="primary" style="width:100%" type="submit">{$buttonLabel}</button>
+      </form>
       <div id="payMsg" class="msg"></div>
     </section>
     <section id="voucherTab" class="hide">
@@ -218,13 +250,86 @@ class CaptivePortalService
     document.getElementById('tenantName').textContent = ONLIFI.tenant.name;
     function showTab(tab){document.getElementById('payTab').classList.toggle('hide',tab!=='pay');document.getElementById('voucherTab').classList.toggle('hide',tab!=='voucher');document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',(tab==='pay'&&i===0)||(tab==='voucher'&&i===1)));}
     function renderPackages(){const holder=document.getElementById('packages');holder.innerHTML='';ONLIFI.packages.forEach((p,i)=>{if(i===0)selectedPackage=p;const row=document.createElement('label');row.className='package';row.innerHTML='<span><strong>'+p.name+'</strong><br><small>'+p.validity_hours+' hours</small></span><span><input type="radio" name="pkg" '+(i===0?'checked':'')+'> UGX '+Number(p.price).toLocaleString()+'</span>';row.onclick=()=>selectedPackage=p;holder.appendChild(row);});}
-    async function startPayment(){const msg=document.getElementById('payMsg');msg.className='msg';msg.textContent='Starting payment...';try{const r=await fetch(ONLIFI.api.pay_url,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({token:ONLIFI.router.token,msisdn:document.getElementById('phone').value,amount:selectedPackage.price,voucher_type:selectedPackage.name,client_mac:'\$(mac)',origin_url:'\$(link-orig)'})});const data=await r.json();if(!r.ok)throw new Error(data.message||data.errorMessage||'Payment failed');pollRef=data.externalReference||data.transactionReference;msg.textContent='Confirm the prompt on your phone...';setTimeout(checkPayment,5000);}catch(e){msg.className='msg err';msg.textContent=e.message;}}
-    async function checkPayment(){if(!pollRef)return;const msg=document.getElementById('payMsg');try{const r=await fetch(ONLIFI.api.status_url+'?ref='+encodeURIComponent(pollRef));const data=await r.json();if(data.transactionStatus===1){msg.className='msg ok';msg.textContent='Payment confirmed. Connecting...';document.getElementById('voucher').value=data.voucherCode;document.getElementById('password').value=data.password||data.voucherCode;document.login.submit();return;}if(data.transactionStatus===-1){msg.className='msg err';msg.textContent=data.errorMessage||'Payment failed';return;}msg.textContent='Waiting for confirmation...';setTimeout(checkPayment,5000);}catch(e){msg.textContent='Waiting for confirmation...';setTimeout(checkPayment,5000);}}
+    document.getElementById('paymentForm').addEventListener('submit',function(){document.getElementById('msisdn').value=document.getElementById('phone').value;if(selectedPackage){document.getElementById('packageName').value=selectedPackage.name;document.getElementById('amount').value=selectedPackage.price;}});
     renderPackages();
   </script>
 </body>
 </html>
 HTML;
+    }
+
+    private function loadManualLoginTemplate(): ?string
+    {
+        $paths = [
+            base_path('OLD-Flow/login.html'),
+            base_path('EgoSMS Flow/login.html'),
+            resource_path('hotspot/login-manual.html'),
+        ];
+
+        foreach ($paths as $path) {
+            if (is_file($path)) {
+                $contents = file_get_contents($path);
+                if ($contents !== false) {
+                    return $contents;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function renderManualLoginTemplate(string $template, array $config): string
+    {
+        $replacements = [
+            '{{SITE_NAME}}' => $config['manual_payment']['site_name'],
+            '{{SITE_SLUG}}' => $config['manual_payment']['site_slug'],
+            '{{SITE_NAME_FIELD}}' => $config['manual_payment']['site_name'],
+            '{{PAYMENT_INITIATE_URL}}' => $config['manual_payment']['initiate_url'],
+            '{{MANUAL_PAYMENT_URL}}' => $config['manual_payment']['initiate_url'],
+            '{{PAYMENT_CHECK_STATUS_URL}}' => $config['manual_payment']['check_status_url'],
+            '{{VOUCHER_LOOKUP_URL}}' => $config['manual_payment']['voucher_lookup_url'],
+            '{{API_BASE_URL}}' => $config['api']['base_url'],
+            '{{ROUTER_TOKEN}}' => $config['router']['token'],
+        ];
+
+        $html = str_replace(array_keys($replacements), array_map('htmlspecialchars', array_values($replacements)), $template);
+
+        $html = str_replace(
+            ['SITE_NAME_PLACEHOLDER', 'PAYMENT_ENDPOINT_PLACEHOLDER'],
+            [$config['manual_payment']['site_name'], $config['manual_payment']['initiate_url']],
+            $html
+        );
+
+        $legacyReplacements = [
+            "const CURRENT_ORIGIN_SITE = 'STK WIFI';" => 'const CURRENT_ORIGIN_SITE = ' . json_encode($config['manual_payment']['site_name']) . ';',
+            'http://pay.onlustech.com/yo/initiate.php' => $config['manual_payment']['initiate_url'],
+            'http://pay.onlustech.com/yo/check_status.php' => $config['manual_payment']['check_status_url'],
+            'http://pay.onlustech.com/yo/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
+        ];
+
+        $html = str_replace(array_keys($legacyReplacements), array_values($legacyReplacements), $html);
+
+        return str_replace(
+            ['STK WIFI POINT', 'STK WIFI'],
+            [htmlspecialchars($config['manual_payment']['site_name'], ENT_QUOTES), htmlspecialchars($config['manual_payment']['site_name'], ENT_QUOTES)],
+            $html
+        );
+    }
+
+    private function apiBaseUrl(): string
+    {
+        return rtrim((string) SystemSetting::get('api_base_url', config('app.api_url', config('app.url'))), '/');
+    }
+
+    private function manualPaymentUrl(string $siteName, string $script = 'initiate.php'): string
+    {
+        return rtrim((string) SystemSetting::get('manual_payment_base_url', config('app.manual_payment_base_url')), '/')
+            . '/' . $this->paymentSiteSlug($siteName) . '/' . ltrim($script, '/');
+    }
+
+    private function paymentSiteSlug(string $siteName): string
+    {
+        return Str::slug($siteName) ?: 'site';
     }
 
     private function simpleHtml(array $config, string $title, string $message): string

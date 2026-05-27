@@ -313,13 +313,28 @@ class NasController extends Controller
 
     private function provisioningUrl(string $token): string
     {
-        return rtrim(config('app.url'), '/') . "/api/router/provision/{$token}";
+        return $this->apiBaseUrl() . "/api/router/provision/{$token}";
     }
 
     private function fetchCommand(string $token): string
     {
         $url = $this->provisioningUrl($token);
-        return "/tool fetch url=\"{$url}\" mode=http dst-path=onlifi-setup.rsc; /import file-name=onlifi-setup.rsc";
+        return "/tool fetch url=\"{$url}\" mode={$this->fetchModeForUrl($url)} dst-path=onlifi-setup.rsc; /import file-name=onlifi-setup.rsc";
+    }
+
+    private function apiBaseUrl(): string
+    {
+        return rtrim((string) SystemSetting::get('api_base_url', config('app.api_url', config('app.url'))), '/');
+    }
+
+    private function manualPaymentBaseUrl(): string
+    {
+        return rtrim((string) SystemSetting::get('manual_payment_base_url', config('app.manual_payment_base_url')), '/');
+    }
+
+    private function fetchModeForUrl(string $url): string
+    {
+        return str_starts_with(strtolower($url), 'https://') ? 'https' : 'http';
     }
 
     private function radiusServerIp(): string
@@ -347,7 +362,8 @@ class NasController extends Controller
         $tenant = DB::connection('central')->table('tenants')->where('id', $nas->tenant_id)->first();
         $tenantName = $tenant->name ?? 'Unknown Tenant';
         $site = $this->getOrCreateProvisioningSite($nas, $tenant);
-        $telemetryUrl = rtrim(config('app.url'), '/') . '/api/telemetry';
+        $apiBaseUrl = $this->apiBaseUrl();
+        $telemetryUrl = $apiBaseUrl . '/api/telemetry';
         $telemetryToken = $site?->api_token ?? '';
         $serverIp = $this->radiusServerIp();
         $authPort = $this->radiusAuthPort();
@@ -358,9 +374,12 @@ class NasController extends Controller
         $poolRange = (string) SystemSetting::get('router_default_dhcp_pool', '10.10.0.10-10.10.0.254');
         $dnsServers = (string) SystemSetting::get('router_default_dns_servers', '1.1.1.1,8.8.8.8');
         $hotspotDns = (string) SystemSetting::get('router_default_hotspot_dns', 'wifi.onlifi.local');
-        $appHost = parse_url(config('app.url'), PHP_URL_HOST) ?: $serverIp;
-        $hotspotBaseUrl = rtrim(config('app.url'), '/') . "/api/captive/hotspot/{$nas->provisioning_token}";
-        $portalConfigUrl = rtrim(config('app.url'), '/') . "/api/captive/config/{$nas->provisioning_token}";
+        $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
+        $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.com';
+        $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
+        $portalConfigUrl = $apiBaseUrl . "/api/captive/config/{$nas->provisioning_token}";
+        $hotspotFetchMode = $this->fetchModeForUrl($hotspotBaseUrl);
+        $telemetryFetchMode = $this->fetchModeForUrl($telemetryUrl);
 
         return <<<RSC
 # ============================================
@@ -397,8 +416,11 @@ class NasController extends Controller
 :local telemetryUrl "{$telemetryUrl}"
 :local telemetryToken "{$telemetryToken}"
 :local appHost "{$appHost}"
+:local paymentHost "{$paymentHost}"
 :local hotspotBaseUrl "{$hotspotBaseUrl}"
 :local portalConfigUrl "{$portalConfigUrl}"
+:local hotspotFetchMode "{$hotspotFetchMode}"
+:local telemetryFetchMode "{$telemetryFetchMode}"
 :local telemetryScriptName "onlifi-telemetry"
 :local telemetrySchedulerName "onlifi-telemetry-scheduler"
 
@@ -488,16 +510,19 @@ class NasController extends Controller
 :if ([:len [/ip hotspot walled-garden find comment="OnLiFi API access"]] = 0) do={
   /ip hotspot walled-garden add dst-host=\$appHost action=allow comment="OnLiFi API access"
 }
+:if ([:len [/ip hotspot walled-garden find comment="OnLiFi payment access"]] = 0) do={
+  /ip hotspot walled-garden add dst-host=\$paymentHost action=allow comment="OnLiFi payment access"
+}
 :if ([:len [/ip hotspot walled-garden find dst-host=\$hotspotDnsName]] = 0) do={
   /ip hotspot walled-garden add dst-host=\$hotspotDnsName action=allow comment="OnLiFi local captive host"
 }
-:do { /tool fetch url=(\$hotspotBaseUrl . "/login.html") mode=http dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html" }
-:do { /tool fetch url=(\$hotspotBaseUrl . "/status.html") mode=http dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html" }
-:do { /tool fetch url=(\$hotspotBaseUrl . "/alogin.html") mode=http dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html" }
+:do { /tool fetch url=(\$hotspotBaseUrl . "/login.html") mode=\$hotspotFetchMode dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html" }
+:do { /tool fetch url=(\$hotspotBaseUrl . "/status.html") mode=\$hotspotFetchMode dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html" }
+:do { /tool fetch url=(\$hotspotBaseUrl . "/alogin.html") mode=\$hotspotFetchMode dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html" }
 
 # Telemetry script
 /system script remove [find name=\$telemetryScriptName]
-/system script add name=\$telemetryScriptName policy=read,write,test source=":local dashboardUrl \\"\$telemetryUrl\\"; :local apiToken \\"\$telemetryToken\\"; :local routerIdentity [/system identity get name]; :local cpuVal [/system resource get cpu-load]; :local memTotal [/system resource get total-memory]; :local memFree [/system resource get free-memory]; :local memUsed (\\\$memTotal - \\\$memFree); :local activeUsers 0; :do { :set activeUsers [/ip hotspot active print count-only] } on-error={}; :local tx 0; :local rx 0; :foreach i in=[/interface find] do={ :do { :set tx (\\\$tx + [/interface get \\\$i tx-byte]); :set rx (\\\$rx + [/interface get \\\$i rx-byte]) } on-error={} }; :local json \\"{\\\\\\"router_identity\\\\\\":\\\\\\"\\" . \\\$routerIdentity . \\"\\\\\\",\\\\\\"cpu_load\\\\\\":\\" . \\\$cpuVal . \\",\\\\\\"memory_total_mb\\\\\\":\\" . (\\\$memTotal / 1048576) . \\",\\\\\\"memory_used_mb\\\\\\":\\" . (\\\$memUsed / 1048576) . \\",\\\\\\"active_connections\\\\\\":\\" . \\\$activeUsers . \\",\\\\\\"total_tx_bytes\\\\\\":\\" . \\\$tx . \\",\\\\\\"total_rx_bytes\\\\\\":\\" . \\\$rx . \\"}\\"; :local headers (\\"Authorization: Bearer \\" . \\\$apiToken . \\",Content-Type: application/json\\"); :do { /tool fetch url=\\\$dashboardUrl mode=http http-method=post http-data=\\\$json http-header-field=\\\$headers keep-result=no } on-error={ :log warning \\"OnLiFi telemetry post failed\\" }"
+/system script add name=\$telemetryScriptName policy=read,write,test source=":local dashboardUrl \\"\$telemetryUrl\\"; :local fetchMode \\"\$telemetryFetchMode\\"; :local apiToken \\"\$telemetryToken\\"; :local routerIdentity [/system identity get name]; :local cpuVal [/system resource get cpu-load]; :local memTotal [/system resource get total-memory]; :local memFree [/system resource get free-memory]; :local memUsed (\\\$memTotal - \\\$memFree); :local activeUsers 0; :do { :set activeUsers [/ip hotspot active print count-only] } on-error={}; :local tx 0; :local rx 0; :foreach i in=[/interface find] do={ :do { :set tx (\\\$tx + [/interface get \\\$i tx-byte]); :set rx (\\\$rx + [/interface get \\\$i rx-byte]) } on-error={} }; :local json \\"{\\\\\\"router_identity\\\\\\":\\\\\\"\\" . \\\$routerIdentity . \\"\\\\\\",\\\\\\"cpu_load\\\\\\":\\" . \\\$cpuVal . \\",\\\\\\"memory_total_mb\\\\\\":\\" . (\\\$memTotal / 1048576) . \\",\\\\\\"memory_used_mb\\\\\\":\\" . (\\\$memUsed / 1048576) . \\",\\\\\\"active_connections\\\\\\":\\" . \\\$activeUsers . \\",\\\\\\"total_tx_bytes\\\\\\":\\" . \\\$tx . \\",\\\\\\"total_rx_bytes\\\\\\":\\" . \\\$rx . \\"}\\"; :local headers (\\"Authorization: Bearer \\" . \\\$apiToken . \\",Content-Type: application/json\\"); :do { /tool fetch url=\\\$dashboardUrl mode=\\\$fetchMode http-method=post http-data=\\\$json http-header-field=\\\$headers keep-result=no } on-error={ :log warning \\"OnLiFi telemetry post failed\\" }"
 
 :if ([:len [/system scheduler find name=\$telemetrySchedulerName]] = 0) do={
   /system scheduler add name=\$telemetrySchedulerName start-time=startup interval=30s on-event="/system script run onlifi-telemetry"

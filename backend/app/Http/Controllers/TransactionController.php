@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Transaction;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
 
 class TransactionController extends Controller
@@ -10,6 +11,8 @@ class TransactionController extends Controller
     public function index(Request $request)
     {
         $query = Transaction::with('voucher');
+        $site = SiteScope::selectedSite($request);
+        SiteScope::applyToTenantTable($query, 'transactions', $site, 'origin_site');
 
         if ($request->has('status')) {
             $query->where('status', $request->status);
@@ -46,6 +49,8 @@ class TransactionController extends Controller
     public function statistics(Request $request)
     {
         $query = Transaction::query();
+        $site = SiteScope::selectedSite($request);
+        SiteScope::applyToTenantTable($query, 'transactions', $site, 'origin_site');
 
         if ($request->has('from_date')) {
             $query->whereDate('created_at', '>=', $request->from_date);

@@ -28,6 +28,8 @@ Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
 // Tenant Authentication Routes
 Route::post('/tenant/login', [TenantAuthController::class, 'login']);
+Route::post('/tenant/forgot-password', [TenantAuthController::class, 'forgotPassword']);
+Route::post('/tenant/reset-password', [TenantAuthController::class, 'resetPassword']);
 
 Route::get('/system/settings/public', [SystemSettingController::class, 'publicSettings']);
 Route::post('/billing/ipn', [SubscriptionBillingController::class, 'ipn']);

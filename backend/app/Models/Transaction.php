@@ -20,6 +20,8 @@ class Transaction extends Model
         'status_message',
         'network_ref',
         'origin_site',
+        'site_id',
+        'tenant_id',
         'client_mac',
         'email',
         'voucher_code',

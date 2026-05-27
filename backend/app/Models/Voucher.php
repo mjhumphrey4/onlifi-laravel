@@ -21,6 +21,8 @@ class Voucher extends Model
         'speed_limit_kbps',
         'price',
         'sales_point_id',
+        'site_id',
+        'tenant_id',
         'status',
         'first_used_at',
         'last_used_at',

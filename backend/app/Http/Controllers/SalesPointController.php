@@ -3,15 +3,28 @@
 namespace App\Http\Controllers;
 
 use App\Models\VoucherSalesPoint;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class SalesPointController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $salesPoints = VoucherSalesPoint::orderBy('name')->get();
+            $site = SiteScope::selectedSite($request);
+            $query = VoucherSalesPoint::query();
+
+            if (Schema::connection('tenant')->hasColumn('voucher_sales_points', 'tenant_id') && app()->bound('tenant')) {
+                $query->where(function ($q) {
+                    $q->where('tenant_id', app('tenant')->id)->orWhereNull('tenant_id');
+                });
+            }
+
+            SiteScope::applyToTenantTable($query, 'voucher_sales_points', $site);
+
+            $salesPoints = $query->orderBy('name')->get();
 
             return response()->json([
                 'sales_points' => $salesPoints,
@@ -43,13 +56,20 @@ class SalesPointController extends Controller
             ], 422);
         }
 
-        $salesPoint = VoucherSalesPoint::create([
+        $site = SiteScope::selectedSite($request);
+
+        $data = [
             'name' => $request->name,
             'location' => $request->location,
             'contact_person' => $request->contact_person,
             'contact_phone' => $request->contact_phone,
             'is_active' => true,
-        ]);
+        ];
+
+        $data = SiteScope::tenantCompatColumns('voucher_sales_points', $data);
+        $data = SiteScope::withSiteColumn('voucher_sales_points', $data, $site);
+
+        $salesPoint = VoucherSalesPoint::create($data);
 
         return response()->json([
             'message' => 'Site created successfully',

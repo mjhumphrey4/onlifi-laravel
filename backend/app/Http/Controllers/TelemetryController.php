@@ -35,6 +35,9 @@ class TelemetryController extends Controller
             if ($hasTenantIdColumn && $user && isset($user->tenant_id) && $user->tenant_id) {
                 $query->where('tenant_id', $user->tenant_id);
             }
+            if ($request->header('X-Site-ID') && is_numeric($request->header('X-Site-ID'))) {
+                $query->where('site_id', (int) $request->header('X-Site-ID'));
+            }
             
             $latestIds = $query->pluck('latest_id');
             
@@ -85,6 +88,9 @@ class TelemetryController extends Controller
             
             if ($hasTenantIdColumn && $user && isset($user->tenant_id) && $user->tenant_id) {
                 $query->where('tenant_id', $user->tenant_id);
+            }
+            if ($request->header('X-Site-ID') && is_numeric($request->header('X-Site-ID'))) {
+                $query->where('site_id', (int) $request->header('X-Site-ID'));
             }
             
             $latestIds = $query->pluck('latest_id');

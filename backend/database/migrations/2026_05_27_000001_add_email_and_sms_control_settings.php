@@ -38,6 +38,9 @@ return new class extends Migration
             ['notify_activation_email', '1', 'boolean', 'notifications', 'Email tenant when account is approved'],
             ['notify_password_reset_email', '1', 'boolean', 'notifications', 'Email tenant after password reset'],
             ['notify_announcement_email', '0', 'boolean', 'notifications', 'Allow announcements to be sent by email'],
+            ['api_base_url', 'https://api.onlifi.com', 'string', 'domains', 'Public API base URL used by routers and generated hotspot files'],
+            ['dashboard_url', 'https://onlifi.com', 'string', 'domains', 'Public dashboard URL used in emails and frontend links'],
+            ['manual_payment_base_url', 'http://pay.onlifi.com', 'string', 'domains', 'Base URL for manually managed captive payment folders'],
         ];
 
         foreach ($settings as [$key, $value, $type, $group, $description]) {

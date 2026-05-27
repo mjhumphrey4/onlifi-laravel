@@ -50,6 +50,8 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
       'Accept': 'application/json',
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    const siteId = localStorage.getItem('selected_site_id');
+    if (siteId) headers['X-Site-ID'] = siteId;
     return headers;
   };
 

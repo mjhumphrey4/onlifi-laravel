@@ -19,6 +19,8 @@ class VoucherSalesPoint extends Model
         'phone',
         'email',
         'is_active',
+        'site_id',
+        'tenant_id',
     ];
 
     protected $casts = [

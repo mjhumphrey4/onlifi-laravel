@@ -20,6 +20,8 @@ class VoucherGroup extends Model
         'speed_limit_kbps',
         'price',
         'sales_point_id',
+        'site_id',
+        'tenant_id',
         'created_by',
     ];
 

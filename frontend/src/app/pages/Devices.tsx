@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Server, Plus, Trash2, ExternalLink, CheckCircle, XCircle, RefreshCw, Globe, MapPin } from 'lucide-react';
+import { useSite } from '../context/SiteContext';
 
 interface Router {
   id: number;
@@ -12,6 +13,7 @@ interface Router {
 }
 
 export function Devices() {
+  const { selectedSite } = useSite();
   const [routers, setRouters] = useState<Router[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -27,7 +29,7 @@ export function Devices() {
     loadData();
     const interval = setInterval(loadData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedSite?.id]);
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
@@ -36,6 +38,8 @@ export function Devices() {
       'Accept': 'application/json',
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    const siteId = localStorage.getItem('selected_site_id');
+    if (siteId) headers['X-Site-ID'] = siteId;
     return headers;
   };
 

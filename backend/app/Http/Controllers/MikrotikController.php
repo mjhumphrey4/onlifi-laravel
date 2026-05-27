@@ -7,10 +7,12 @@ use App\Models\RadiusNas;
 use App\Models\RouterTelemetry;
 use App\Models\Site;
 use App\Services\MikrotikService;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class MikrotikController extends Controller
 {
@@ -21,11 +23,16 @@ class MikrotikController extends Controller
         $this->mikrotikService = $mikrotikService;
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $routers = MikrotikRouter::with('latestTelemetry')
-            ->orderBy('name')
-            ->get();
+        $site = SiteScope::selectedSite($request);
+        $query = MikrotikRouter::with('latestTelemetry');
+
+        if ($site && Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+            $query->where('site_id', $site->id);
+        }
+
+        $routers = $query->orderBy('name')->get();
 
         return response()->json($routers);
     }
@@ -58,7 +65,13 @@ class MikrotikController extends Controller
             ], 422);
         }
 
-        $router = MikrotikRouter::create($request->all());
+        $data = $request->all();
+        $site = SiteScope::selectedSite($request);
+        if ($site && Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+            $data['site_id'] = $site->id;
+        }
+
+        $router = MikrotikRouter::create($data);
 
         // Auto-register in RADIUS NAS table for multi-tenant authentication
         $tenant = app('tenant');
