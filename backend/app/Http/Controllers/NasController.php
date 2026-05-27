@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\SystemSetting;
 use App\Models\Site;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -28,8 +30,10 @@ class NasController extends Controller
             return response()->json(['error' => 'Tenant not found'], 404);
         }
         
+        $site = SiteScope::selectedSite($request);
         $nasEntries = DB::connection('central')->table('nas')
             ->where('tenant_id', $tenant->id)
+            ->when($site && Schema::connection('central')->hasColumn('nas', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
             ->orderBy('created_at', 'desc')
             ->get();
         
@@ -64,8 +68,13 @@ class NasController extends Controller
             return response()->json(['error' => 'Tenant not found'], 404);
         }
         
-        // Generate unique router identifier
-        $routerIdentifier = $this->generateRouterIdentifier($tenant->id);
+        $site = SiteScope::selectedSite($request);
+        if (!$site) {
+            $site = $this->getOrCreateSiteByName($request->input('name'), $tenant);
+        }
+
+        // Generate unique router identifier based on the active site, not the tenant id.
+        $routerIdentifier = $this->generateRouterIdentifier($tenant, $site);
         
         // Get shared RADIUS secret (or generate one per tenant)
         $radiusSecret = $tenant->radius_secret ?? config('radius.shared_secret', 'onlifi_radius_secret');
@@ -82,6 +91,7 @@ class NasController extends Controller
             'server' => null,  // Use default virtual server
             'description' => $request->input('description'),
             'tenant_id' => $tenant->id,
+            ...($site && Schema::connection('central')->hasColumn('nas', 'site_id') ? ['site_id' => $site->id] : []),
             'router_id' => $request->input('router_id'),
             'created_at' => now(),
             'updated_at' => now(),
@@ -225,7 +235,11 @@ class NasController extends Controller
             return response()->json(['error' => 'NAS entry not found'], 404);
         }
         
-        $newIdentifier = $this->generateRouterIdentifier($tenant->id);
+        $site = null;
+        if (Schema::connection('central')->hasColumn('nas', 'site_id') && !empty($nas->site_id)) {
+            $site = Site::where('tenant_id', $tenant->id)->where('id', $nas->site_id)->first();
+        }
+        $newIdentifier = $this->generateRouterIdentifier($tenant, $site);
         
         DB::connection('central')->table('nas')
             ->where('id', $id)
@@ -291,11 +305,13 @@ class NasController extends Controller
      * Generate unique router identifier
      * Format: ONLIFI-{tenant_id}-{timestamp}-{random}
      */
-    private function generateRouterIdentifier(int $tenantId): string
+    private function generateRouterIdentifier($tenant, ?Site $site = null): string
     {
         $timestamp = now()->format('ymd');
         $random = strtoupper(Str::random(8));
-        return "ONLIFI-{$tenantId}-{$timestamp}-{$random}";
+        $sitePart = strtoupper(Str::slug($site?->name ?: $tenant->slug ?: $tenant->name ?: 'SITE', '-'));
+
+        return "ONLIFI-{$sitePart}-{$timestamp}-{$random}";
     }
 
     private function ensureProvisioningToken($nas)
@@ -377,6 +393,10 @@ class NasController extends Controller
         $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
         $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
         $remoteVpnCidr = (string) SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24');
+        $vpnHost = $site?->vpn_public_host ?: 'vpn.onlifi.net';
+        $vpnPort = $site?->vpn_public_port ?: 443;
+        $vpnUsername = $site?->vpn_username ?: Str::slug($site?->name ?: $tenantName);
+        $vpnPassword = $site?->vpn_password ?: Str::random(24);
         $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
         $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
@@ -419,6 +439,11 @@ class NasController extends Controller
 :local remoteAdminUser "{$remoteAdminUser}"
 :local remoteAdminPassword "{$remoteAdminPassword}"
 :local remoteVpnCidr "{$remoteVpnCidr}"
+:local sstpHost "{$vpnHost}"
+:local sstpPort "{$vpnPort}"
+:local sstpUser "{$vpnUsername}"
+:local sstpPassword "{$vpnPassword}"
+:local sstpClientName "onlifi-sstp"
 :local telemetryUrl "{$telemetryUrl}"
 :local telemetryToken "{$telemetryToken}"
 :local appHost "{$appHost}"
@@ -473,6 +498,13 @@ class NasController extends Controller
 }
 :do { /ip service set api disabled=no port=8728 address=\$remoteVpnCidr } on-error={ :log warning "OnLiFi failed to restrict API service to VPN range" }
 :do { /ip service set winbox address=\$remoteVpnCidr } on-error={}
+
+# SSTP VPN client for managed remote access
+:if ([:len [/interface sstp-client find name=\$sstpClientName]] = 0) do={
+  /interface sstp-client add name=\$sstpClientName connect-to=\$sstpHost port=\$sstpPort user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no verify-server-certificate=no comment="OnLiFi managed SSTP"
+} else={
+  /interface sstp-client set [find name=\$sstpClientName] connect-to=\$sstpHost port=\$sstpPort user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no verify-server-certificate=no comment="OnLiFi managed SSTP"
+}
 
 # DHCP
 :if ([:len [/ip pool find name=\$dhcpPool]] = 0) do={
@@ -581,7 +613,32 @@ RSC;
             return null;
         }
 
+        if (Schema::connection('central')->hasColumn('nas', 'site_id') && !empty($nas->site_id)) {
+            $site = Site::where('tenant_id', $tenant->id)->where('id', $nas->site_id)->first();
+            if ($site) {
+                return $this->ensureSiteVpnCredentials($site);
+            }
+        }
+
         $name = $nas->shortname ?: 'Router ' . $nas->id;
+        $site = $this->getOrCreateSiteByName($name, $tenant);
+
+        if ($site && Schema::connection('central')->hasColumn('nas', 'site_id')) {
+            DB::connection('central')->table('nas')
+                ->where('id', $nas->id)
+                ->whereNull('site_id')
+                ->update(['site_id' => $site->id, 'updated_at' => now()]);
+        }
+
+        return $site;
+    }
+
+    private function getOrCreateSiteByName(string $name, $tenant): ?Site
+    {
+        if (!$tenant) {
+            return null;
+        }
+
         $site = Site::where('tenant_id', $tenant->id)
             ->where('name', $name)
             ->first();
@@ -590,13 +647,41 @@ RSC;
             $site = Site::create([
                 'tenant_id' => $tenant->id,
                 'name' => $name,
-                'slug' => Str::slug($name . '-' . $nas->id),
+                'slug' => Str::slug($name),
                 'description' => 'Auto-created for router provisioning',
                 'is_active' => true,
+                'vpn_username' => Str::slug($name),
+                'vpn_password' => Str::random(24),
+                'vpn_public_host' => 'vpn.onlifi.net',
+                'vpn_status' => 'pending',
             ]);
         }
 
-        return $site;
+        return $this->ensureSiteVpnCredentials($site);
+    }
+
+    private function ensureSiteVpnCredentials(Site $site): Site
+    {
+        $updates = [];
+
+        if (!$site->vpn_username) {
+            $updates['vpn_username'] = Str::slug($site->name) ?: 'site-' . $site->id;
+        }
+        if (!$site->vpn_password) {
+            $updates['vpn_password'] = Str::random(24);
+        }
+        if (!$site->vpn_public_host) {
+            $updates['vpn_public_host'] = 'vpn.onlifi.net';
+        }
+        if (!$site->vpn_status) {
+            $updates['vpn_status'] = 'pending';
+        }
+
+        if ($updates) {
+            $site->update($updates);
+        }
+
+        return $site->fresh();
     }
     
     /**

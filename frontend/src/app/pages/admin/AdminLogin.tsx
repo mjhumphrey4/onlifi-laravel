@@ -6,6 +6,7 @@ import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Alert, AlertDescription } from '@/app/components/ui/alert';
 import { Shield } from 'lucide-react';
+import { adminLogin } from '../../utils/api';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -22,24 +23,7 @@ export default function AdminLogin() {
     setError('');
 
     try {
-      const response = await fetch('/api/super-admin/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
-          ...(twoFactorToken ? { two_factor_token: twoFactorToken } : {}),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
+      const data = await adminLogin(email, password, twoFactorCode || undefined, twoFactorToken || undefined);
 
       if (data.requires_2fa) {
         setTwoFactorToken(data.two_factor_token);

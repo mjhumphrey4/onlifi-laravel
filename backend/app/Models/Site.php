@@ -18,6 +18,9 @@ class Site extends Model
         'api_token',
         'vpn_private_ip',
         'vpn_username',
+        'vpn_password',
+        'vpn_public_host',
+        'vpn_public_port',
         'vpn_status',
         'vpn_last_seen_at',
         'router_api_port',
@@ -28,6 +31,7 @@ class Site extends Model
         'is_active' => 'boolean',
         'vpn_last_seen_at' => 'datetime',
         'router_api_port' => 'integer',
+        'vpn_public_port' => 'integer',
     ];
 
     // Don't hide api_token - it's needed for telemetry script generation

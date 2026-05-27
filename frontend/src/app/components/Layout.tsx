@@ -498,9 +498,11 @@ export function Layout() {
           </>
         )}
 
-        <BillingGate>
-          <Outlet />
-        </BillingGate>
+        <div key={selectedSite?.id || 'no-site'}>
+          <BillingGate>
+            <Outlet />
+          </BillingGate>
+        </div>
       </main>
 
       {/* Add New Site Modal */}

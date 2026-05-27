@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class RemoteAccessController extends Controller
 {
@@ -22,9 +23,14 @@ class RemoteAccessController extends Controller
             ->map(fn (Site $site) => $this->formatSite($site));
 
         return response()->json([
-            'vpn_range' => SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24'),
-            'router_admin_username' => SystemSetting::get('router_admin_username', 'onlifi'),
-            'sites' => $sites,
+            'vpn_host' => 'vpn.onlifi.net',
+            'sites' => $sites->map(fn (array $site) => [
+                'id' => $site['id'],
+                'name' => $site['name'],
+                'slug' => $site['slug'],
+                'vpn_public_endpoint' => $site['vpn_public_endpoint'],
+                'vpn_status' => $site['vpn_status'],
+            ]),
         ]);
     }
 
@@ -56,6 +62,9 @@ class RemoteAccessController extends Controller
         $validator = Validator::make($request->all(), [
             'vpn_private_ip' => 'nullable|ip',
             'vpn_username' => 'nullable|string|max:100',
+            'vpn_password' => 'nullable|string|max:255',
+            'vpn_public_host' => 'nullable|string|max:100',
+            'vpn_public_port' => 'nullable|integer|min:1|max:65535',
             'vpn_status' => 'nullable|string|in:pending,active,offline,suspended',
             'vpn_last_seen_at' => 'nullable|date',
             'router_api_port' => 'nullable|integer|min:1|max:65535',
@@ -72,6 +81,9 @@ class RemoteAccessController extends Controller
         $site->update($request->only([
             'vpn_private_ip',
             'vpn_username',
+            'vpn_password',
+            'vpn_public_host',
+            'vpn_public_port',
             'vpn_status',
             'vpn_last_seen_at',
             'router_api_port',
@@ -104,7 +116,6 @@ class RemoteAccessController extends Controller
                 'api_port' => $site->router_api_port ?: 8728,
                 'username' => SystemSetting::get('router_admin_username', 'onlifi'),
                 'password' => SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me'),
-                'updated_at' => now(),
             ];
 
             $query = \App\Models\MikrotikRouter::query();
@@ -114,7 +125,18 @@ class RemoteAccessController extends Controller
                 $query->where('name', $site->name);
             }
 
-            $query->update($updates);
+            if ($query->exists()) {
+                $query->update($updates);
+                return;
+            }
+
+            \App\Models\MikrotikRouter::create([
+                'name' => $site->name,
+                ...$updates,
+                ...(Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id') ? ['site_id' => $site->id] : []),
+                'location' => $site->description,
+                'is_active' => true,
+            ]);
         } catch (\Throwable $e) {
             Log::warning('Failed to sync remote access details to tenant router record', [
                 'tenant_id' => $tenant->id,
@@ -133,11 +155,29 @@ class RemoteAccessController extends Controller
             'slug' => $site->slug,
             'description' => $site->description,
             'vpn_private_ip' => $site->vpn_private_ip,
-            'vpn_username' => $site->vpn_username,
+            'vpn_username' => $site->vpn_username ?: $this->defaultVpnUsername($site),
+            'vpn_password' => $site->vpn_password,
+            'vpn_public_host' => $site->vpn_public_host ?: 'vpn.onlifi.net',
+            'vpn_public_port' => $site->vpn_public_port,
+            'vpn_public_endpoint' => $this->publicEndpoint($site),
             'vpn_status' => $site->vpn_status ?: 'pending',
             'vpn_last_seen_at' => $site->vpn_last_seen_at?->toIso8601String(),
             'router_api_port' => $site->router_api_port ?: 8728,
             'remote_access_notes' => $site->remote_access_notes,
         ];
+    }
+
+    private function publicEndpoint(Site $site): ?string
+    {
+        if (!$site->vpn_public_port) {
+            return null;
+        }
+
+        return ($site->vpn_public_host ?: 'vpn.onlifi.net') . ':' . $site->vpn_public_port;
+    }
+
+    private function defaultVpnUsername(Site $site): string
+    {
+        return Str::slug($site->name) ?: 'site-' . $site->id;
     }
 }

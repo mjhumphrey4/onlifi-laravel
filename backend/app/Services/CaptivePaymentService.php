@@ -42,9 +42,18 @@ class CaptivePaymentService
             return ['status' => -1, 'errorMessage' => 'Tenant is not active'];
         }
 
+        $site = Schema::connection('central')->hasColumn('nas', 'site_id') && !empty($nas->site_id)
+            ? Site::where('tenant_id', $tenant->id)->where('id', $nas->site_id)->first()
+            : Site::where('tenant_id', $tenant->id)->where('name', $nas->shortname)->first();
+        $siteName = $site?->name ?: $nas->shortname;
+
         $tenant->configure();
         $packageQuery = DB::connection('tenant')->table('voucher_groups')
             ->where('price', $data['amount']);
+
+        if ($site && Schema::connection('tenant')->hasColumn('voucher_groups', 'site_id')) {
+            $packageQuery->where('site_id', $site->id);
+        }
 
         if (!empty($data['voucher_type'])) {
             $packageQuery->where('group_name', $data['voucher_type']);
@@ -60,14 +69,12 @@ class CaptivePaymentService
         $externalRef = sprintf('CAP_%d_%d_%s', $tenant->id, time(), uniqid());
         $msisdn = $this->normalizeMsisdn($data['msisdn']);
 
-        $site = Site::where('tenant_id', $tenant->id)->where('name', $nas->shortname)->first();
-
         $transactionData = [
             'external_ref' => $externalRef,
             'msisdn' => $msisdn,
             'amount' => $data['amount'],
             'status' => 'pending',
-            'origin_site' => $nas->shortname,
+            'origin_site' => $siteName,
             'site_id' => $site?->id,
             'client_mac' => $data['client_mac'] ?? null,
             'email' => $data['email'] ?? null,

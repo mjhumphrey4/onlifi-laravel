@@ -43,15 +43,9 @@ export function RemoteAccess() {
         <p className="text-muted-foreground mt-1">SSTP VPN addressing and router API access details for each site.</p>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div className="bg-card border border-border rounded-lg p-5">
-          <p className="text-sm text-muted-foreground">VPN private range</p>
-          <p className="text-2xl font-semibold mt-1 font-mono">{data?.vpn_range || '10.10.1.0/24'}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-5">
-          <p className="text-sm text-muted-foreground">Router administrator user</p>
-          <p className="text-2xl font-semibold mt-1 font-mono">{data?.router_admin_username || 'onlifi'}</p>
-        </div>
+      <div className="bg-card border border-border rounded-lg p-5">
+        <p className="text-sm text-muted-foreground">Remote access host</p>
+        <p className="text-2xl font-semibold mt-1 font-mono">{data?.vpn_host || 'vpn.onlifi.net'}</p>
       </div>
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
@@ -63,15 +57,13 @@ export function RemoteAccess() {
             <thead className="text-left text-muted-foreground border-b border-border">
               <tr>
                 <th className="px-5 py-3 font-medium">Site</th>
-                <th className="px-5 py-3 font-medium">Private IP</th>
-                <th className="px-5 py-3 font-medium">VPN User</th>
-                <th className="px-5 py-3 font-medium">Router API</th>
+                <th className="px-5 py-3 font-medium">Endpoint</th>
                 <th className="px-5 py-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {sites.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">No sites configured yet.</td></tr>
+                <tr><td colSpan={3} className="px-5 py-8 text-center text-muted-foreground">No sites configured yet.</td></tr>
               ) : sites.map((site: any) => (
                 <tr key={site.id} className="border-b border-border/60 last:border-0">
                   <td className="px-5 py-3">
@@ -79,13 +71,11 @@ export function RemoteAccess() {
                     <p className="text-xs text-muted-foreground">{site.slug}</p>
                   </td>
                   <td className="px-5 py-3">
-                    <button onClick={() => copy(site.vpn_private_ip, `ip-${site.id}`)} className="inline-flex items-center gap-2 font-mono text-primary hover:underline disabled:text-muted-foreground" disabled={!site.vpn_private_ip}>
-                      {site.vpn_private_ip || 'Not assigned'}
-                      {site.vpn_private_ip && (copied === `ip-${site.id}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />)}
+                    <button onClick={() => copy(site.vpn_public_endpoint, `endpoint-${site.id}`)} className="inline-flex items-center gap-2 font-mono text-primary hover:underline disabled:text-muted-foreground" disabled={!site.vpn_public_endpoint}>
+                      {site.vpn_public_endpoint || 'Pending assignment'}
+                      {site.vpn_public_endpoint && (copied === `endpoint-${site.id}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />)}
                     </button>
                   </td>
-                  <td className="px-5 py-3 font-mono">{site.vpn_username || 'Pending'}</td>
-                  <td className="px-5 py-3 font-mono">{site.vpn_private_ip ? `${site.vpn_private_ip}:${site.router_api_port || 8728}` : 'Pending'}</td>
                   <td className="px-5 py-3">
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted capitalize">
                       <ShieldCheck className="w-3 h-3" />

@@ -8,6 +8,7 @@ class VoucherTemplate extends Model
 {
     protected $fillable = [
         'tenant_id',
+        'site_id',
         'name',
         'description',
         'layout',

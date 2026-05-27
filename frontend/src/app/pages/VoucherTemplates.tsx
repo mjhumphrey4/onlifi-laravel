@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Edit2, Trash2, Printer, Star, Eye, Palette, Layout, FileText } from 'lucide-react';
+import { useSite } from '../context/SiteContext';
 
 interface VoucherTemplate {
   id: number;
@@ -128,6 +129,7 @@ const DEFAULT_SKINS = [
 ];
 
 export function VoucherTemplates() {
+  const { selectedSite } = useSite();
   const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -185,12 +187,13 @@ export function VoucherTemplates() {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...(localStorage.getItem('selected_site_id') && { 'X-Site-ID': localStorage.getItem('selected_site_id') as string }),
     };
   };
 
   useEffect(() => {
     loadTemplates();
-  }, []);
+  }, [selectedSite?.id]);
 
   const loadTemplates = async () => {
     try {

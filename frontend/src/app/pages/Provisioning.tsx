@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, Loader2, Plus, Router, ShieldCheck } from 'lucide-react';
+import { useSite } from '../context/SiteContext';
 
 interface NasEntry {
   id: number;
@@ -10,6 +11,7 @@ interface NasEntry {
 }
 
 export function Provisioning() {
+  const { selectedSite } = useSite();
   const [entries, setEntries] = useState<NasEntry[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [name, setName] = useState('Main Router');
@@ -21,6 +23,7 @@ export function Provisioning() {
     Authorization: `Bearer ${localStorage.getItem('tenant_token')}`,
     Accept: 'application/json',
     'Content-Type': 'application/json',
+    ...(localStorage.getItem('selected_site_id') ? { 'X-Site-ID': localStorage.getItem('selected_site_id') as string } : {}),
   });
 
   const load = async () => {
@@ -35,8 +38,11 @@ export function Provisioning() {
   };
 
   useEffect(() => {
+    if (selectedSite?.name) {
+      setName(`${selectedSite.name} Router`);
+    }
     load();
-  }, []);
+  }, [selectedSite?.id]);
 
   const createRouter = async () => {
     setCreating(true);

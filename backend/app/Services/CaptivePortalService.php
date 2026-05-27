@@ -6,6 +6,7 @@ use App\Models\CaptivePortalTemplate;
 use App\Models\SystemSetting;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class CaptivePortalService
@@ -101,8 +102,15 @@ class CaptivePortalService
         }
 
         $tenant->configure();
+        $site = null;
+        if (Schema::connection('central')->hasColumn('nas', 'site_id') && !empty($nas->site_id)) {
+            $site = \App\Models\Site::where('tenant_id', $tenant->id)->where('id', $nas->site_id)->first();
+        }
+        $siteName = $site?->name ?: ($nas->shortname ?: $tenant->name);
+
         $packages = DB::connection('tenant')->table('voucher_groups')
             ->select('group_name as name', 'price', 'validity_hours', 'data_limit_mb', 'speed_limit_kbps')
+            ->when($site && Schema::connection('tenant')->hasColumn('voucher_groups', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
             ->orderBy('price')
             ->limit(12)
             ->get();
@@ -120,7 +128,7 @@ class CaptivePortalService
                 'slug' => $tenant->slug,
             ],
             'router' => [
-                'name' => $nas->shortname,
+                'name' => $siteName,
                 'identifier' => $nas->router_identifier,
                 'token' => $token,
             ],
@@ -131,11 +139,11 @@ class CaptivePortalService
                 'status_url' => $this->apiBaseUrl() . '/api/captive/payment-status',
             ],
             'manual_payment' => [
-                'site_name' => $nas->shortname ?: $tenant->name,
-                'site_slug' => $this->paymentSiteSlug($nas->shortname ?: $tenant->name ?: $tenant->slug),
-                'initiate_url' => $this->manualPaymentUrl($nas->shortname ?: $tenant->name ?: $tenant->slug),
-                'check_status_url' => $this->manualPaymentUrl($nas->shortname ?: $tenant->name ?: $tenant->slug, 'check_status.php'),
-                'voucher_lookup_url' => $this->manualPaymentUrl($nas->shortname ?: $tenant->name ?: $tenant->slug, 'look/voucher-lookup.php'),
+                'site_name' => $siteName,
+                'site_slug' => $this->paymentSiteSlug($siteName),
+                'initiate_url' => $this->manualPaymentUrl($siteName),
+                'check_status_url' => $this->manualPaymentUrl($siteName, 'check_status.php'),
+                'voucher_lookup_url' => $this->manualPaymentUrl($siteName, 'look/voucher-lookup.php'),
             ],
             'packages' => $packages->values(),
         ];

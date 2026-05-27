@@ -868,6 +868,9 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
           nextForms[site.id] = {
             vpn_private_ip: site.vpn_private_ip || '',
             vpn_username: site.vpn_username || '',
+            vpn_password: site.vpn_password || '',
+            vpn_public_host: site.vpn_public_host || 'vpn.onlifi.net',
+            vpn_public_port: site.vpn_public_port || '',
             vpn_status: site.vpn_status || 'pending',
             router_api_port: site.router_api_port || 8728,
             remote_access_notes: site.remote_access_notes || '',
@@ -940,6 +943,10 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
                   <input value={forms[site.id]?.vpn_username || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_username: e.target.value } })} placeholder={site.slug} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
                 <label className="block text-sm">
+                  <span className="text-slate-300">VPN password</span>
+                  <input value={forms[site.id]?.vpn_password || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_password: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                </label>
+                <label className="block text-sm">
                   <span className="text-slate-300">Status</span>
                   <select value={forms[site.id]?.vpn_status || 'pending'} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_status: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
                     <option value="pending">Pending</option>
@@ -949,9 +956,20 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
                   </select>
                 </label>
                 <label className="block text-sm">
-                  <span className="text-slate-300">API port</span>
+                  <span className="text-slate-300">Router API port</span>
                   <input type="number" value={forms[site.id]?.router_api_port || 8728} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], router_api_port: Number(e.target.value) } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
+                <label className="block text-sm">
+                  <span className="text-slate-300">Public host</span>
+                  <input value={forms[site.id]?.vpn_public_host || 'vpn.onlifi.net'} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_public_host: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-slate-300">Public port</span>
+                  <input type="number" value={forms[site.id]?.vpn_public_port || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_public_port: e.target.value ? Number(e.target.value) : null } })} placeholder="443" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                </label>
+              </div>
+              <div className="rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm text-slate-300">
+                Tenant-visible endpoint: <span className="font-mono text-sky-300">{forms[site.id]?.vpn_public_host || 'vpn.onlifi.net'}:{forms[site.id]?.vpn_public_port || 'pending'}</span>
               </div>
               <label className="block text-sm">
                 <span className="text-slate-300">SoftEther notes</span>

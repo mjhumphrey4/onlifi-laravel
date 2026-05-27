@@ -49,6 +49,8 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     } else {
       localStorage.removeItem('selected_site_id');
     }
+
+    window.dispatchEvent(new CustomEvent('onlifi:site-changed', { detail: { siteId: site?.id || null } }));
   }, []);
 
   const refreshSites = useCallback(async () => {

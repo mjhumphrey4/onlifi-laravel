@@ -53,7 +53,7 @@ use constant {
 
 #
 # Get tenant database info from router identifier (NAS-Identifier)
-# Router identifier format: ONLIFI-{tenant_id}-{router_id}-{random}
+# Router identifier format: ONLIFI-{site-name}-{date}-{random}
 #
 sub get_tenant_db {
     my ($router_identifier) = @_;
@@ -72,7 +72,8 @@ sub get_tenant_db {
     
     # Look up by router_identifier (unique per router)
     my $sth = $dbh->prepare(q{
-        SELECT t.database_name, t.database_host, t.database_port, t.database_username, t.database_password
+        SELECT t.database_name, t.database_host, t.database_port, t.database_username, t.database_password,
+               n.site_id
         FROM nas n
         JOIN tenants t ON n.tenant_id = t.id
         WHERE n.router_identifier = ?
@@ -129,16 +130,19 @@ sub authorize {
     
     &radiusd::radlog(1, "PERL: Connected to tenant database successfully");
     
-    # Check radcheck for user
+    # Check radcheck for user. When a NAS is linked to a site, only vouchers
+    # created for that same site are accepted by routers in that site.
     my $sth = $dbh->prepare(q{
-        SELECT attribute, value, op
-        FROM radcheck
-        WHERE username = ?
+        SELECT rc.attribute, rc.value, rc.op
+        FROM radcheck rc
+        LEFT JOIN vouchers v ON v.voucher_code = rc.username
+        WHERE rc.username = ?
+        AND (? IS NULL OR v.site_id = ?)
     });
     
     &radiusd::radlog(1, "PERL: Executing radcheck query for user: $username");
     
-    $sth->execute($username);
+    $sth->execute($username, $tenant->{site_id}, $tenant->{site_id});
     
     my $found = 0;
     while (my $row = $sth->fetchrow_hashref()) {
