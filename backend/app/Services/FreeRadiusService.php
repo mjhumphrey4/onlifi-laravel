@@ -131,32 +131,104 @@ class FreeRadiusService
         }
     }
 
-    public function syncBatchToRadius(array $vouchers): array
+    public function syncBatchToRadius(iterable $vouchers): array
     {
-        $synced = 0;
-        $failed = 0;
+        $items = collect($vouchers)->values();
 
-        foreach ($vouchers as $voucher) {
-            $voucherData = [
-                'voucher_code' => $voucher->voucher_code,
-                'password' => $voucher->password,
-                'validity_hours' => $voucher->validity_hours,
-                'data_limit_mb' => $voucher->data_limit_mb,
-                'speed_limit_kbps' => $voucher->speed_limit_kbps,
-            ];
-
-            if ($this->syncVoucherToRadius($voucherData)) {
-                $synced++;
-            } else {
-                $failed++;
-            }
+        if ($items->isEmpty()) {
+            return ['synced' => 0, 'failed' => 0, 'total' => 0];
         }
 
-        return [
-            'synced' => $synced,
-            'failed' => $failed,
-            'total' => count($vouchers),
-        ];
+        try {
+            DB::connection('tenant')->beginTransaction();
+
+            $usernames = $items->pluck('voucher_code')->filter()->values()->all();
+
+            DB::connection('tenant')->table('radcheck')->whereIn('username', $usernames)->delete();
+            DB::connection('tenant')->table('radreply')->whereIn('username', $usernames)->delete();
+
+            $radcheckRows = [];
+            $radreplyRows = [];
+
+            foreach ($items as $voucher) {
+                $radcheckRows[] = [
+                    'username' => $voucher->voucher_code,
+                    'attribute' => 'Cleartext-Password',
+                    'op' => ':=',
+                    'value' => $voucher->password,
+                ];
+
+                $radreplyRows[] = [
+                    'username' => $voucher->voucher_code,
+                    'attribute' => 'Session-Timeout',
+                    'op' => '=',
+                    'value' => (string) ((int) $voucher->validity_hours * 3600),
+                ];
+
+                $radreplyRows[] = [
+                    'username' => $voucher->voucher_code,
+                    'attribute' => 'Idle-Timeout',
+                    'op' => '=',
+                    'value' => '900',
+                ];
+
+                if ($voucher->data_limit_mb) {
+                    $radreplyRows[] = [
+                        'username' => $voucher->voucher_code,
+                        'attribute' => 'Mikrotik-Total-Limit',
+                        'op' => '=',
+                        'value' => (string) ((int) $voucher->data_limit_mb * 1048576),
+                    ];
+                }
+
+                if ($voucher->speed_limit_kbps) {
+                    $radreplyRows[] = [
+                        'username' => $voucher->voucher_code,
+                        'attribute' => 'Mikrotik-Rate-Limit',
+                        'op' => '=',
+                        'value' => "{$voucher->speed_limit_kbps}k/{$voucher->speed_limit_kbps}k",
+                    ];
+                }
+
+                $radreplyRows[] = [
+                    'username' => $voucher->voucher_code,
+                    'attribute' => 'Acct-Interim-Interval',
+                    'op' => '=',
+                    'value' => '300',
+                ];
+            }
+
+            foreach (array_chunk($radcheckRows, 500) as $chunk) {
+                DB::connection('tenant')->table('radcheck')->insert($chunk);
+            }
+
+            foreach (array_chunk($radreplyRows, 500) as $chunk) {
+                DB::connection('tenant')->table('radreply')->insert($chunk);
+            }
+
+            DB::connection('tenant')->commit();
+
+            Log::info('Voucher batch synced to FreeRADIUS', ['count' => $items->count()]);
+
+            return [
+                'synced' => $items->count(),
+                'failed' => 0,
+                'total' => $items->count(),
+            ];
+        } catch (\Exception $e) {
+            DB::connection('tenant')->rollBack();
+
+            Log::error('Failed to batch sync vouchers to FreeRADIUS', [
+                'error' => $e->getMessage(),
+                'count' => $items->count(),
+            ]);
+
+            return [
+                'synced' => 0,
+                'failed' => $items->count(),
+                'total' => $items->count(),
+            ];
+        }
     }
 
     public function checkRadiusAuth(string $username, string $password): bool

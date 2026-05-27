@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Download, Ticket, Filter, Search, Printer } from 'lucide-react';
+import { getDefaultVoucherTemplate, getVouchers } from '../utils/api';
 
 interface Voucher {
   id: number;
@@ -11,6 +12,9 @@ interface Voucher {
   first_used_at: string | null;
   expires_at: string | null;
   created_at: string;
+  voucher_type?: string;
+  sales_point?: { name: string } | null;
+  sales_point_name?: string | null;
 }
 
 interface VoucherGroup {
@@ -25,8 +29,29 @@ interface VoucherListDialogProps {
   onClose: () => void;
 }
 
+interface VoucherTemplate {
+  name: string;
+  layout: 'single' | 'grid-2x2' | 'grid-2x4' | 'grid-3x3';
+  paper_size: string;
+  logo_url?: string | null;
+  background_color: string;
+  text_color: string;
+  accent_color: string;
+  show_voucher_code: boolean;
+  show_voucher_type: boolean;
+  show_sales_point: boolean;
+  show_duration: boolean;
+  show_price: boolean;
+  show_expiry: boolean;
+  show_qr_code: boolean;
+  header_text?: string | null;
+  footer_text?: string | null;
+  instructions?: string | null;
+}
+
 export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [template, setTemplate] = useState<VoucherTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,28 +60,28 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     loadVouchers();
   }, [group.id, statusFilter]);
 
+  useEffect(() => {
+    loadTemplate();
+  }, []);
+
+  const loadTemplate = async () => {
+    try {
+      const data = await getDefaultVoucherTemplate();
+      setTemplate(data.template || null);
+    } catch (error) {
+      console.error('Failed to load voucher template:', error);
+    }
+  };
+
   const loadVouchers = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const siteId = localStorage.getItem('selected_site_id');
-      if (siteId) headers['X-Site-ID'] = siteId;
-
-      let url = `/api/vouchers?group_id=${group.id}`;
-      if (statusFilter !== 'all') {
-        url += `&status=${statusFilter}`;
-      }
-
-      const response = await fetch(url, { headers });
-      if (response.ok) {
-        const data = await response.json();
-        setVouchers(data.data || data || []);
-      }
+      const data = await getVouchers({
+        group_id: group.id,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        per_page: 5000,
+      });
+      setVouchers(data.data || data || []);
     } catch (error) {
       console.error('Failed to load vouchers:', error);
     } finally {
@@ -69,20 +94,9 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     v.voucher_code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const downloadVouchers = (vouchersToDownload: Voucher[], filename: string) => {
-    const csvContent = [
-      ['Voucher Code', 'Password', 'Status', 'Price', 'Validity (Hours)', 'Created At'].join(','),
-      ...vouchersToDownload.map(v => [
-        v.voucher_code,
-        v.password,
-        v.status,
-        v.price,
-        v.validity_hours,
-        new Date(v.created_at).toLocaleString()
-      ].join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const downloadTemplateVouchers = (vouchersToDownload: Voucher[], filename: string, heading: string) => {
+    const html = buildTemplateHtml(vouchersToDownload, false, heading);
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = filename;
@@ -91,64 +105,125 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
   };
 
   const handleDownloadAll = () => {
-    downloadVouchers(filteredVouchers, `${group.group_name}_all_vouchers.csv`);
+    downloadTemplateVouchers(
+      filteredVouchers,
+      `${group.group_name}_all_vouchers.html`,
+      statusFilter === 'all' ? 'All Vouchers' : `${statusFilter} Vouchers`
+    );
   };
 
   const handleDownloadUnused = () => {
     const unusedVouchers = vouchers.filter(v => v.status === 'unused');
-    downloadVouchers(unusedVouchers, `${group.group_name}_unused_vouchers.csv`);
+    downloadTemplateVouchers(unusedVouchers, `${group.group_name}_unused_vouchers.html`, 'Unused Vouchers');
   };
 
   const handlePrintUnused = () => {
     const unusedVouchers = vouchers.filter(v => v.status === 'unused');
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    printTemplateVouchers(unusedVouchers, 'Unused Vouchers');
+  };
 
-    const html = `
+  const escapeHtml = (value: string | number | null | undefined) =>
+    String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    }[char] || char));
+
+  const layoutColumns = (layout: VoucherTemplate['layout']) => {
+    switch (layout) {
+      case 'single': return 1;
+      case 'grid-2x2': return 2;
+      case 'grid-3x3': return 3;
+      case 'grid-2x4':
+      default: return 2;
+    }
+  };
+
+  const buildVoucherCard = (voucher: Voucher, activeTemplate: VoucherTemplate) => {
+    const salesPoint = voucher.sales_point?.name || voucher.sales_point_name || '';
+    return `
+      <div class="voucher-card">
+        ${activeTemplate.logo_url ? `<img class="voucher-logo" src="${escapeHtml(activeTemplate.logo_url)}" alt="Logo" />` : ''}
+        ${activeTemplate.header_text ? `<div class="voucher-header">${escapeHtml(activeTemplate.header_text)}</div>` : ''}
+        ${activeTemplate.show_voucher_code ? `<div class="voucher-code">${escapeHtml(voucher.voucher_code)}</div>` : ''}
+        <div class="voucher-meta">
+          ${activeTemplate.show_voucher_type ? `<div><span>Type</span><strong>${escapeHtml(voucher.voucher_type || group.group_name)}</strong></div>` : ''}
+          ${activeTemplate.show_duration ? `<div><span>Duration</span><strong>${escapeHtml(voucher.validity_hours)}h</strong></div>` : ''}
+          ${activeTemplate.show_price ? `<div><span>Price</span><strong>UGX ${Number(voucher.price || group.price).toLocaleString()}</strong></div>` : ''}
+          ${activeTemplate.show_sales_point && salesPoint ? `<div><span>Sales Point</span><strong>${escapeHtml(salesPoint)}</strong></div>` : ''}
+          ${activeTemplate.show_expiry && voucher.expires_at ? `<div><span>Expiry</span><strong>${escapeHtml(new Date(voucher.expires_at).toLocaleDateString())}</strong></div>` : ''}
+        </div>
+        ${activeTemplate.instructions ? `<div class="voucher-instructions">${escapeHtml(activeTemplate.instructions)}</div>` : ''}
+        ${activeTemplate.footer_text ? `<div class="voucher-footer">${escapeHtml(activeTemplate.footer_text)}</div>` : ''}
+      </div>
+    `;
+  };
+
+  const buildTemplateHtml = (vouchersToRender: Voucher[], autoPrint: boolean, heading: string) => {
+    const activeTemplate = template || {
+      name: 'Default',
+      layout: 'grid-2x4',
+      paper_size: 'A4',
+      background_color: '#ffffff',
+      text_color: '#000000',
+      accent_color: '#3b82f6',
+      show_voucher_code: true,
+      show_voucher_type: true,
+      show_sales_point: true,
+      show_duration: true,
+      show_price: true,
+      show_expiry: false,
+      show_qr_code: false,
+    } as VoucherTemplate;
+    const columns = layoutColumns(activeTemplate.layout);
+
+    return `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Vouchers - ${group.group_name}</title>
+        <title>${escapeHtml(heading)} - ${escapeHtml(group.group_name)}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          h1 { text-align: center; margin-bottom: 20px; }
-          .voucher-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-          .voucher-card { 
-            border: 2px dashed #333; 
-            padding: 15px; 
-            text-align: center;
+          @page { size: ${escapeHtml(activeTemplate.paper_size || 'A4')}; margin: 12mm; }
+          body { font-family: Arial, sans-serif; padding: 0; margin: 0; color: ${escapeHtml(activeTemplate.text_color)}; }
+          h1 { text-align: center; margin: 0 0 14px; font-size: 20px; }
+          .voucher-grid { display: grid; grid-template-columns: repeat(${columns}, minmax(0, 1fr)); gap: 10px; }
+          .voucher-card {
+            background: ${escapeHtml(activeTemplate.background_color)};
+            color: ${escapeHtml(activeTemplate.text_color)};
+            border: 1.5px dashed ${escapeHtml(activeTemplate.accent_color)};
             border-radius: 8px;
+            padding: 12px;
+            min-height: 140px;
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
-          .voucher-code { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
-          .voucher-password { font-size: 14px; color: #666; margin-bottom: 10px; }
-          .voucher-details { font-size: 12px; color: #888; }
-          @media print {
-            .voucher-card { page-break-inside: avoid; }
-          }
+          .voucher-logo { max-height: 42px; max-width: 120px; object-fit: contain; display: block; margin: 0 auto 8px; }
+          .voucher-header, .voucher-footer { text-align: center; color: ${escapeHtml(activeTemplate.accent_color)}; font-weight: 700; font-size: 12px; }
+          .voucher-code { text-align: center; color: ${escapeHtml(activeTemplate.accent_color)}; font-size: 24px; font-weight: 800; letter-spacing: 1px; margin: 8px 0; }
+          .voucher-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; font-size: 11px; }
+          .voucher-meta span { display: block; opacity: .65; }
+          .voucher-meta strong { display: block; font-size: 12px; }
+          .voucher-instructions { margin-top: 8px; padding-top: 8px; border-top: 1px solid ${escapeHtml(activeTemplate.accent_color)}; font-size: 10px; opacity: .75; text-align: center; }
+          @media print { .voucher-card { page-break-inside: avoid; } }
         </style>
       </head>
       <body>
-        <h1>${group.group_name} - Unused Vouchers</h1>
-        <p style="text-align: center; margin-bottom: 20px;">
-          Price: UGX ${group.price.toLocaleString()} | Validity: ${group.validity_hours} hours
-        </p>
+        <h1>${escapeHtml(group.group_name)} - ${escapeHtml(heading)}</h1>
         <div class="voucher-grid">
-          ${unusedVouchers.map(v => `
-            <div class="voucher-card">
-              <div class="voucher-code">${v.voucher_code}</div>
-              <div class="voucher-password">Password: ${v.password}</div>
-              <div class="voucher-details">
-                UGX ${v.price.toLocaleString()} | ${v.validity_hours}h
-              </div>
-            </div>
-          `).join('')}
+          ${vouchersToRender.map((voucher) => buildVoucherCard(voucher, activeTemplate)).join('')}
         </div>
-        <script>window.print();</script>
+        ${autoPrint ? '<script>window.print();</script>' : ''}
       </body>
       </html>
     `;
+  };
 
-    printWindow.document.write(html);
+  const printTemplateVouchers = (vouchersToPrint: Voucher[], heading: string) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(buildTemplateHtml(vouchersToPrint, true, heading));
     printWindow.document.close();
   };
 

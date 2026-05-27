@@ -1,18 +1,22 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://api.onlifi.net/api';
 
 // Get auth token from localStorage
-function getAuthToken(): string | null {
-  return localStorage.getItem('admin_token') || localStorage.getItem('tenant_token');
+function getAuthToken(endpoint = ''): string | null {
+  if (endpoint.startsWith('/super-admin')) {
+    return localStorage.getItem('admin_token') || localStorage.getItem('tenant_token');
+  }
+
+  return localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
 }
 
 // Build headers with auth token
-function buildHeaders(includeAuth = true): HeadersInit {
+function buildHeaders(includeAuth = true, endpoint = ''): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
   if (includeAuth) {
-    const token = getAuthToken();
+    const token = getAuthToken(endpoint);
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -32,7 +36,7 @@ async function request<T = any>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   const mergedHeaders = {
-    ...buildHeaders(includeAuth),
+    ...buildHeaders(includeAuth, endpoint),
     ...(options.headers || {}),
   };
   const res = await fetch(url, {
@@ -178,11 +182,13 @@ export const getTenantRealtimeStats = () => get('/dashboard/realtime');
 export const getTelemetryStats = () => get('/telemetry/stats');
 
 // ============ VOUCHERS (Tenant) ============
-export const getVouchers = (params?: { page?: number; status?: string }) => {
+export const getVouchers = (params?: { page?: number; per_page?: number; status?: string; group_id?: number }) => {
   let endpoint = '/vouchers';
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.per_page) searchParams.set('per_page', String(params.per_page));
   if (params?.status) searchParams.set('status', params.status);
+  if (params?.group_id) searchParams.set('group_id', String(params.group_id));
   if (searchParams.toString()) endpoint += `?${searchParams.toString()}`;
   return get(endpoint);
 };
@@ -191,6 +197,10 @@ export const generateVouchers = (data: Record<string, unknown>) => post('/vouche
 export const getVoucherTypes = () => get('/vouchers/types');
 export const getVoucherGroups = () => get('/vouchers/groups');
 export const getVoucherStatistics = () => get('/vouchers/statistics');
+export const getDefaultVoucherTemplate = () => get('/voucher-templates/default');
+
+// ============ SALES POINTS (Tenant) ============
+export const getSalesPoints = () => get('/sales-points');
 
 // ============ VOUCHER TYPES MANAGEMENT (Tenant) ============
 export const listVoucherTypes = () => get('/vouchers/types');

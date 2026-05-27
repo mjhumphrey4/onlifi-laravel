@@ -297,24 +297,8 @@ class VoucherService
             $radiusService = app(FreeRadiusService::class);
             $syncCount = 0;
             
-            foreach ($vouchers as $voucher) {
-                try {
-                    $radiusService->syncVoucherToRadius([
-                        'voucher_code' => $voucher->voucher_code,
-                        'password' => $voucher->password,
-                        'validity_hours' => $voucher->validity_hours,
-                        'data_limit_mb' => $voucher->data_limit_mb,
-                        'speed_limit_kbps' => $voucher->speed_limit_kbps,
-                    ]);
-                    $syncCount++;
-                } catch (\Exception $e) {
-                    Log::warning('RADIUS sync failed for voucher', [
-                        'voucher_code' => $voucher->voucher_code,
-                        'error' => $e->getMessage()
-                    ]);
-                    // Continue with next voucher
-                }
-            }
+            $syncResult = $radiusService->syncBatchToRadius($vouchers);
+            $syncCount = $syncResult['synced'] ?? 0;
             
             Log::info("RADIUS sync completed", ['synced' => $syncCount, 'total' => $vouchers->count()]);
         } catch (\Exception $e) {

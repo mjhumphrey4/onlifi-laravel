@@ -8,6 +8,7 @@ use App\Models\VoucherType;
 use App\Services\VoucherService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
@@ -24,6 +25,14 @@ class VoucherController extends Controller
     {
         $query = Voucher::with(['group', 'salesPoint']);
         $site = SiteScope::selectedSite($request);
+        if (!$site) {
+            return response()->json([
+                'data' => [],
+                'current_page' => 1,
+                'total' => 0,
+                'per_page' => (int) ($request->per_page ?? 50),
+            ]);
+        }
         SiteScope::applyToTenantTable($query, 'vouchers', $site);
 
         if ($request->has('status')) {
@@ -42,7 +51,13 @@ class VoucherController extends Controller
 
     public function show($id)
     {
-        $voucher = Voucher::with(['group', 'salesPoint', 'transactions'])->findOrFail($id);
+        $site = SiteScope::selectedSite(request());
+        if (!$site) {
+            abort(404);
+        }
+        $query = Voucher::with(['group', 'salesPoint', 'transactions']);
+        SiteScope::applyToTenantTable($query, 'vouchers', $site);
+        $voucher = $query->findOrFail($id);
         return response()->json($voucher);
     }
 
@@ -76,9 +91,39 @@ class VoucherController extends Controller
         try {
             $data = $request->all();
             $site = SiteScope::selectedSite($request);
+            if (!$site) {
+                return response()->json([
+                    'error' => 'Site required',
+                    'message' => 'Select a site before creating vouchers.',
+                ], 422);
+            }
+
+            foreach (['voucher_groups', 'vouchers'] as $table) {
+                if (!Schema::connection('tenant')->hasColumn($table, 'site_id')) {
+                    return response()->json([
+                        'error' => 'Tenant database needs migration',
+                        'message' => "The {$table}.site_id column is required before site-specific vouchers can be created.",
+                    ], 500);
+                }
+            }
+
             if ($site) {
                 $data['site_id'] = $site->id;
                 $data['site_name'] = $site->name;
+            }
+
+            if (!empty($data['sales_point_id']) && Schema::connection('tenant')->hasColumn('voucher_sales_points', 'site_id')) {
+                $belongsToSite = DB::connection('tenant')->table('voucher_sales_points')
+                    ->where('id', $data['sales_point_id'])
+                    ->where('site_id', $site->id)
+                    ->exists();
+
+                if (!$belongsToSite) {
+                    return response()->json([
+                        'error' => 'Invalid sales point',
+                        'message' => 'The selected sales point does not belong to the active site.',
+                    ], 422);
+                }
             }
 
             $result = $this->voucherService->generateVoucherBatch($data);
@@ -146,6 +191,9 @@ class VoucherController extends Controller
     {
         $query = VoucherType::query();
         $site = SiteScope::selectedSite($request);
+        if (!$site) {
+            return response()->json(['types' => []]);
+        }
         SiteScope::applyToTenantTable($query, 'voucher_types', $site);
 
         if (Schema::connection('tenant')->hasColumn('voucher_types', 'tenant_id') && app()->bound('tenant')) {
@@ -186,10 +234,24 @@ class VoucherController extends Controller
             'is_active' => true,
         ];
 
+        $site = SiteScope::selectedSite($request);
+        if (!$site) {
+            return response()->json([
+                'error' => 'Site required',
+                'message' => 'Select a site before creating voucher types.',
+            ], 422);
+        }
+        if (!Schema::connection('tenant')->hasColumn('voucher_types', 'site_id')) {
+            return response()->json([
+                'error' => 'Tenant database needs migration',
+                'message' => 'The voucher_types.site_id column is required before site-specific voucher types can be created.',
+            ], 500);
+        }
+
         if (Schema::connection('tenant')->hasColumn('voucher_types', 'tenant_id') && app()->bound('tenant')) {
             $data['tenant_id'] = app('tenant')->id;
         }
-        $data = SiteScope::withSiteColumn('voucher_types', $data, SiteScope::selectedSite($request));
+        $data = SiteScope::withSiteColumn('voucher_types', $data, $site);
 
         $type = VoucherType::create($data);
 
@@ -202,7 +264,11 @@ class VoucherController extends Controller
     public function updateType(Request $request, $id)
     {
         $query = VoucherType::query();
-        SiteScope::applyToTenantTable($query, 'voucher_types', SiteScope::selectedSite($request));
+        $site = SiteScope::selectedSite($request);
+        if (!$site) {
+            abort(404);
+        }
+        SiteScope::applyToTenantTable($query, 'voucher_types', $site);
         $type = $query->findOrFail($id);
 
         $validator = Validator::make($request->all(), [
@@ -236,7 +302,11 @@ class VoucherController extends Controller
     public function destroyType(Request $request, $id)
     {
         $query = VoucherType::query();
-        SiteScope::applyToTenantTable($query, 'voucher_types', SiteScope::selectedSite($request));
+        $site = SiteScope::selectedSite($request);
+        if (!$site) {
+            abort(404);
+        }
+        SiteScope::applyToTenantTable($query, 'voucher_types', $site);
         $type = $query->findOrFail($id);
         $type->delete();
 
@@ -245,9 +315,12 @@ class VoucherController extends Controller
         ]);
     }
 
-    public function getGroups()
+    public function getGroups(Request $request)
     {
-        $site = SiteScope::selectedSite(request());
+        $site = SiteScope::selectedSite($request);
+        if (!$site) {
+            return response()->json([]);
+        }
         $query = VoucherGroup::with('salesPoint');
         SiteScope::applyToTenantTable($query, 'voucher_groups', $site);
 
@@ -259,11 +332,15 @@ class VoucherController extends Controller
 
         $groups = $query
             ->withCount([
-                'vouchers as total_vouchers',
-                'vouchers as unused_count' => function ($query) {
+                'vouchers as total_vouchers' => function ($query) use ($site) {
+                    SiteScope::applyToTenantTable($query, 'vouchers', $site);
+                },
+                'vouchers as unused_count' => function ($query) use ($site) {
+                    SiteScope::applyToTenantTable($query, 'vouchers', $site);
                     $query->where('status', 'unused');
                 },
-                'vouchers as used_count' => function ($query) {
+                'vouchers as used_count' => function ($query) use ($site) {
+                    SiteScope::applyToTenantTable($query, 'vouchers', $site);
                     $query->where('status', 'used');
                 }
             ])
@@ -276,9 +353,21 @@ class VoucherController extends Controller
         return response()->json($groups);
     }
 
-    public function statistics()
+    public function statistics(Request $request)
     {
-        $site = SiteScope::selectedSite(request());
+        $site = SiteScope::selectedSite($request);
+        if (!$site) {
+            return response()->json([
+                'total_vouchers' => 0,
+                'unused_vouchers' => 0,
+                'used_vouchers' => 0,
+                'expired_vouchers' => 0,
+                'total_revenue' => 0,
+                'vouchers_by_status' => [],
+                'daily' => [],
+                'by_sales_point' => [],
+            ]);
+        }
         $voucherQuery = Voucher::query();
         SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
 

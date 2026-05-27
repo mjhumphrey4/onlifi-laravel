@@ -37,45 +37,7 @@ export function VoucherGroupCard({ group, onDelete, isDeleting }: VoucherGroupCa
   };
 
   const handleDownloadUnused = () => {
-    // Download unused vouchers as CSV
-    const downloadVouchers = async () => {
-      try {
-        const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        const siteId = localStorage.getItem('selected_site_id');
-        if (siteId) headers['X-Site-ID'] = siteId;
-
-        const response = await fetch(`/api/vouchers?group_id=${group.id}&status=unused`, { headers });
-        if (response.ok) {
-          const data = await response.json();
-          const vouchers = data.data || data || [];
-          
-          const csvContent = [
-            ['Voucher Code', 'Password', 'Price', 'Validity (Hours)'].join(','),
-            ...vouchers.map((v: any) => [
-              v.voucher_code,
-              v.password,
-              v.price,
-              v.validity_hours
-            ].join(','))
-          ].join('\n');
-
-          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(blob);
-          link.download = `${group.group_name}_unused_vouchers.csv`;
-          link.click();
-          URL.revokeObjectURL(link.href);
-        }
-      } catch (error) {
-        console.error('Failed to download vouchers:', error);
-      }
-    };
-    downloadVouchers();
+    setShowVoucherList(true);
   };
 
   return (
@@ -168,10 +130,10 @@ export function VoucherGroupCard({ group, onDelete, isDeleting }: VoucherGroupCa
           <button
             onClick={handleDownloadUnused}
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
-            title="Download unused vouchers"
+            title="Open print and download options"
           >
             <Download className="w-4 h-4" />
-            Download
+            Print/Download
           </button>
         )}
         

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Ticket, Clock, Database, Zap, DollarSign, Users, Package } from 'lucide-react';
+import { generateVouchers, getSalesPoints, getVoucherTypes } from '../utils/api';
+import { useSite } from '../context/SiteContext';
 
 interface SalesPoint {
   id: number;
@@ -23,6 +25,7 @@ interface CreateVoucherDialogProps {
 }
 
 export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogProps) {
+  const { selectedSite } = useSite();
   const [salesPoints, setSalesPoints] = useState<SalesPoint[]>([]);
   const [voucherTypes, setVoucherTypes] = useState<VoucherType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,27 +44,12 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
   useEffect(() => {
     loadSalesPoints();
     loadVoucherTypes();
-  }, []);
-
-  const getAuthHeaders = (): HeadersInit => {
-    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const siteId = localStorage.getItem('selected_site_id');
-    if (siteId) headers['X-Site-ID'] = siteId;
-    return headers;
-  };
+  }, [selectedSite?.id]);
 
   const loadSalesPoints = async () => {
     try {
-      const response = await fetch('/api/sales-points', { headers: getAuthHeaders() });
-      if (response.ok) {
-        const data = await response.json();
-        setSalesPoints(Array.isArray(data) ? data : data.sales_points || []);
-      }
+      const data = await getSalesPoints();
+      setSalesPoints(Array.isArray(data) ? data : data.sales_points || data.data || []);
     } catch (error) {
       console.error('Failed to load sales points:', error);
     }
@@ -69,11 +57,8 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
 
   const loadVoucherTypes = async () => {
     try {
-      const response = await fetch('/api/vouchers/types', { headers: getAuthHeaders() });
-      if (response.ok) {
-        const data = await response.json();
-        setVoucherTypes(data.types || (Array.isArray(data) ? data : []));
-      }
+      const data = await getVoucherTypes();
+      setVoucherTypes(data.types || (Array.isArray(data) ? data : []));
     } catch (error) {
       console.error('Failed to load voucher types:', error);
     }
@@ -81,6 +66,11 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedSite?.id) {
+      alert('Please select a site before creating vouchers.');
+      return;
+    }
+
     setLoading(true);
 
     const selectedType = voucherTypes.find(t => t.id === formData.voucher_type_id);
@@ -105,22 +95,11 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
         code_length: formData.code_length,
       };
 
-      const response = await fetch('/api/vouchers/generate-batch', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        onSuccess();
-      } else {
-        alert(data.message || data.error || 'Failed to create vouchers');
-      }
+      await generateVouchers(payload);
+      onSuccess();
     } catch (error) {
       console.error('Failed to create vouchers:', error);
-      alert('Failed to create vouchers');
+      alert(error instanceof Error ? error.message : 'Failed to create vouchers');
     } finally {
       setLoading(false);
     }

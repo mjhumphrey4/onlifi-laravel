@@ -202,10 +202,18 @@ class VoucherTemplateController extends Controller
         $tenant = app('tenant');
         $site = SiteScope::selectedSite($request);
         
-        $template = VoucherTemplate::where('tenant_id', $tenant->id)
-            ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
+        $templateQuery = VoucherTemplate::where('tenant_id', $tenant->id)
+            ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id));
+
+        $template = (clone $templateQuery)
+            ->where('is_active', true)
             ->where('is_default', true)
-            ->first();
+            ->first()
+            ?: (clone $templateQuery)
+                ->where('is_active', true)
+                ->orderBy('is_default', 'desc')
+                ->orderBy('name')
+                ->first();
 
         if (!$template) {
             // Return a default template structure if none exists
