@@ -3,7 +3,7 @@ import { Download, Server, Copy, Check, Settings as SettingsIcon, RefreshCw, Bui
 import { useAuth } from '../context/AuthContext';
 import { TwoFactorPanel } from '../components/TwoFactorPanel';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://api.onlifi.com/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://api.onlifi.net/api';
 
 interface Site {
   id: number;
@@ -377,7 +377,7 @@ export function Settings() {
                 type="url"
                 value={telemetryUrl}
                 onChange={(e) => setTelemetryUrl(e.target.value)}
-                placeholder="https://api.onlifi.com/api/telemetry"
+                placeholder="http://api.onlifi.net/api/telemetry"
                 className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
               />
               <p className="text-xs text-muted-foreground mt-1">

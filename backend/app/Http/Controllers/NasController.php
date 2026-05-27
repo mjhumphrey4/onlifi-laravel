@@ -374,8 +374,11 @@ class NasController extends Controller
         $poolRange = (string) SystemSetting::get('router_default_dhcp_pool', '10.10.0.10-10.10.0.254');
         $dnsServers = (string) SystemSetting::get('router_default_dns_servers', '1.1.1.1,8.8.8.8');
         $hotspotDns = (string) SystemSetting::get('router_default_hotspot_dns', 'wifi.onlifi.local');
+        $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
+        $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
+        $remoteVpnCidr = (string) SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24');
         $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
-        $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.com';
+        $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
         $portalConfigUrl = $apiBaseUrl . "/api/captive/config/{$nas->provisioning_token}";
         $hotspotFetchMode = $this->fetchModeForUrl($hotspotBaseUrl);
@@ -413,6 +416,9 @@ class NasController extends Controller
 :local radiusAuthPort "{$authPort}"
 :local radiusAcctPort "{$acctPort}"
 :local routerIdentifier "{$routerIdentifier}"
+:local remoteAdminUser "{$remoteAdminUser}"
+:local remoteAdminPassword "{$remoteAdminPassword}"
+:local remoteVpnCidr "{$remoteVpnCidr}"
 :local telemetryUrl "{$telemetryUrl}"
 :local telemetryToken "{$telemetryToken}"
 :local appHost "{$appHost}"
@@ -458,6 +464,15 @@ class NasController extends Controller
 
 # DNS
 /ip dns set allow-remote-requests=yes servers=\$dnsServers
+
+# Dedicated OnLiFi administrator user for VPN telemetry and support access
+:if ([:len [/user find name=\$remoteAdminUser]] = 0) do={
+  /user add name=\$remoteAdminUser password=\$remoteAdminPassword group=full comment="OnLiFi remote telemetry administrator"
+} else={
+  /user set [find name=\$remoteAdminUser] password=\$remoteAdminPassword group=full disabled=no comment="OnLiFi remote telemetry administrator"
+}
+:do { /ip service set api disabled=no port=8728 address=\$remoteVpnCidr } on-error={ :log warning "OnLiFi failed to restrict API service to VPN range" }
+:do { /ip service set winbox address=\$remoteVpnCidr } on-error={}
 
 # DHCP
 :if ([:len [/ip pool find name=\$dhcpPool]] = 0) do={

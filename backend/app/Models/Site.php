@@ -16,10 +16,18 @@ class Site extends Model
         'description',
         'is_active',
         'api_token',
+        'vpn_private_ip',
+        'vpn_username',
+        'vpn_status',
+        'vpn_last_seen_at',
+        'router_api_port',
+        'remote_access_notes',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'vpn_last_seen_at' => 'datetime',
+        'router_api_port' => 'integer',
     ];
 
     // Don't hide api_token - it's needed for telemetry script generation

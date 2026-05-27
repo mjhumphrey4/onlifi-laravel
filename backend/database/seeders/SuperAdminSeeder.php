@@ -12,7 +12,7 @@ class SuperAdminSeeder extends Seeder
     {
         SuperAdmin::create([
             'name' => 'Super Administrator',
-            'email' => 'admin@onlifi.com',
+            'email' => 'admin@onlifi.net',
             'password' => Hash::make('admin123'),
             'role' => 'super_admin',
             'is_active' => true,
@@ -20,7 +20,7 @@ class SuperAdminSeeder extends Seeder
         ]);
 
         $this->command->info('Super admin created successfully!');
-        $this->command->info('Email: admin@onlifi.com');
+        $this->command->info('Email: admin@onlifi.net');
         $this->command->info('Password: admin123');
         $this->command->warn('Please change this password immediately in production!');
     }

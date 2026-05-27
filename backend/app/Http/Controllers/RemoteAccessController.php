@@ -1,0 +1,143 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Site;
+use App\Models\SystemSetting;
+use App\Models\Tenant;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
+
+class RemoteAccessController extends Controller
+{
+    public function tenantIndex(Request $request)
+    {
+        $tenantId = $request->user()?->tenant_id;
+
+        $sites = Site::where('tenant_id', $tenantId)
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Site $site) => $this->formatSite($site));
+
+        return response()->json([
+            'vpn_range' => SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24'),
+            'router_admin_username' => SystemSetting::get('router_admin_username', 'onlifi'),
+            'sites' => $sites,
+        ]);
+    }
+
+    public function adminIndex(Tenant $tenant)
+    {
+        $sites = Site::where('tenant_id', $tenant->id)
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Site $site) => $this->formatSite($site));
+
+        return response()->json([
+            'tenant' => [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'slug' => $tenant->slug,
+            ],
+            'vpn_range' => SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24'),
+            'router_admin_username' => SystemSetting::get('router_admin_username', 'onlifi'),
+            'sites' => $sites,
+        ]);
+    }
+
+    public function adminUpdate(Request $request, Tenant $tenant, Site $site)
+    {
+        if ((int) $site->tenant_id !== (int) $tenant->id) {
+            return response()->json(['message' => 'Site does not belong to this tenant'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'vpn_private_ip' => 'nullable|ip',
+            'vpn_username' => 'nullable|string|max:100',
+            'vpn_status' => 'nullable|string|in:pending,active,offline,suspended',
+            'vpn_last_seen_at' => 'nullable|date',
+            'router_api_port' => 'nullable|integer|min:1|max:65535',
+            'remote_access_notes' => 'nullable|string|max:5000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $site->update($request->only([
+            'vpn_private_ip',
+            'vpn_username',
+            'vpn_status',
+            'vpn_last_seen_at',
+            'router_api_port',
+            'remote_access_notes',
+        ]));
+
+        $this->syncTenantRouterRecord($tenant, $site->fresh());
+
+        return response()->json([
+            'message' => 'Remote access details updated',
+            'site' => $this->formatSite($site->fresh()),
+        ]);
+    }
+
+    private function syncTenantRouterRecord(Tenant $tenant, Site $site): void
+    {
+        if (!$site->vpn_private_ip || $tenant->status !== 'approved') {
+            return;
+        }
+
+        try {
+            $tenant->configure();
+
+            if (!Schema::connection('tenant')->hasTable('mikrotik_routers')) {
+                return;
+            }
+
+            $updates = [
+                'ip_address' => $site->vpn_private_ip,
+                'api_port' => $site->router_api_port ?: 8728,
+                'username' => SystemSetting::get('router_admin_username', 'onlifi'),
+                'password' => SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me'),
+                'updated_at' => now(),
+            ];
+
+            $query = \App\Models\MikrotikRouter::query();
+            if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+                $query->where('site_id', $site->id);
+            } else {
+                $query->where('name', $site->name);
+            }
+
+            $query->update($updates);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to sync remote access details to tenant router record', [
+                'tenant_id' => $tenant->id,
+                'site_id' => $site->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function formatSite(Site $site): array
+    {
+        return [
+            'id' => $site->id,
+            'tenant_id' => $site->tenant_id,
+            'name' => $site->name,
+            'slug' => $site->slug,
+            'description' => $site->description,
+            'vpn_private_ip' => $site->vpn_private_ip,
+            'vpn_username' => $site->vpn_username,
+            'vpn_status' => $site->vpn_status ?: 'pending',
+            'vpn_last_seen_at' => $site->vpn_last_seen_at?->toIso8601String(),
+            'router_api_port' => $site->router_api_port ?: 8728,
+            'remote_access_notes' => $site->remote_access_notes,
+        ];
+    }
+}

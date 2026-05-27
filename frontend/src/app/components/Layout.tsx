@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Router,
   BarChart3,
+  Network,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
@@ -69,6 +70,7 @@ const menuItems: MenuItem[] = [
   { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false },
   { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false },
   { path: '/reports',        label: 'Reports',            icon: BarChart3, adminOnly: false },
+  { path: '/remote-access',  label: 'Remote Access',      icon: Network, adminOnly: false },
   { path: '/sms-gateway',     label: 'SMS Gateway',        icon: MessageSquare, adminOnly: false },
   {
     path: '/settings',

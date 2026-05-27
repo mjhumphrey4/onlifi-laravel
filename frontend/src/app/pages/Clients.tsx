@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Users, RefreshCw, Wifi, HardDrive, Clock, TrendingUp, TrendingDown } from 'lucide-react';
+import { Users, RefreshCw, Wifi, HardDrive, Clock, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
+import { collectRouterTelemetry, getRouters } from '../utils/api';
 
 interface Client {
   id: number;
@@ -23,9 +24,12 @@ interface Client {
 export function Clients() {
   const { selectedSite } = useSite();
   const [clients, setClients] = useState<Client[]>([]);
+  const [routers, setRouters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [pullingTelemetry, setPullingTelemetry] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [telemetryMessage, setTelemetryMessage] = useState('');
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
@@ -60,8 +64,36 @@ export function Clients() {
     }
   };
 
+  const loadRouters = async () => {
+    try {
+      const response = await getRouters();
+      setRouters(Array.isArray(response) ? response : response.routers || response.data || []);
+    } catch (error) {
+      console.error('Failed to load routers:', error);
+    }
+  };
+
+  const pullTelemetry = async () => {
+    if (routers.length === 0) {
+      setTelemetryMessage('No router is registered for this site yet.');
+      return;
+    }
+
+    setPullingTelemetry(true);
+    setTelemetryMessage('');
+    try {
+      const results = await Promise.allSettled(routers.map((router) => collectRouterTelemetry(router.id)));
+      const successCount = results.filter((result) => result.status === 'fulfilled').length;
+      setTelemetryMessage(`Telemetry pulled from ${successCount} of ${routers.length} router${routers.length === 1 ? '' : 's'}.`);
+      await loadClients(true);
+    } finally {
+      setPullingTelemetry(false);
+    }
+  };
+
   useEffect(() => {
     loadClients();
+    loadRouters();
     const interval = setInterval(() => loadClients(), 30000); // Auto-refresh every 30s
     return () => clearInterval(interval);
   }, [selectedSite?.id]);
@@ -101,6 +133,14 @@ export function Clients() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={pullTelemetry}
+            disabled={pullingTelemetry}
+            className="flex items-center gap-2 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            <Activity className={`w-4 h-4 ${pullingTelemetry ? 'animate-pulse' : ''}`} />
+            {pullingTelemetry ? 'Pulling...' : 'Pull Router Telemetry'}
+          </button>
+          <button
             onClick={() => loadClients(true)}
             disabled={refreshing}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
@@ -115,6 +155,12 @@ export function Clients() {
           )}
         </div>
       </div>
+
+      {telemetryMessage && (
+        <div className="mb-4 rounded-lg border border-border bg-card p-3 text-sm text-card-foreground">
+          {telemetryMessage}
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

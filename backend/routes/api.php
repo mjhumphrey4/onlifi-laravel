@@ -23,6 +23,7 @@ use App\Http\Controllers\TwoFactorController;
 use App\Http\Controllers\SubscriptionBillingController;
 use App\Http\Controllers\CaptivePortalController;
 use App\Http\Controllers\SmsCreditController;
+use App\Http\Controllers\RemoteAccessController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -83,6 +84,8 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
         Route::post('/{tenant}/reset-password', [AdminTenantController::class, 'resetPassword']);
         Route::post('/{tenant}/repair', [AdminTenantController::class, 'repairTenant']);
         Route::post('/{tenant}/sms-credits/adjust', [AdminTenantController::class, 'adjustSmsCredits']);
+        Route::get('/{tenant}/remote-access', [RemoteAccessController::class, 'adminIndex']);
+        Route::put('/{tenant}/remote-access/{site}', [RemoteAccessController::class, 'adminUpdate']);
         Route::post('/{tenant}/regenerate-credentials', [TenantController::class, 'regenerateCredentials']);
         Route::get('/{tenant}/stats', [TenantController::class, 'stats']);
         Route::get('/{tenant}/database', [AdminTenantController::class, 'viewDatabase']);
@@ -137,6 +140,7 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::put('/sms-credits/plan', [SmsCreditController::class, 'updatePlan']);
     Route::post('/sms-credits/top-up', [SmsCreditController::class, 'topUp']);
     Route::get('/sms-credits/payment-status', [SmsCreditController::class, 'paymentStatus']);
+    Route::get('/remote-access', [RemoteAccessController::class, 'tenantIndex']);
 });
 
 // Active announcements for all authenticated users

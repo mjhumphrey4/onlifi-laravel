@@ -21,6 +21,7 @@ import {
   Database,
   Copy,
   Check,
+  Network,
 } from 'lucide-react';
 
 interface Tenant {
@@ -57,6 +58,7 @@ export default function TenantList() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [showRadiusModal, setShowRadiusModal] = useState(false);
+  const [showRemoteAccessModal, setShowRemoteAccessModal] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [radiusSettings, setRadiusSettings] = useState({
@@ -514,6 +516,16 @@ export default function TenantList() {
                               <Database className="w-4 h-4" /> RADIUS Info
                             </button>
                             <button
+                              onClick={() => {
+                                setSelectedTenant(tenant);
+                                setShowRemoteAccessModal(true);
+                                setActionMenuOpen(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-sky-400 hover:bg-slate-600 transition-colors"
+                            >
+                              <Network className="w-4 h-4" /> Remote Access
+                            </button>
+                            <button
                               onClick={() => handleRepair(tenant)}
                               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-cyan-400 hover:bg-slate-600 transition-colors"
                             >
@@ -628,6 +640,16 @@ export default function TenantList() {
           radiusInfo={getRadiusInfo(selectedTenant)}
           copyToClipboard={copyToClipboard}
           copiedField={copiedField}
+        />
+      )}
+
+      {showRemoteAccessModal && selectedTenant && (
+        <RemoteAccessModal
+          tenant={selectedTenant}
+          onClose={() => {
+            setShowRemoteAccessModal(false);
+            setSelectedTenant(null);
+          }}
         />
       )}
     </div>
@@ -820,6 +842,129 @@ function ResetPasswordModal({ tenant, onClose, onReset }: { tenant: Tenant; onCl
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [data, setData] = useState<any>(null);
+  const [forms, setForms] = useState<Record<number, any>>({});
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/remote-access`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+      });
+      if (response.ok) {
+        const payload = await response.json();
+        setData(payload);
+        const nextForms: Record<number, any> = {};
+        (payload.sites || []).forEach((site: any) => {
+          nextForms[site.id] = {
+            vpn_private_ip: site.vpn_private_ip || '',
+            vpn_username: site.vpn_username || '',
+            vpn_status: site.vpn_status || 'pending',
+            router_api_port: site.router_api_port || 8728,
+            remote_access_notes: site.remote_access_notes || '',
+          };
+        });
+        setForms(nextForms);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [tenant.id]);
+
+  const save = async (siteId: number) => {
+    setSavingId(siteId);
+    try {
+      const token = localStorage.getItem('admin_token');
+      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/remote-access/${siteId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(forms[siteId]),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json();
+        alert(payload.message || payload.error || 'Failed to update remote access details');
+      } else {
+        await load();
+      }
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-2xl w-full max-w-4xl border border-slate-700 max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-6 border-b border-slate-700 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-white">Remote Access</h2>
+            <p className="text-sm text-slate-400 mt-1">{tenant.name} - SSTP range {data?.vpn_range || '10.10.1.0/24'}</p>
+          </div>
+          <button onClick={onClose} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl">Close</button>
+        </div>
+        <div className="p-6 overflow-y-auto space-y-4">
+          {loading ? (
+            <div className="py-10 text-center text-slate-400">Loading remote access details...</div>
+          ) : (data?.sites || []).length === 0 ? (
+            <div className="py-10 text-center text-slate-400">No sites found for this tenant.</div>
+          ) : (data.sites || []).map((site: any) => (
+            <div key={site.id} className="rounded-xl border border-slate-700 p-4 space-y-4">
+              <div>
+                <h3 className="font-semibold text-white">{site.name}</h3>
+                <p className="text-xs text-slate-400">{site.slug}</p>
+              </div>
+              <div className="grid md:grid-cols-4 gap-3">
+                <label className="block text-sm">
+                  <span className="text-slate-300">VPN private IP</span>
+                  <input value={forms[site.id]?.vpn_private_ip || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_private_ip: e.target.value } })} placeholder="10.10.1.10" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-slate-300">VPN username</span>
+                  <input value={forms[site.id]?.vpn_username || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_username: e.target.value } })} placeholder={site.slug} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-slate-300">Status</span>
+                  <select value={forms[site.id]?.vpn_status || 'pending'} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_status: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
+                    <option value="pending">Pending</option>
+                    <option value="active">Active</option>
+                    <option value="offline">Offline</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="text-slate-300">API port</span>
+                  <input type="number" value={forms[site.id]?.router_api_port || 8728} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], router_api_port: Number(e.target.value) } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                </label>
+              </div>
+              <label className="block text-sm">
+                <span className="text-slate-300">SoftEther notes</span>
+                <textarea value={forms[site.id]?.remote_access_notes || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], remote_access_notes: e.target.value } })} rows={2} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+              </label>
+              <div className="flex justify-end">
+                <button onClick={() => save(site.id)} disabled={savingId === site.id} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg disabled:opacity-60">
+                  {savingId === site.id ? 'Saving...' : 'Save Remote Access'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

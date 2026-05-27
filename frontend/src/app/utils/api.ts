@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'https://api.onlifi.com/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://api.onlifi.net/api';
 
 // Get auth token from localStorage
 function getAuthToken(): string | null {
@@ -164,6 +164,8 @@ export const getSmsCredits = (page = 1) => get(`/tenant/sms-credits?page=${page}
 export const updateSmsPlan = (sms_enabled: boolean) => put('/tenant/sms-credits/plan', { sms_enabled });
 export const topUpSmsCredits = (data: Record<string, unknown>) => post('/tenant/sms-credits/top-up', data);
 export const checkSmsCreditPaymentStatus = (ref: string) => get(`/tenant/sms-credits/payment-status?ref=${encodeURIComponent(ref)}`);
+export const getRemoteAccess = () => get('/tenant/remote-access');
+export const collectRouterTelemetry = (id: number) => post(`/routers/${id}/collect-telemetry`);
 
 export const tenantChangePassword = (current_password: string, new_password: string, new_password_confirmation: string) =>
   post('/tenant/change-password', { current_password, new_password, new_password_confirmation });

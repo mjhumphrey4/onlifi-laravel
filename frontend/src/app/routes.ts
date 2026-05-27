@@ -17,6 +17,7 @@ import { RadiusSetup } from './pages/RadiusSetup';
 import { Provisioning } from './pages/Provisioning';
 import { CaptivePortal } from './pages/CaptivePortal';
 import { SmsGateway } from './pages/SmsGateway';
+import { RemoteAccess } from './pages/RemoteAccess';
 import { Reports } from './pages/Reports';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: 'withdrawals', Component: Withdrawals },
       { path: 'performance', Component: AnalyzePerformance },
       { path: 'reports', Component: Reports },
+      { path: 'remote-access', Component: RemoteAccess },
       { path: 'captive-portal', Component: CaptivePortal },
       { path: 'sms-gateway', Component: SmsGateway },
       { path: 'voucher-stock', Component: VoucherStock },
