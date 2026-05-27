@@ -74,17 +74,17 @@ export function Clients() {
   };
 
   const pullTelemetry = async () => {
-    if (routers.length === 0) {
-      setTelemetryMessage('No router is registered for this site yet.');
+    const router = routers.find((item) => item.id);
+    if (!router) {
+      setTelemetryMessage('This site router is waiting for VPN/API details before telemetry can be pulled.');
       return;
     }
 
     setPullingTelemetry(true);
     setTelemetryMessage('');
     try {
-      const results = await Promise.allSettled(routers.map((router) => collectRouterTelemetry(router.id)));
-      const successCount = results.filter((result) => result.status === 'fulfilled').length;
-      setTelemetryMessage(`Telemetry pulled from ${successCount} of ${routers.length} router${routers.length === 1 ? '' : 's'}.`);
+      await collectRouterTelemetry(router.id);
+      setTelemetryMessage('Telemetry pulled from this site router.');
       await loadClients(true);
     } finally {
       setPullingTelemetry(false);

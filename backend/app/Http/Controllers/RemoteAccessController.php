@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Site;
 use App\Models\SystemSetting;
 use App\Models\Tenant;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -16,8 +17,10 @@ class RemoteAccessController extends Controller
     public function tenantIndex(Request $request)
     {
         $tenantId = $request->user()?->tenant_id;
+        $selectedSite = SiteScope::selectedSite($request);
 
         $sites = Site::where('tenant_id', $tenantId)
+            ->when($selectedSite, fn ($query) => $query->where('id', $selectedSite->id))
             ->orderBy('name')
             ->get()
             ->map(fn (Site $site) => $this->formatSite($site));

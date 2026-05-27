@@ -6,6 +6,7 @@ use App\Models\MikrotikRouter;
 use App\Models\RadiusNas;
 use App\Models\RouterTelemetry;
 use App\Models\Site;
+use App\Models\SystemSetting;
 use App\Services\MikrotikService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
@@ -28,8 +29,37 @@ class MikrotikController extends Controller
         $site = SiteScope::selectedSite($request);
         $query = MikrotikRouter::with('latestTelemetry');
 
-        if ($site && Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
-            $query->where('site_id', $site->id);
+        if ($site) {
+            if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+                $query->where('site_id', $site->id);
+            } else {
+                $query->where('name', $site->name);
+            }
+
+            $router = $query->orderBy('id')->first();
+            if ($router) {
+                if ($router->name !== $site->name) {
+                    $router->update(['name' => $site->name]);
+                    $router = $router->fresh('latestTelemetry');
+                }
+
+                return response()->json([$router]);
+            }
+
+            return response()->json([[
+                'id' => null,
+                'name' => $site->name,
+                'site_id' => $site->id,
+                'ip_address' => $site->vpn_private_ip,
+                'api_port' => $site->router_api_port ?: 8728,
+                'username' => SystemSetting::get('router_admin_username', 'onlifi'),
+                'location' => $site->description,
+                'is_active' => true,
+                'last_seen' => $site->vpn_last_seen_at,
+                'latest_telemetry' => null,
+                'managed_by_site' => true,
+                'needs_remote_access' => !$site->vpn_private_ip,
+            ]]);
         }
 
         $routers = $query->orderBy('name')->get();

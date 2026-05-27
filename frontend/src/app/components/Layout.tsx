@@ -51,7 +51,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { path: '/',               label: 'Dashboard',          icon: LayoutDashboard, adminOnly: false },
   { path: '/clients',        label: 'Clients',            icon: Users, adminOnly: false },
-  { path: '/devices',        label: 'Devices',            icon: Server, adminOnly: false },
+  { path: '/devices',        label: 'Site Router',        icon: Server, adminOnly: false },
   { 
     path: '/vouchers',       
     label: 'Manage Vouchers',           
@@ -498,11 +498,9 @@ export function Layout() {
           </>
         )}
 
-        <div key={selectedSite?.id || 'no-site'}>
-          <BillingGate>
-            <Outlet />
-          </BillingGate>
-        </div>
+        <BillingGate>
+          <Outlet />
+        </BillingGate>
       </main>
 
       {/* Add New Site Modal */}

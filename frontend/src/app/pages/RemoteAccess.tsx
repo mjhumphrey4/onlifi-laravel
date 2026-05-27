@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Copy, Check, Loader2, Network, ShieldCheck } from 'lucide-react';
 import { getRemoteAccess } from '../utils/api';
+import { useSite } from '../context/SiteContext';
 
 export function RemoteAccess() {
+  const { selectedSite } = useSite();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
@@ -18,7 +20,7 @@ export function RemoteAccess() {
     };
 
     load();
-  }, []);
+  }, [selectedSite?.id]);
 
   const copy = async (value: string, key: string) => {
     if (!value) return;

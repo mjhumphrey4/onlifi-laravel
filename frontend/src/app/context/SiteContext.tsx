@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 
 export interface Site {
@@ -40,8 +40,13 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSite, setSelectedSiteState] = useState<Site | null>(null);
   const [loadingSites, setLoadingSites] = useState(false);
+  const selectedSiteIdRef = useRef<number | null>(null);
 
-  const setSelectedSite = useCallback((site: Site | null) => {
+  const applySelectedSite = useCallback((site: Site | null, notify = true) => {
+    const previousId = selectedSiteIdRef.current;
+    const nextId = site?.id ?? null;
+
+    selectedSiteIdRef.current = nextId;
     setSelectedSiteState(site);
 
     if (site) {
@@ -50,15 +55,21 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('selected_site_id');
     }
 
-    window.dispatchEvent(new CustomEvent('onlifi:site-changed', { detail: { siteId: site?.id || null } }));
+    if (notify && previousId !== nextId) {
+      window.dispatchEvent(new CustomEvent('onlifi:site-changed', { detail: { siteId: nextId } }));
+    }
   }, []);
+
+  const setSelectedSite = useCallback((site: Site | null) => {
+    applySelectedSite(site, true);
+  }, [applySelectedSite]);
 
   const refreshSites = useCallback(async () => {
     const hasTenantToken = Boolean(localStorage.getItem('tenant_token'));
 
     if (!user || !hasTenantToken) {
       setSites([]);
-      setSelectedSite(null);
+      applySelectedSite(null, true);
       return;
     }
 
@@ -71,14 +82,14 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         setSites([]);
-        setSelectedSite(null);
+        applySelectedSite(null, true);
         return;
       }
 
       const data = await response.json();
       const nextSites: Site[] = data.sites || [];
       const storedSiteId = Number(localStorage.getItem('selected_site_id'));
-      const currentSiteId = selectedSite?.id;
+      const currentSiteId = selectedSiteIdRef.current;
       const nextSelected =
         nextSites.find((site) => site.id === currentSiteId) ||
         nextSites.find((site) => site.id === storedSiteId) ||
@@ -86,15 +97,15 @@ export function SiteProvider({ children }: { children: ReactNode }) {
         null;
 
       setSites(nextSites);
-      setSelectedSite(nextSelected);
+      applySelectedSite(nextSelected, selectedSiteIdRef.current !== (nextSelected?.id ?? null));
     } catch (error) {
       console.error('Failed to load sites:', error);
       setSites([]);
-      setSelectedSite(null);
+      applySelectedSite(null, true);
     } finally {
       setLoadingSites(false);
     }
-  }, [selectedSite?.id, setSelectedSite, user]);
+  }, [applySelectedSite, user]);
 
   useEffect(() => {
     if (loading) return;

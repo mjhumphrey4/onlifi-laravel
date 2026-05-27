@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Package, AlertTriangle } from 'lucide-react';
 import { apiVoucherStock } from '../utils/api';
-import { useAuth } from '../context/AuthContext';
+import { useSite } from '../context/SiteContext';
 
 const LOW_STOCK_THRESHOLD = 50;
 
@@ -25,22 +25,28 @@ const VOUCHER_TYPES: { key: keyof Omit<Stock, 'total'>; label: string; badge: st
 ];
 
 export function VoucherStock() {
-  const { userSites } = useAuth();
-  const sites = userSites();
+  const { selectedSite } = useSite();
 
-  const [selectedSite, setSelectedSite] = useState(sites[0] ?? '');
   const [stock, setStock] = useState<Stock | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const load = useCallback(async (site: string) => {
-    if (!site) return;
+  const load = useCallback(async () => {
+    if (!selectedSite?.id) return;
     setLoading(true);
     setError('');
     try {
-      const res = await apiVoucherStock(site);
-      setStock(res.stock);
+      const res = await apiVoucherStock();
+      setStock(res.stock ?? {
+        '2hours': 0,
+        '3hours': 0,
+        '12hours': 0,
+        '24hours': 0,
+        '7days': 0,
+        '30days': 0,
+        total: res.unused_vouchers ?? 0,
+      });
       setLastUpdated(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load voucher stock');
@@ -48,9 +54,9 @@ export function VoucherStock() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedSite?.id]);
 
-  useEffect(() => { load(selectedSite); }, [selectedSite, load]);
+  useEffect(() => { load(); }, [load]);
 
   const lowStockItems = stock
     ? VOUCHER_TYPES.filter((t) => (stock[t.key] ?? 0) < LOW_STOCK_THRESHOLD).map((t) => t.label)
@@ -67,26 +73,12 @@ export function VoucherStock() {
           {lastUpdated && (
             <span className="text-xs text-muted-foreground">Updated {lastUpdated.toLocaleTimeString()}</span>
           )}
-          <button onClick={() => load(selectedSite)} disabled={loading}
+          <button onClick={() => load()} disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors text-sm disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
         </div>
       </div>
-
-      {/* Site selector (only shown for admin or multi-site users) */}
-      {sites.length > 1 && (
-        <div className="mb-6">
-          <div className="flex flex-wrap gap-2">
-            {sites.map((s) => (
-              <button key={s} onClick={() => setSelectedSite(s)}
-                className={`px-4 py-2 rounded-lg text-sm transition-colors ${selectedSite === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Error */}
       {error && (
@@ -142,7 +134,7 @@ export function VoucherStock() {
                 <Package className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Unused Vouchers — {selectedSite}</p>
+                <p className="text-sm text-muted-foreground">Total Unused Vouchers — {selectedSite?.name || 'Selected site'}</p>
                 <p className="text-3xl font-bold text-primary">{stock.total.toLocaleString()}</p>
               </div>
             </div>

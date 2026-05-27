@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Search, RefreshCw } from 'lucide-react';
 import { apiTransactions } from '../utils/api';
-import { useAuth } from '../context/AuthContext';
+import { useSite } from '../context/SiteContext';
 
 const ITEMS_PER_PAGE = 15;
 type TabType = 'all' | 'success' | 'pending' | 'failed' | 'no-voucher';
@@ -30,8 +30,7 @@ function statusStyle(s: string) {
 }
 
 export function Transactions() {
-  const { userSites } = useAuth();
-  const sites = userSites();
+  const { selectedSite } = useSite();
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,8 +51,7 @@ export function Transactions() {
         setTotal(rows.length);
       } else {
         const status = tab === 'all' ? '' : tab;
-        const params = new URLSearchParams({ page: String(page), limit: String(ITEMS_PER_PAGE), status: tab, search });
-        const res = await apiTransactions(params);
+        const res = await apiTransactions({ page, limit: ITEMS_PER_PAGE, status, search });
         setTxs(res.transactions ?? []);
         setTotal(res.total ?? 0);
       }
@@ -61,7 +59,7 @@ export function Transactions() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(currentPage, activeTab, searchQuery); }, [currentPage, activeTab, searchQuery, load]);
+  useEffect(() => { load(currentPage, activeTab, searchQuery); }, [currentPage, activeTab, searchQuery, selectedSite?.id, load]);
 
   const handleTabChange = (tab: TabType) => { setActiveTab(tab); setCurrentPage(1); };
 

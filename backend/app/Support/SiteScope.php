@@ -36,11 +36,15 @@ class SiteScope
     public static function applyToTenantTable(Builder $query, string $table, ?Site $site, ?string $siteNameColumn = null): Builder
     {
         if ($site && Schema::connection('tenant')->hasColumn($table, 'site_id')) {
-            return $query->where('site_id', $site->id);
+            return $query->where("{$table}.site_id", $site->id);
         }
 
         if ($site && $siteNameColumn && Schema::connection('tenant')->hasColumn($table, $siteNameColumn)) {
-            return $query->where($siteNameColumn, $site->name);
+            return $query->where("{$table}.{$siteNameColumn}", $site->name);
+        }
+
+        if ($site) {
+            return $query->whereRaw('1 = 0');
         }
 
         return $query;

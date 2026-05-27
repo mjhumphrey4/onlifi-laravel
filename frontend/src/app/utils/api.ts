@@ -208,10 +208,11 @@ export const testRouterConnection = (id: number) => post(`/routers/${id}/test-co
 export const getRouterActiveUsers = (id: number) => get(`/routers/${id}/active-users`);
 
 // ============ TRANSACTIONS (Tenant) ============
-export const getTransactions = (params?: { page?: number; status?: string; search?: string }) => {
+export const getTransactions = (params?: { page?: number; per_page?: number; status?: string; search?: string }) => {
   let endpoint = '/transactions';
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
+  if (params?.per_page) searchParams.set('per_page', String(params.per_page));
   if (params?.status) searchParams.set('status', params.status);
   if (params?.search) searchParams.set('search', params.search);
   if (searchParams.toString()) endpoint += `?${searchParams.toString()}`;
@@ -230,8 +231,14 @@ export const apiLogin = (username: string, password: string) => adminLogin(usern
 export const apiLogout = () => adminLogout();
 export const apiMe = () => adminMe();
 export const apiStats = () => getTenantDashboardStats();
-export const apiTransactions = (p: { page?: number; limit?: number; status?: string; search?: string }) =>
-  getTransactions({ page: p.page, status: p.status, search: p.search });
+export const apiTransactions = async (p: { page?: number; limit?: number; status?: string; search?: string }) => {
+  const data = await getTransactions({ page: p.page, per_page: p.limit, status: p.status, search: p.search });
+  return {
+    ...data,
+    transactions: data.transactions ?? data.data ?? [],
+    total: data.total ?? data.meta?.total ?? 0,
+  };
+};
 export const apiVoucherStock = () => getVoucherStatistics();
 
 // Performance analytics - placeholder until backend endpoint is implemented

@@ -1,158 +1,103 @@
-import { useState, useEffect } from 'react';
-import { Server, Plus, Copy, Download, RefreshCw, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle, Copy, Download, RefreshCw, Server } from 'lucide-react';
+import { useSite } from '../context/SiteContext';
 
 interface NasEntry {
   id: number;
   router_identifier: string;
   shortname: string;
-  description: string;
-  secret: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface RadiusConfig {
-  server: string;
-  auth_port: number;
-  acct_port: number;
-  nas_identifier: string;
+  description?: string;
   secret: string;
 }
 
 export function RadiusSetup() {
-  const [nasEntries, setNasEntries] = useState<NasEntry[]>([]);
+  const { selectedSite } = useSite();
+  const [nas, setNas] = useState<NasEntry | null>(null);
   const [radiusServer, setRadiusServer] = useState('');
   const [radiusPort, setRadiusPort] = useState(1812);
   const [radiusAcctPort, setRadiusAcctPort] = useState(1813);
-  const [loading, setLoading] = useState(true);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [newNasName, setNewNasName] = useState('');
-  const [newNasDescription, setNewNasDescription] = useState('');
-  const [selectedNas, setSelectedNas] = useState<NasEntry | null>(null);
   const [mikrotikScript, setMikrotikScript] = useState('');
   const [provisioningUrl, setProvisioningUrl] = useState('');
   const [fetchCommand, setFetchCommand] = useState('');
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState('');
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
     };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (selectedSite?.id) headers['X-Site-ID'] = String(selectedSite.id);
     return headers;
   };
 
-  const loadNasEntries = async () => {
+  const load = async () => {
+    if (!selectedSite?.id) {
+      setLoading(false);
+      setNas(null);
+      return;
+    }
+
+    setLoading(true);
     try {
       const response = await fetch('/api/nas', { headers: getAuthHeaders() });
-      if (!response.ok) throw new Error('Failed to fetch NAS entries');
       const data = await response.json();
-      setNasEntries(data.nas_entries || []);
       setRadiusServer(data.radius_server || '');
       setRadiusPort(data.radius_port || 1812);
       setRadiusAcctPort(data.radius_acct_port || 1813);
+
+      const entry = data.nas_entries?.[0];
+      if (!entry) {
+        setNas(null);
+        return;
+      }
+
+      setNas(entry);
+      const detailResponse = await fetch(`/api/nas/${entry.id}`, { headers: getAuthHeaders() });
+      const detailData = await detailResponse.json();
+      setMikrotikScript(detailData.mikrotik_script || '');
+      setProvisioningUrl(detailData.provisioning_url || '');
+      setFetchCommand(detailData.fetch_command || '');
     } catch (error) {
-      console.error('Error loading NAS entries:', error);
+      console.error('Error loading site router setup:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadNasEntries();
-  }, []);
+    setNas(null);
+    setMikrotikScript('');
+    setProvisioningUrl('');
+    setFetchCommand('');
+    load();
+  }, [selectedSite?.id]);
 
-  const handleAddNas = async () => {
-    if (!newNasName.trim()) {
-      alert('Please enter a router name');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/nas', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          name: newNasName,
-          description: newNasDescription,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to create NAS entry');
-      
-      const data = await response.json();
-      setMikrotikScript(data.mikrotik_script || '');
-      setProvisioningUrl(data.provisioning_url || '');
-      setFetchCommand(data.fetch_command || '');
-      setShowAddDialog(false);
-      setNewNasName('');
-      setNewNasDescription('');
-      await loadNasEntries();
-      if (data.nas) setSelectedNas(data.nas);
-    } catch (error) {
-      console.error('Error creating NAS entry:', error);
-      alert('Failed to create NAS entry');
-    }
+  const copyToClipboard = async (text: string, key: string) => {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(''), 1600);
   };
 
-  const handleDeleteNas = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this NAS entry? The router will no longer be able to authenticate users.')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/nas/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-
-      if (!response.ok) throw new Error('Failed to delete NAS entry');
-      await loadNasEntries();
-    } catch (error) {
-      console.error('Error deleting NAS entry:', error);
-      alert('Failed to delete NAS entry');
-    }
-  };
-
-  const handleViewScript = async (nas: NasEntry) => {
-    setSelectedNas(nas);
-    try {
-      const response = await fetch(`/api/nas/${nas.id}`, { headers: getAuthHeaders() });
-      if (!response.ok) throw new Error('Failed to fetch NAS details');
-      const data = await response.json();
-      setMikrotikScript(data.mikrotik_script || '');
-      setProvisioningUrl(data.provisioning_url || '');
-      setFetchCommand(data.fetch_command || '');
-    } catch (error) {
-      console.error('Error fetching NAS details:', error);
-    }
-  };
-
-  const handleDownloadScript = async (nas: NasEntry) => {
-    try {
-      const response = await fetch(`/api/nas/${nas.id}/mikrotik-script`, { headers: getAuthHeaders() });
-      if (!response.ok) throw new Error('Failed to download script');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `radius-config-${nas.shortname}.rsc`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Error downloading script:', error);
+  const handleDownloadScript = async () => {
+    if (!nas) return;
+    const response = await fetch(`/api/nas/${nas.id}/mikrotik-script`, { headers: getAuthHeaders() });
+    if (!response.ok) {
       alert('Failed to download script');
+      return;
     }
-  };
-
-  const copyToClipboard = (text: string, id: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `onlifi-${selectedSite?.slug || 'site'}-router.rsc`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
   if (loading) {
@@ -167,10 +112,9 @@ export function RadiusSetup() {
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl text-foreground mb-2">RADIUS Setup</h1>
-        <p className="text-sm text-muted-foreground">Generate one script that configures interfaces, DHCP, NAT, hotspot, RADIUS, and telemetry</p>
+        <p className="text-sm text-muted-foreground">The selected site has one router. Its RADIUS identity and setup script are prepared automatically.</p>
       </div>
 
-      {/* RADIUS Server Info */}
       <div className="bg-gradient-to-br from-primary to-primary/80 rounded-lg p-6 mb-6 text-primary-foreground">
         <div className="flex items-center gap-2 mb-4">
           <Server className="w-5 h-5" />
@@ -192,260 +136,52 @@ export function RadiusSetup() {
         </div>
       </div>
 
-      {/* Setup Instructions */}
-      <div className="bg-card border border-border rounded-lg p-6 mb-6">
-        <h3 className="text-lg font-semibold text-card-foreground mb-4">Quick Setup Guide</h3>
-        <ol className="space-y-3 text-sm text-muted-foreground">
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">1</span>
-            <span>Click <strong>"Add Router"</strong> below to register a new MikroTik router</span>
-          </li>
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">2</span>
-            <span>Copy the one-line fetch command or download the full provisioning script</span>
-          </li>
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">3</span>
-            <span>Paste the fetch command in MikroTik Terminal to download and run the setup immediately</span>
-          </li>
-          <li className="flex gap-3">
-            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">4</span>
-            <span>Your router is now connected! Users can authenticate with voucher codes</span>
-          </li>
-        </ol>
-      </div>
-
-      {/* NAS Entries List */}
-      <div className="bg-card border border-border rounded-lg p-6 mb-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-card-foreground">Registered Routers</h2>
-          <button
-            onClick={() => setShowAddDialog(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Router
-          </button>
+      {!nas ? (
+        <div className="bg-card border border-border rounded-lg p-10 text-center text-muted-foreground">
+          Select a site to prepare its router configuration.
         </div>
-
-        {nasEntries.length === 0 ? (
-          <div className="text-center py-12">
-            <Server className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground mb-4">No routers registered yet</p>
-            <button
-              onClick={() => setShowAddDialog(true)}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Register Your First Router
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {nasEntries.map((nas) => (
-              <div key={nas.id} className="bg-muted/50 rounded-lg p-4 border border-border">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-card-foreground mb-1">{nas.shortname}</h3>
-                    {nas.description && (
-                      <p className="text-sm text-muted-foreground mb-2">{nas.description}</p>
-                    )}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs text-muted-foreground">Router ID:</span>
-                      <code className="text-xs bg-background px-2 py-1 rounded font-mono">{nas.router_identifier}</code>
-                      <button
-                        onClick={() => copyToClipboard(nas.router_identifier, nas.id)}
-                        className="p-1 hover:bg-background rounded transition-colors"
-                        title="Copy Router ID"
-                      >
-                        {copiedId === nas.id ? (
-                          <CheckCircle className="w-3 h-3 text-emerald-500" />
-                        ) : (
-                          <Copy className="w-3 h-3 text-muted-foreground" />
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Created: {new Date(nas.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleViewScript(nas)}
-                      className="p-2 hover:bg-background rounded transition-colors"
-                      title="View Configuration"
-                    >
-                      <Server className="w-4 h-4 text-primary" />
-                    </button>
-                    <button
-                      onClick={() => handleDownloadScript(nas)}
-                      className="p-2 hover:bg-background rounded transition-colors"
-                      title="Download Script"
-                    >
-                      <Download className="w-4 h-4 text-blue-500" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteNas(nas.id)}
-                      className="p-2 hover:bg-background rounded transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Add NAS Dialog */}
-      {showAddDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-card-foreground mb-4">Register New Router</h3>
-            <div className="space-y-4">
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div>
-                <label className="block text-sm font-medium text-card-foreground mb-2">
-                  Router Name *
-                </label>
-                <input
-                  type="text"
-                  value={newNasName}
-                  onChange={(e) => setNewNasName(e.target.value)}
-                  placeholder="e.g., Main Office Router"
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-card-foreground mb-2">
-                  Description (Optional)
-                </label>
-                <textarea
-                  value={newNasDescription}
-                  onChange={(e) => setNewNasDescription(e.target.value)}
-                  placeholder="e.g., Router at main office location"
-                  rows={3}
-                  className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowAddDialog(false);
-                    setNewNasName('');
-                    setNewNasDescription('');
-                  }}
-                  className="flex-1 px-4 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddNas}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                  Register Router
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MikroTik Script Viewer */}
-      {selectedNas && mikrotikScript && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-lg p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-card-foreground">
-                Full Router Setup: {selectedNas.shortname}
-              </h3>
-              <button
-                onClick={() => {
-                  setSelectedNas(null);
-                  setMikrotikScript('');
-                  setProvisioningUrl('');
-                  setFetchCommand('');
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="bg-muted/50 rounded-lg p-4 mb-4 border border-border">
-              <div className="flex items-start gap-2 mb-2">
-                <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-muted-foreground">
-                  <p className="font-semibold text-card-foreground mb-1">Important:</p>
-                  <p>This single script configures LAN bridge, DHCP, NAT, hotspot, RADIUS, and live telemetry. Review interface defaults before running on a production router: WAN is <strong>ether1</strong>, LAN is <strong>onlifi-lan</strong>.</p>
-                </div>
-              </div>
-            </div>
-
-            {fetchCommand && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-card-foreground mb-2">
-                  One-line RouterOS fetch command
-                </label>
-                <div className="relative">
-                  <pre className="bg-background p-4 pr-20 rounded-lg overflow-x-auto text-xs font-mono border border-border">
-                    {fetchCommand}
-                  </pre>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(fetchCommand);
-                      alert('Fetch command copied to clipboard!');
-                    }}
-                    className="absolute top-2 right-2 px-3 py-1 bg-primary text-primary-foreground rounded text-xs flex items-center gap-1 hover:bg-primary/90"
-                  >
-                    <Copy className="w-3 h-3" />
-                    Copy
+                <h2 className="text-lg font-semibold text-card-foreground">{selectedSite?.name} Router</h2>
+                <p className="text-sm text-muted-foreground mt-1">Router identity is based on the active site and shared by hotspot, RADIUS, and provisioning.</p>
+                <div className="flex items-center gap-2 mt-3">
+                  <span className="text-xs text-muted-foreground">Router ID:</span>
+                  <code className="text-xs bg-background px-2 py-1 rounded font-mono break-all">{nas.router_identifier}</code>
+                  <button onClick={() => copyToClipboard(nas.router_identifier, 'id')} className="p-1 hover:bg-background rounded transition-colors" title="Copy Router ID">
+                    {copied === 'id' ? <CheckCircle className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3 text-muted-foreground" />}
                   </button>
                 </div>
-                {provisioningUrl && (
-                  <p className="text-xs text-muted-foreground mt-2 break-all">
-                    Script URL: {provisioningUrl}
-                  </p>
-                )}
               </div>
-            )}
-
-            <div className="relative">
-              <pre className="bg-background p-4 rounded-lg overflow-x-auto text-xs font-mono border border-border">
-                {mikrotikScript}
-              </pre>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(mikrotikScript);
-                  alert('Script copied to clipboard!');
-                }}
-                className="absolute top-2 right-2 px-3 py-1 bg-primary text-primary-foreground rounded text-xs flex items-center gap-1 hover:bg-primary/90"
-              >
-                <Copy className="w-3 h-3" />
-                Copy
-              </button>
-            </div>
-
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => handleDownloadScript(selectedNas)}
-                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-              >
+              <button onClick={handleDownloadScript} className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
                 <Download className="w-4 h-4" />
                 Download Script
               </button>
-              <button
-                onClick={() => {
-                  setSelectedNas(null);
-                  setMikrotikScript('');
-                  setProvisioningUrl('');
-                  setFetchCommand('');
-                }}
-                className="px-4 py-2 bg-muted text-muted-foreground rounded-lg hover:bg-muted/80 transition-colors"
-              >
-                Close
+            </div>
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-start gap-2 mb-4">
+              <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-muted-foreground">Run the one-line command on the MikroTik terminal. It configures LAN, DHCP, NAT, hotspot, RADIUS, SSTP VPN, captive files, and telemetry for this site.</p>
+            </div>
+
+            <label className="block text-sm font-medium text-card-foreground mb-2">One-line RouterOS command</label>
+            <div className="relative">
+              <pre className="bg-background p-4 pr-20 rounded-lg overflow-x-auto text-xs font-mono border border-border">{fetchCommand}</pre>
+              <button onClick={() => copyToClipboard(fetchCommand, 'command')} className="absolute top-2 right-2 px-3 py-1 bg-primary text-primary-foreground rounded text-xs flex items-center gap-1 hover:bg-primary/90">
+                <Copy className="w-3 h-3" />
+                {copied === 'command' ? 'Copied' : 'Copy'}
               </button>
             </div>
+            {provisioningUrl && <p className="text-xs text-muted-foreground mt-2 break-all">Script URL: {provisioningUrl}</p>}
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-card-foreground mb-3">Full Script Preview</h3>
+            <pre className="bg-background p-4 rounded-lg overflow-x-auto text-xs font-mono border border-border max-h-[560px] whitespace-pre-wrap">{mikrotikScript}</pre>
           </div>
         </div>
       )}

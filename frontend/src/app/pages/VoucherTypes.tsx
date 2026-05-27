@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Clock, DollarSign, Database, Zap } from 'lucide-react';
 import { listVoucherTypes, createVoucherType, updateVoucherType, deleteVoucherType } from '../utils/api';
+import { useSite } from '../context/SiteContext';
 
 interface VoucherType {
   id: number;
@@ -18,6 +19,7 @@ interface VoucherType {
 }
 
 export function VoucherTypes() {
+  const { selectedSite } = useSite();
   const [types, setTypes] = useState<VoucherType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -34,7 +36,7 @@ export function VoucherTypes() {
 
   useEffect(() => {
     loadTypes();
-  }, []);
+  }, [selectedSite?.id]);
 
   const loadTypes = async () => {
     try {

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Calendar, RefreshCw, Smartphone, Ticket, Trophy, Users, Medal } from 'lucide-react';
 import { apiPerformance } from '../utils/api';
-import { useAuth } from '../context/AuthContext';
+import { useSite } from '../context/SiteContext';
 
 interface DayData {
   date: string;
@@ -32,22 +32,20 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function AnalyzePerformance() {
-  const { userSites } = useAuth();
-  const sites = userSites();
+  const { selectedSite } = useSite();
 
   const [activeTab, setActiveTab] = useState<'mobile_money' | 'vouchers'>('mobile_money');
   const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
-  const [selectedSite, setSelectedSite] = useState(sites[0] ?? '');
   const [data, setData] = useState<DayData[]>([]);
   const [loading, setLoading] = useState(true);
   const [topSalesPoints, setTopSalesPoints] = useState<SalesPointStats[]>([]);
 
-  const load = useCallback(async (site: string, mode: 'week' | 'month') => {
-    if (!site) return;
+  const load = useCallback(async (siteName: string, mode: 'week' | 'month') => {
+    if (!siteName) return;
     setLoading(true);
     try {
       const days = mode === 'week' ? 7 : 30;
-      const res = await apiPerformance(site, days);
+      const res = await apiPerformance(siteName, days);
       setData(res.data ?? []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -61,6 +59,7 @@ export function AnalyzePerformance() {
         'Accept': 'application/json',
       };
       if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (selectedSite?.id) headers['X-Site-ID'] = String(selectedSite.id);
 
       const res = await fetch('/api/vouchers/statistics', { headers });
       if (res.ok) {
@@ -71,9 +70,9 @@ export function AnalyzePerformance() {
         setTopSalesPoints(sorted);
       }
     } catch (e) { console.error(e); }
-  }, []);
+  }, [selectedSite?.id]);
 
-  useEffect(() => { load(selectedSite, viewMode); }, [selectedSite, viewMode, load]);
+  useEffect(() => { load(selectedSite?.name || '', viewMode); }, [selectedSite?.id, selectedSite?.name, viewMode, load]);
   useEffect(() => { loadSalesPoints(); }, [loadSalesPoints]);
 
   const stats = useMemo(() => {
@@ -124,12 +123,6 @@ export function AnalyzePerformance() {
             </button>
           ))}
         </div>
-        {sites.length > 1 && (
-          <select value={selectedSite} onChange={(e) => setSelectedSite(e.target.value)}
-            className="px-4 py-2 bg-input-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm">
-            {sites.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        )}
       </div>
 
       {/* Tabs */}
@@ -259,7 +252,7 @@ export function AnalyzePerformance() {
       {/* Chart */}
       <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
         <h2 className="text-lg text-card-foreground mb-6">
-          {viewMode === 'week' ? 'Weekly' : 'Monthly'} Earnings — {selectedSite}
+          {viewMode === 'week' ? 'Weekly' : 'Monthly'} Earnings — {selectedSite?.name || 'Selected site'}
         </h2>
         {loading ? (
           <div className="flex items-center justify-center h-48">

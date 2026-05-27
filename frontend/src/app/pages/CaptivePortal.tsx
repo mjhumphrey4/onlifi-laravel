@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle, Loader2, Paintbrush, Save } from 'lucide-react';
 import { activateCaptivePortalTemplate, getCaptivePortalTemplates, saveCaptivePortalTemplate } from '../utils/api';
+import { useSite } from '../context/SiteContext';
 
 interface BaseTemplate {
   theme: string;
@@ -10,6 +11,7 @@ interface BaseTemplate {
 }
 
 export function CaptivePortal() {
+  const { selectedSite } = useSite();
   const [baseTemplates, setBaseTemplates] = useState<BaseTemplate[]>([]);
   const [savedTemplates, setSavedTemplates] = useState<any[]>([]);
   const [selected, setSelected] = useState<BaseTemplate | null>(null);
@@ -41,7 +43,7 @@ export function CaptivePortal() {
 
   useEffect(() => {
     fetchTemplates();
-  }, []);
+  }, [selectedSite?.id]);
 
   const chooseTemplate = (template: BaseTemplate) => {
     setSelected(template);

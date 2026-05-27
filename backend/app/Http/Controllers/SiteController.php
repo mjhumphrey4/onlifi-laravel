@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
@@ -58,6 +61,8 @@ class SiteController extends Controller
             'vpn_status' => 'pending',
         ]);
 
+        $this->ensureNasForSite($site);
+
         return response()->json([
             'message' => 'Site created successfully',
             'site' => $site,
@@ -102,6 +107,8 @@ class SiteController extends Controller
             $site->save();
         }
 
+        $this->ensureNasForSite($site->fresh());
+
         return response()->json([
             'message' => 'Site updated successfully',
             'site' => $site->fresh(),
@@ -138,5 +145,63 @@ class SiteController extends Controller
         return response()->json([
             'api_token' => $site->api_token,
         ]);
+    }
+
+    private function ensureNasForSite(Site $site): void
+    {
+        if (!Schema::connection('central')->hasTable('nas')) {
+            return;
+        }
+
+        $query = DB::connection('central')->table('nas')
+            ->where('tenant_id', $site->tenant_id);
+
+        if (Schema::connection('central')->hasColumn('nas', 'site_id')) {
+            $query->where('site_id', $site->id);
+        } else {
+            $query->where('shortname', $site->name);
+        }
+
+        $existing = $query->orderBy('id')->first();
+        if ($existing) {
+            $updates = [
+                'shortname' => $site->name,
+                'updated_at' => now(),
+            ];
+
+            if (Schema::connection('central')->hasColumn('nas', 'site_id')) {
+                $updates['site_id'] = $site->id;
+            }
+            if (empty($existing->provisioning_token)) {
+                $updates['provisioning_token'] = Str::random(64);
+            }
+            if (empty($existing->router_identifier)) {
+                $updates['router_identifier'] = $this->routerIdentifierForSite($site);
+            }
+
+            DB::connection('central')->table('nas')->where('id', $existing->id)->update($updates);
+            return;
+        }
+
+        DB::connection('central')->table('nas')->insert([
+            'nasname' => '0.0.0.0/0',
+            'router_identifier' => $this->routerIdentifierForSite($site),
+            'provisioning_token' => Str::random(64),
+            'shortname' => $site->name,
+            'type' => 'other',
+            'secret' => SystemSetting::get('radius_shared_secret', config('radius.shared_secret', 'onlifi_radius_secret')),
+            'server' => null,
+            'description' => $site->description,
+            'tenant_id' => $site->tenant_id,
+            ...(Schema::connection('central')->hasColumn('nas', 'site_id') ? ['site_id' => $site->id] : []),
+            'router_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function routerIdentifierForSite(Site $site): string
+    {
+        return 'ONLIFI-' . strtoupper(Str::slug($site->name ?: 'SITE', '-')) . '-' . now()->format('ymd') . '-' . strtoupper(Str::random(8));
     }
 }

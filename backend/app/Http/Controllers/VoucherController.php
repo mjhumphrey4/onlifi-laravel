@@ -142,9 +142,12 @@ class VoucherController extends Controller
         ]);
     }
 
-    public function getTypes()
+    public function getTypes(Request $request)
     {
         $query = VoucherType::query();
+        $site = SiteScope::selectedSite($request);
+        SiteScope::applyToTenantTable($query, 'voucher_types', $site);
+
         if (Schema::connection('tenant')->hasColumn('voucher_types', 'tenant_id') && app()->bound('tenant')) {
             $query->where(function ($q) {
                 $q->where('tenant_id', app('tenant')->id)->orWhereNull('tenant_id');
@@ -186,6 +189,7 @@ class VoucherController extends Controller
         if (Schema::connection('tenant')->hasColumn('voucher_types', 'tenant_id') && app()->bound('tenant')) {
             $data['tenant_id'] = app('tenant')->id;
         }
+        $data = SiteScope::withSiteColumn('voucher_types', $data, SiteScope::selectedSite($request));
 
         $type = VoucherType::create($data);
 
@@ -197,7 +201,9 @@ class VoucherController extends Controller
 
     public function updateType(Request $request, $id)
     {
-        $type = VoucherType::findOrFail($id);
+        $query = VoucherType::query();
+        SiteScope::applyToTenantTable($query, 'voucher_types', SiteScope::selectedSite($request));
+        $type = $query->findOrFail($id);
 
         $validator = Validator::make($request->all(), [
             'type_name' => 'sometimes|string|max:100',
@@ -227,9 +233,11 @@ class VoucherController extends Controller
         ]);
     }
 
-    public function destroyType($id)
+    public function destroyType(Request $request, $id)
     {
-        $type = VoucherType::findOrFail($id);
+        $query = VoucherType::query();
+        SiteScope::applyToTenantTable($query, 'voucher_types', SiteScope::selectedSite($request));
+        $type = $query->findOrFail($id);
         $type->delete();
 
         return response()->json([

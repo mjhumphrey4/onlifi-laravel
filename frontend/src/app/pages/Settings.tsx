@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Download, Server, Copy, Check, Settings as SettingsIcon, RefreshCw, Building2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 import { TwoFactorPanel } from '../components/TwoFactorPanel';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://api.onlifi.net/api';
@@ -13,10 +12,7 @@ interface Site {
 }
 
 export function Settings() {
-  const { user } = useAuth();
   const [copied, setCopied] = useState<string | null>(null);
-  const [routers, setRouters] = useState<Array<{id: number; name: string; site_id?: number}>>([]);
-  const [selectedRouter, setSelectedRouter] = useState<string>('');
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
   const [siteToken, setSiteToken] = useState<string>('');
@@ -28,7 +24,6 @@ export function Settings() {
 
   useEffect(() => {
     loadSites();
-    loadRouters();
   }, []);
 
   useEffect(() => {
@@ -106,24 +101,6 @@ export function Settings() {
     }
   };
 
-  const loadRouters = async () => {
-    try {
-      const headers = getAuthHeaders();
-      const response = await fetch(`${API_BASE}/routers`, { headers });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const routerList = data.routers || data.data || data || [];
-        setRouters(routerList);
-        if (routerList.length > 0) {
-          setSelectedRouter(routerList[0].name);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load routers:', error);
-    }
-  };
-
   const copyToClipboard = async (text: string, field: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -138,13 +115,13 @@ export function Settings() {
 # Onlifi Router Telemetry Script (RouterOS)
 # ============================================
 # Site: ${selectedSite?.name || 'Default'}
-# Router: ${selectedRouter || 'YOUR_ROUTER'}
+# Router: ${selectedSite?.name || 'YOUR_SITE_ROUTER'}
 # Generated: ${new Date().toISOString()}
 
 #---------- CONFIGURATION ----------
 :local dashboardUrl "${telemetryUrl}"
 :local fetchMode "${telemetryUrl.startsWith('https://') ? 'https' : 'http'}"
-:local routerName "${selectedRouter || '[system identity get name]'}"
+:local routerName "${selectedSite?.name || '[system identity get name]'}"
 :local apiToken "${siteToken || 'TOKEN_NOT_LOADED'}"
 :local siteSlug "${selectedSite?.slug || 'default'}"
 :local schedulerName "onlifi-telemetry-${selectedSite?.slug || 'default'}"
@@ -472,23 +449,12 @@ export function Settings() {
             </div>
           )}
 
-          {/* Router Selection */}
-          {routers.length > 0 && (
+          {selectedSite && (
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-              <h3 className="font-medium text-blue-600 mb-2">Select Router</h3>
-              <select
-                value={selectedRouter}
-                onChange={(e) => setSelectedRouter(e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-              >
-                {routers.map((router) => (
-                  <option key={router.id} value={router.name}>
-                    {router.name}
-                  </option>
-                ))}
-              </select>
+              <h3 className="font-medium text-blue-600 mb-2">Site Router</h3>
+              <p className="text-sm text-card-foreground">{selectedSite.name}</p>
               <p className="text-xs text-blue-600/80 mt-2">
-                The script below is pre-configured for this router. Just copy and paste!
+                A site has exactly one router, and the script below is pre-configured for it.
               </p>
             </div>
           )}
@@ -553,7 +519,7 @@ export function Settings() {
             <h3 className="font-medium text-green-600 mb-2">✅ Ready to Use</h3>
             <ul className="list-disc list-inside space-y-1 text-sm text-green-600/80">
               <li>Script is pre-configured with your unique API token</li>
-              <li>Router identity is set to: <code className="bg-green-500/10 px-1 py-0.5 rounded font-semibold">{selectedRouter || 'Select a router above'}</code></li>
+              <li>Router identity is set to: <code className="bg-green-500/10 px-1 py-0.5 rounded font-semibold">{selectedSite?.name || 'Select a site above'}</code></li>
               <li>No manual editing required - just copy and paste!</li>
               <li>Data will appear on your dashboard within 30 seconds</li>
               <li>Collects: CPU, memory, uptime, active clients, network bandwidth</li>

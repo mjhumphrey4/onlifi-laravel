@@ -31,6 +31,10 @@ class NasController extends Controller
         }
         
         $site = SiteScope::selectedSite($request);
+        if ($site) {
+            $this->ensureNasForSite($tenant, $site);
+        }
+
         $nasEntries = DB::connection('central')->table('nas')
             ->where('tenant_id', $tenant->id)
             ->when($site && Schema::connection('central')->hasColumn('nas', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
@@ -70,52 +74,28 @@ class NasController extends Controller
         
         $site = SiteScope::selectedSite($request);
         if (!$site) {
-            $site = $this->getOrCreateSiteByName($request->input('name'), $tenant);
+            return response()->json(['error' => 'Select a site before provisioning its router'], 422);
         }
 
-        // Generate unique router identifier based on the active site, not the tenant id.
-        $routerIdentifier = $this->generateRouterIdentifier($tenant, $site);
-        
-        // Get shared RADIUS secret (or generate one per tenant)
-        $radiusSecret = $tenant->radius_secret ?? config('radius.shared_secret', 'onlifi_radius_secret');
-        
-        // Insert NAS entry
-        $provisioningToken = Str::random(64);
-        $nasId = DB::connection('central')->table('nas')->insertGetId([
-            'nasname' => '0.0.0.0/0',  // Accept from any IP (we use NAS-Identifier)
-            'router_identifier' => $routerIdentifier,
-            'provisioning_token' => $provisioningToken,
-            'shortname' => $request->input('name'),
-            'type' => 'other',
-            'secret' => $radiusSecret,
-            'server' => null,  // Use default virtual server
-            'description' => $request->input('description'),
-            'tenant_id' => $tenant->id,
-            ...($site && Schema::connection('central')->hasColumn('nas', 'site_id') ? ['site_id' => $site->id] : []),
-            'router_id' => $request->input('router_id'),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        
-        $nas = DB::connection('central')->table('nas')->where('id', $nasId)->first();
+        $nas = $this->ensureNasForSite($tenant, $site, $request->input('description'));
         $mikrotikScript = $this->generateFullProvisioningScript($nas);
         
         return response()->json([
-            'message' => 'Router registered successfully',
-            'nas_id' => $nasId,
+            'message' => 'Site router provisioning endpoint is ready',
+            'nas_id' => $nas->id,
             'nas' => $nas,
-            'router_identifier' => $routerIdentifier,
-            'provisioning_url' => $this->provisioningUrl($provisioningToken),
-            'fetch_command' => $this->fetchCommand($provisioningToken),
+            'router_identifier' => $nas->router_identifier,
+            'provisioning_url' => $this->provisioningUrl($nas->provisioning_token),
+            'fetch_command' => $this->fetchCommand($nas->provisioning_token),
             'radius_config' => [
                 'server' => $this->radiusServerIp(),
                 'auth_port' => $this->radiusAuthPort(),
                 'acct_port' => $this->radiusAcctPort(),
-                'secret' => $radiusSecret,
-                'nas_identifier' => $routerIdentifier,
+                'secret' => $nas->secret,
+                'nas_identifier' => $nas->router_identifier,
             ],
             'mikrotik_script' => $mikrotikScript,
-        ], 201);
+        ], 200);
     }
     
     /**
@@ -197,25 +177,70 @@ class NasController extends Controller
      */
     public function destroy(Request $request, $id)
     {
-        $tenant = $this->getTenant($request);
-        if (!$tenant) {
-            return response()->json(['error' => 'Tenant not found'], 404);
-        }
-        
-        $deleted = DB::connection('central')->table('nas')
-            ->where('id', $id)
-            ->where('tenant_id', $tenant->id)
-            ->delete();
-        
-        if (!$deleted) {
-            return response()->json(['error' => 'NAS entry not found'], 404);
-        }
-        
         return response()->json([
-            'message' => 'NAS entry deleted successfully',
-        ]);
+            'error' => 'Site routers are managed automatically',
+            'message' => 'Delete or deactivate the site instead of deleting its router record.',
+        ], 400);
     }
-    
+
+    private function ensureNasForSite($tenant, Site $site, ?string $description = null)
+    {
+        $query = DB::connection('central')->table('nas')
+            ->where('tenant_id', $tenant->id);
+
+        if (Schema::connection('central')->hasColumn('nas', 'site_id')) {
+            $query->where('site_id', $site->id);
+        } else {
+            $query->where('shortname', $site->name);
+        }
+
+        $nas = $query->orderBy('id')->first();
+        if ($nas) {
+            $updates = [];
+            if ($nas->shortname !== $site->name) {
+                $updates['shortname'] = $site->name;
+            }
+            if (Schema::connection('central')->hasColumn('nas', 'site_id') && empty($nas->site_id)) {
+                $updates['site_id'] = $site->id;
+            }
+            if (empty($nas->provisioning_token)) {
+                $updates['provisioning_token'] = Str::random(64);
+            }
+            if (empty($nas->router_identifier)) {
+                $updates['router_identifier'] = $this->generateRouterIdentifier($tenant, $site);
+            }
+            if ($description !== null) {
+                $updates['description'] = $description;
+            }
+
+            if ($updates) {
+                $updates['updated_at'] = now();
+                DB::connection('central')->table('nas')->where('id', $nas->id)->update($updates);
+                $nas = DB::connection('central')->table('nas')->where('id', $nas->id)->first();
+            }
+
+            return $this->ensureProvisioningToken($nas);
+        }
+
+        $nasId = DB::connection('central')->table('nas')->insertGetId([
+            'nasname' => '0.0.0.0/0',
+            'router_identifier' => $this->generateRouterIdentifier($tenant, $site),
+            'provisioning_token' => Str::random(64),
+            'shortname' => $site->name,
+            'type' => 'other',
+            'secret' => $tenant->radius_secret ?? config('radius.shared_secret', 'onlifi_radius_secret'),
+            'server' => null,
+            'description' => $description ?: $site->description,
+            'tenant_id' => $tenant->id,
+            ...(Schema::connection('central')->hasColumn('nas', 'site_id') ? ['site_id' => $site->id] : []),
+            'router_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return DB::connection('central')->table('nas')->where('id', $nasId)->first();
+    }
+
     /**
      * Regenerate router identifier for a NAS
      */
