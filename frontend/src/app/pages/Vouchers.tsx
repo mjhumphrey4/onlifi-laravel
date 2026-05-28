@@ -4,6 +4,7 @@ import { CreateVoucherDialog } from '../components/CreateVoucherDialog';
 import { VoucherGroupCard } from '../components/VoucherGroupCard';
 import { SalesPointsDialog } from '../components/SalesPointsDialog';
 import { useSite } from '../context/SiteContext';
+import { API_BASE, getVoucherGroups, getVoucherStatistics } from '../utils/api';
 
 interface VoucherGroup {
   id: number;
@@ -63,38 +64,23 @@ export function Vouchers() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const siteId = localStorage.getItem('selected_site_id');
-      if (siteId) headers['X-Site-ID'] = siteId;
-
-      const [groupsRes, statsRes] = await Promise.all([
-        fetch('/api/vouchers/groups', { headers }),
-        fetch('/api/vouchers/statistics', { headers })
+      const [groupsData, statsData] = await Promise.all([
+        getVoucherGroups(),
+        getVoucherStatistics(),
       ]);
 
-      if (groupsRes.ok) {
-        const groupsData = await groupsRes.json();
-        setGroups(Array.isArray(groupsData) ? groupsData : groupsData.groups || []);
-      }
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        setStats({
-          overall: {
-            total_vouchers: statsData.total_vouchers || 0,
-            unused: statsData.unused_vouchers || 0,
-            used: statsData.used_vouchers || 0,
-            expired: statsData.expired_vouchers || 0,
-            total_revenue: statsData.total_revenue || 0,
-          },
-          daily: statsData.daily || [],
-          by_sales_point: statsData.by_sales_point || [],
-        });
-      }
+      setGroups(Array.isArray(groupsData) ? groupsData : groupsData.groups || []);
+      setStats({
+        overall: {
+          total_vouchers: statsData.total_vouchers || 0,
+          unused: statsData.unused_vouchers || 0,
+          used: statsData.used_vouchers || 0,
+          expired: statsData.expired_vouchers || 0,
+          total_revenue: statsData.total_revenue || 0,
+        },
+        daily: statsData.daily || [],
+        by_sales_point: statsData.by_sales_point || [],
+      });
     } catch (error) {
       console.error('Failed to load vouchers:', error);
     } finally {
@@ -125,9 +111,10 @@ export function Vouchers() {
       const siteId = localStorage.getItem('selected_site_id');
       if (siteId) headers['X-Site-ID'] = siteId;
 
-      const res = await fetch(`/api/vouchers/groups/${groupId}`, {
+      const res = await fetch(`${API_BASE}/vouchers/groups/${groupId}`, {
         method: 'DELETE',
         headers,
+        credentials: 'include',
       });
 
       if (res.ok) {

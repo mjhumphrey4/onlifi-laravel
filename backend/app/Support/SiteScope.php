@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Site;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class SiteScope
@@ -26,6 +27,62 @@ class SiteScope
         return Site::where('tenant_id', $tenantId)
             ->where('id', (int) $siteId)
             ->first();
+    }
+
+    public static function defaultSite(Request $request): ?Site
+    {
+        $tenantId = $request->user()?->tenant_id ?? (app()->bound('tenant') ? app('tenant')->id : null);
+
+        if (!$tenantId) {
+            return null;
+        }
+
+        return Site::where('tenant_id', $tenantId)
+            ->orderByDesc('is_active')
+            ->orderBy('id')
+            ->first();
+    }
+
+    public static function selectedOrDefaultSite(Request $request): ?Site
+    {
+        return self::selectedSite($request) ?: self::defaultSite($request);
+    }
+
+    public static function backfillLegacyTenantSite(?Site $site, array $tables): void
+    {
+        if (!$site) {
+            return;
+        }
+
+        foreach ($tables as $table) {
+            if (!Schema::connection('tenant')->hasTable($table) || !Schema::connection('tenant')->hasColumn($table, 'site_id')) {
+                continue;
+            }
+
+            DB::connection('tenant')
+                ->table($table)
+                ->whereNull('site_id')
+                ->update(['site_id' => $site->id]);
+        }
+    }
+
+    public static function backfillLegacyCentralSite(?Site $site, array $tables): void
+    {
+        if (!$site) {
+            return;
+        }
+
+        foreach ($tables as $table) {
+            if (!Schema::connection('central')->hasTable($table) || !Schema::connection('central')->hasColumn($table, 'site_id')) {
+                continue;
+            }
+
+            DB::connection('central')
+                ->table($table)
+                ->where('tenant_id', $site->tenant_id)
+                ->whereNull('site_id')
+                ->update(['site_id' => $site->id]);
+        }
     }
 
     public static function tenantId(): ?int

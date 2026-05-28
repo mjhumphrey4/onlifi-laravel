@@ -21,10 +21,26 @@ class VoucherController extends Controller
         $this->voucherService = $voucherService;
     }
 
+    private function resolveVoucherSite(Request $request)
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+        $legacySite = SiteScope::defaultSite($request);
+
+        SiteScope::backfillLegacyTenantSite($legacySite, [
+            'voucher_types',
+            'voucher_sales_points',
+            'voucher_groups',
+            'vouchers',
+            'transactions',
+        ]);
+
+        return $site;
+    }
+
     public function index(Request $request)
     {
         $query = Voucher::with(['group', 'salesPoint']);
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveVoucherSite($request);
         if (!$site) {
             return response()->json([
                 'data' => [],
@@ -51,7 +67,7 @@ class VoucherController extends Controller
 
     public function show($id)
     {
-        $site = SiteScope::selectedSite(request());
+        $site = $this->resolveVoucherSite(request());
         if (!$site) {
             abort(404);
         }
@@ -90,7 +106,7 @@ class VoucherController extends Controller
 
         try {
             $data = $request->all();
-            $site = SiteScope::selectedSite($request);
+            $site = $this->resolveVoucherSite($request);
             if (!$site) {
                 return response()->json([
                     'error' => 'Site required',
@@ -190,7 +206,7 @@ class VoucherController extends Controller
     public function getTypes(Request $request)
     {
         $query = VoucherType::query();
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveVoucherSite($request);
         if (!$site) {
             return response()->json(['types' => []]);
         }
@@ -234,7 +250,7 @@ class VoucherController extends Controller
             'is_active' => true,
         ];
 
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveVoucherSite($request);
         if (!$site) {
             return response()->json([
                 'error' => 'Site required',
@@ -264,7 +280,7 @@ class VoucherController extends Controller
     public function updateType(Request $request, $id)
     {
         $query = VoucherType::query();
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveVoucherSite($request);
         if (!$site) {
             abort(404);
         }
@@ -302,7 +318,7 @@ class VoucherController extends Controller
     public function destroyType(Request $request, $id)
     {
         $query = VoucherType::query();
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveVoucherSite($request);
         if (!$site) {
             abort(404);
         }
@@ -317,7 +333,7 @@ class VoucherController extends Controller
 
     public function getGroups(Request $request)
     {
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveVoucherSite($request);
         if (!$site) {
             return response()->json([]);
         }
@@ -355,7 +371,7 @@ class VoucherController extends Controller
 
     public function statistics(Request $request)
     {
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveVoucherSite($request);
         if (!$site) {
             return response()->json([
                 'total_vouchers' => 0,

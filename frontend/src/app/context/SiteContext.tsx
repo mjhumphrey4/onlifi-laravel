@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
+import { API_BASE } from '../utils/api';
 
 export interface Site {
   id: number;
@@ -76,8 +77,9 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     setLoadingSites(true);
 
     try {
-      const response = await fetch('/api/sites', {
+      const response = await fetch(`${API_BASE}/sites`, {
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
 
       if (!response.ok) {

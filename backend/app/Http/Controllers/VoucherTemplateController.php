@@ -10,10 +10,17 @@ use Illuminate\Support\Facades\Validator;
 
 class VoucherTemplateController extends Controller
 {
+    private function resolveTemplateSite(Request $request)
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+        SiteScope::backfillLegacyCentralSite(SiteScope::defaultSite($request), ['voucher_templates']);
+        return $site;
+    }
+
     public function index(Request $request)
     {
         $tenant = app('tenant');
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveTemplateSite($request);
         
         $templates = VoucherTemplate::where('tenant_id', $tenant->id)
             ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
@@ -58,7 +65,7 @@ class VoucherTemplateController extends Controller
         }
 
         $tenant = app('tenant');
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveTemplateSite($request);
 
         // If this is set as default, unset other defaults
         if ($request->is_default) {
@@ -88,7 +95,7 @@ class VoucherTemplateController extends Controller
     public function show(Request $request, $id)
     {
         $tenant = app('tenant');
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveTemplateSite($request);
         
         $template = VoucherTemplate::where('tenant_id', $tenant->id)
             ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
@@ -100,7 +107,7 @@ class VoucherTemplateController extends Controller
     public function update(Request $request, $id)
     {
         $tenant = app('tenant');
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveTemplateSite($request);
         
         $template = VoucherTemplate::where('tenant_id', $tenant->id)
             ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
@@ -161,7 +168,7 @@ class VoucherTemplateController extends Controller
     public function destroy(Request $request, $id)
     {
         $tenant = app('tenant');
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveTemplateSite($request);
         
         $template = VoucherTemplate::where('tenant_id', $tenant->id)
             ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
@@ -177,7 +184,7 @@ class VoucherTemplateController extends Controller
     public function setDefault(Request $request, $id)
     {
         $tenant = app('tenant');
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveTemplateSite($request);
         
         // Unset all defaults
         VoucherTemplate::where('tenant_id', $tenant->id)
@@ -200,7 +207,7 @@ class VoucherTemplateController extends Controller
     public function getDefault(Request $request)
     {
         $tenant = app('tenant');
-        $site = SiteScope::selectedSite($request);
+        $site = $this->resolveTemplateSite($request);
         
         $templateQuery = VoucherTemplate::where('tenant_id', $tenant->id)
             ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id));

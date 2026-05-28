@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Edit2, Trash2, Printer, Star, Eye, Palette, Layout, FileText } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
+import { API_BASE } from '../utils/api';
 
 interface VoucherTemplate {
   id: number;
@@ -198,7 +199,10 @@ export function VoucherTemplates() {
   const loadTemplates = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/voucher-templates', { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE}/voucher-templates`, {
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
         setTemplates(data.templates || []);
@@ -215,12 +219,13 @@ export function VoucherTemplates() {
     
     try {
       const url = editingTemplate 
-        ? `/api/voucher-templates/${editingTemplate.id}`
-        : '/api/voucher-templates';
+        ? `${API_BASE}/voucher-templates/${editingTemplate.id}`
+        : `${API_BASE}/voucher-templates`;
       
       const response = await fetch(url, {
         method: editingTemplate ? 'PUT' : 'POST',
         headers: getAuthHeaders(),
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
 
@@ -270,9 +275,10 @@ export function VoucherTemplates() {
     if (!confirm('Are you sure you want to delete this template?')) return;
 
     try {
-      const response = await fetch(`/api/voucher-templates/${id}`, {
+      const response = await fetch(`${API_BASE}/voucher-templates/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -288,9 +294,10 @@ export function VoucherTemplates() {
 
   const handleSetDefault = async (id: number) => {
     try {
-      const response = await fetch(`/api/voucher-templates/${id}/set-default`, {
+      const response = await fetch(`${API_BASE}/voucher-templates/${id}/set-default`, {
         method: 'POST',
         headers: getAuthHeaders(),
+        credentials: 'include',
       });
 
       if (response.ok) {

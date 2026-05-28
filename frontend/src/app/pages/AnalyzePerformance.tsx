@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Calendar, RefreshCw, Smartphone, Ticket, Trophy, Users, Medal } from 'lucide-react';
-import { apiPerformance } from '../utils/api';
+import { getVoucherStatistics, apiPerformance } from '../utils/api';
 import { useSite } from '../context/SiteContext';
 
 interface DayData {
@@ -53,22 +53,11 @@ export function AnalyzePerformance() {
 
   const loadSalesPoints = useCallback(async () => {
     try {
-      const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      if (selectedSite?.id) headers['X-Site-ID'] = String(selectedSite.id);
-
-      const res = await fetch('/api/vouchers/statistics', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        const salesPoints = data.by_sales_point || [];
-        // Sort by revenue descending and take top 5
-        const sorted = [...salesPoints].sort((a: SalesPointStats, b: SalesPointStats) => b.revenue - a.revenue).slice(0, 5);
-        setTopSalesPoints(sorted);
-      }
+      const data = await getVoucherStatistics();
+      const salesPoints = data.by_sales_point || [];
+      // Sort by revenue descending and take top 5
+      const sorted = [...salesPoints].sort((a: SalesPointStats, b: SalesPointStats) => b.revenue - a.revenue).slice(0, 5);
+      setTopSalesPoints(sorted);
     } catch (e) { console.error(e); }
   }, [selectedSite?.id]);
 

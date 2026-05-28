@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
+import { API_BASE } from '../utils/api';
 import { BillingGate } from './BillingGate';
 
 interface Announcement {
@@ -108,13 +109,14 @@ export function Layout() {
     setSavingSite(true);
     try {
       const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
-      const response = await fetch('/api/sites', {
+      const response = await fetch(`${API_BASE}/sites`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: newSiteName.trim(),
           description: newSiteDescription.trim() || null,
