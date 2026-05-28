@@ -34,6 +34,8 @@ class SiteScope
 
     public static function defaultSite(Request $request): ?Site
     {
+        self::ensureCentralSitesTable();
+
         $tenantId = $request->user()?->tenant_id ?? (app()->bound('tenant') ? app('tenant')->id : null);
 
         if (!$tenantId) {
@@ -55,7 +57,7 @@ class SiteScope
         return Site::create([
             'tenant_id' => $tenantId,
             'name' => $name,
-            'slug' => Str::slug($name),
+            'slug' => Site::uniqueSlug($name),
             'description' => 'Default site created for existing tenant data.',
             'is_active' => true,
             'vpn_username' => Str::slug($name),
@@ -119,6 +121,36 @@ class SiteScope
     public static function ensureCentralSiteColumns(array $tables): void
     {
         self::ensureSiteColumns('central', $tables);
+    }
+
+    public static function ensureCentralSitesTable(): void
+    {
+        if (Schema::connection('central')->hasTable('sites')) {
+            return;
+        }
+
+        Schema::connection('central')->create('sites', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('tenant_id')->index();
+            $table->string('name', 100);
+            $table->string('slug', 100);
+            $table->string('description', 255)->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->string('api_token', 64)->unique();
+            $table->string('vpn_private_ip')->nullable();
+            $table->string('vpn_username')->nullable();
+            $table->string('vpn_password')->nullable();
+            $table->string('vpn_public_host')->nullable();
+            $table->unsignedInteger('vpn_public_port')->nullable();
+            $table->string('vpn_status')->default('pending');
+            $table->timestamp('vpn_last_seen_at')->nullable();
+            $table->unsignedInteger('router_api_port')->nullable();
+            $table->text('remote_access_notes')->nullable();
+            $table->timestamps();
+
+            $table->unique(['tenant_id', 'slug']);
+            $table->index(['tenant_id', 'is_active']);
+        });
     }
 
     private static function ensureSiteColumns(string $connection, array $tables): void

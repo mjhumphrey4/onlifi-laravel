@@ -60,6 +60,7 @@ class TenantController extends Controller
             'admin_email' => 'required|email|unique:tenant_users,email',
             'admin_name' => 'required|string',
             'admin_password' => 'required|string|min:8',
+            'site_name' => 'required|string|max:100',
             'settings' => 'nullable|array',
         ]);
 

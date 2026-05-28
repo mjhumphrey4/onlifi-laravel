@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Site;
 use App\Models\SystemSetting;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -15,6 +16,8 @@ class SiteController extends Controller
 {
     public function index(Request $request)
     {
+        SiteScope::ensureCentralSitesTable();
+
         $user = $request->user();
         $query = Site::query();
 
@@ -23,9 +26,14 @@ class SiteController extends Controller
             $query->where('tenant_id', $user->tenant_id);
         }
 
-        $sites = $query->orderBy('name')->get();
+        $sites = $query->orderBy('id')->get();
+        if ($sites->isEmpty() && $user && $user->tenant_id) {
+            SiteScope::defaultSite($request);
+            $sites = $query->orderBy('id')->get();
+        }
+
         $sites->each(fn (Site $site) => $this->ensureNasForSite($site));
-        $sites = $query->orderBy('name')->get();
+        $sites = $query->orderBy('id')->get();
 
         return response()->json([
             'sites' => $sites,
@@ -34,6 +42,8 @@ class SiteController extends Controller
 
     public function store(Request $request)
     {
+        SiteScope::ensureCentralSitesTable();
+
         $validator = Validator::make($request->all(), [
             'name' => [
                 'required',
@@ -54,7 +64,7 @@ class SiteController extends Controller
         $site = Site::create([
             'tenant_id' => $request->user()?->tenant_id,
             'name' => $request->name,
-            'slug' => Str::slug($request->name),
+            'slug' => Site::uniqueSlug($request->name),
             'description' => $request->description,
             'is_active' => true,
             'vpn_username' => Str::slug($request->name),
@@ -105,7 +115,7 @@ class SiteController extends Controller
         $site->update($request->only(['name', 'description', 'is_active']));
 
         if ($request->has('name')) {
-            $site->slug = Str::slug($request->name);
+            $site->slug = Site::uniqueSlug($request->name, $site->id);
             $site->save();
         }
 

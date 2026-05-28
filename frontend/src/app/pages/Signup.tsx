@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { User, Mail, Lock, Phone, UserPlus, CheckCircle, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Building2, User, Mail, Lock, Phone, UserPlus, CheckCircle, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
 interface SignupFormData {
   username: string;
@@ -9,6 +10,7 @@ interface SignupFormData {
   confirmPassword: string;
   full_name: string;
   phone: string;
+  site_name: string;
 }
 
 interface ValidationErrors {
@@ -17,6 +19,7 @@ interface ValidationErrors {
   password?: string;
   confirmPassword?: string;
   full_name?: string;
+  site_name?: string;
 }
 
 export function Signup() {
@@ -28,6 +31,7 @@ export function Signup() {
     confirmPassword: '',
     full_name: '',
     phone: '',
+    site_name: '',
   });
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [loading, setLoading] = useState(false);
@@ -55,6 +59,10 @@ export function Signup() {
 
     if (!formData.full_name.trim()) {
       newErrors.full_name = 'Full name is required';
+    }
+
+    if (!formData.site_name.trim()) {
+      newErrors.site_name = 'Default site name is required';
     }
 
     if (!formData.password) {
@@ -97,12 +105,13 @@ export function Signup() {
     setApiError('');
 
     try {
-      const response = await fetch('/api/tenant/signup', {
+      const response = await fetch(`${API_BASE}/tenant/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.username,
           domain: `${formData.username}.onlifi.local`,
+          site_name: formData.site_name,
           admin_email: formData.email,
           admin_name: formData.full_name,
           admin_password: formData.password,
@@ -273,6 +282,29 @@ export function Signup() {
                 placeholder="+256 700 000 000"
               />
             </div>
+          </div>
+
+          {/* Default Site */}
+          <div>
+            <label className="block text-sm font-medium text-card-foreground mb-2">
+              Default Site Name *
+            </label>
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <input
+                type="text"
+                name="site_name"
+                value={formData.site_name}
+                onChange={handleChange}
+                className={`w-full pl-11 pr-4 py-3 bg-background border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all ${
+                  errors.site_name ? 'border-destructive' : 'border-border'
+                }`}
+                placeholder="Main Branch"
+              />
+            </div>
+            {errors.site_name && (
+              <p className="text-xs text-destructive mt-1">{errors.site_name}</p>
+            )}
           </div>
 
           {/* Password */}

@@ -43,12 +43,30 @@ class Site extends Model
 
         static::creating(function ($site) {
             if (empty($site->slug)) {
-                $site->slug = Str::slug($site->name);
+                $site->slug = self::uniqueSlug($site->name);
             }
             if (empty($site->api_token)) {
                 $site->api_token = Str::random(64);
             }
         });
+    }
+
+    public static function uniqueSlug(string $name, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($name) ?: 'site';
+        $slug = $base;
+        $counter = 1;
+
+        while (
+            self::where('slug', $slug)
+                ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = "{$base}-{$counter}";
+            $counter++;
+        }
+
+        return $slug;
     }
 
     public function routers()

@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Tenant;
 use App\Models\TenantUser;
 use App\Models\SystemSetting;
+use App\Models\Site;
+use App\Support\SiteScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -52,6 +54,8 @@ class TenantService
                 ]);
             }
 
+            $this->createDefaultSite($tenant, $data['site_name'] ?? $data['name']);
+
             if ($autoApprove) {
                 $tenant->provisionDatabase();
                 $tenant->runMigrations();
@@ -64,6 +68,32 @@ class TenantService
             DB::connection('central')->rollBack();
             throw $e;
         }
+    }
+
+    private function createDefaultSite(Tenant $tenant, string $siteName): Site
+    {
+        SiteScope::ensureCentralSitesTable();
+
+        $name = trim($siteName) ?: $tenant->name;
+        $existing = Site::where('tenant_id', $tenant->id)->orderBy('id')->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $slug = Site::uniqueSlug($name ?: "site-{$tenant->id}");
+
+        return Site::create([
+            'tenant_id' => $tenant->id,
+            'slug' => $slug,
+            'name' => $name,
+            'description' => 'Default site created during signup.',
+            'is_active' => true,
+            'api_token' => Str::random(64),
+            'vpn_username' => $slug,
+            'vpn_password' => Str::random(24),
+            'vpn_public_host' => 'vpn.onlifi.net',
+            'vpn_status' => 'pending',
+        ]);
     }
 
     public function deleteTenant(Tenant $tenant): bool
