@@ -24,6 +24,8 @@ class SiteController extends Controller
         }
 
         $sites = $query->orderBy('name')->get();
+        $sites->each(fn (Site $site) => $this->ensureNasForSite($site));
+        $sites = $query->orderBy('name')->get();
 
         return response()->json([
             'sites' => $sites,
@@ -175,8 +177,9 @@ class SiteController extends Controller
             if (empty($existing->provisioning_token)) {
                 $updates['provisioning_token'] = Str::random(64);
             }
-            if (empty($existing->router_identifier)) {
-                $updates['router_identifier'] = $this->routerIdentifierForSite($site);
+            $routerIdentifier = $this->routerIdentifierForSite($site, $existing->id);
+            if ($existing->router_identifier !== $routerIdentifier) {
+                $updates['router_identifier'] = $routerIdentifier;
             }
 
             DB::connection('central')->table('nas')->where('id', $existing->id)->update($updates);
@@ -200,8 +203,22 @@ class SiteController extends Controller
         ]);
     }
 
-    private function routerIdentifierForSite(Site $site): string
+    private function routerIdentifierForSite(Site $site, ?int $ignoreNasId = null): string
     {
-        return 'ONLIFI-' . strtoupper(Str::slug($site->name ?: 'SITE', '-')) . '-' . now()->format('ymd') . '-' . strtoupper(Str::random(8));
+        $sitePart = Str::slug($site->name ?: 'site', '-');
+        $base = "{$sitePart}-ONLIFI";
+        $sequence = 1;
+
+        do {
+            $identifier = "{$base}-{$sequence}";
+            $exists = DB::connection('central')
+                ->table('nas')
+                ->where('router_identifier', $identifier)
+                ->when($ignoreNasId, fn ($query) => $query->where('id', '!=', $ignoreNasId))
+                ->exists();
+            $sequence++;
+        } while ($exists);
+
+        return $identifier;
     }
 }

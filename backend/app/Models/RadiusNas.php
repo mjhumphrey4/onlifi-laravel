@@ -44,12 +44,25 @@ class RadiusNas extends Model
     }
 
     /**
-     * Generate a unique router identifier for RADIUS
-     * Format: ONLIFI-{tenant_id}-{router_id}-{random}
+     * Generate a readable router identifier for RADIUS.
+     * Format: {router-slug}-ONLIFI-1, with numeric fallback for global uniqueness.
      */
     public static function generateRouterIdentifier(int $tenantId, int $routerId): string
     {
-        return sprintf('ONLIFI-%d-%d-%s', $tenantId, $routerId, strtoupper(Str::random(8)));
+        $router = MikrotikRouter::find($routerId);
+        $routerPart = Str::slug($router?->name ?: "tenant-{$tenantId}-router", '-');
+        $base = "{$routerPart}-ONLIFI";
+        $sequence = 1;
+
+        do {
+            $identifier = "{$base}-{$sequence}";
+            $exists = self::where('router_identifier', $identifier)
+                ->where('router_id', '!=', $routerId)
+                ->exists();
+            $sequence++;
+        } while ($exists);
+
+        return $identifier;
     }
 
     /**

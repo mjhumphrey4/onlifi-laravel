@@ -206,8 +206,9 @@ class NasController extends Controller
             if (empty($nas->provisioning_token)) {
                 $updates['provisioning_token'] = Str::random(64);
             }
-            if (empty($nas->router_identifier)) {
-                $updates['router_identifier'] = $this->generateRouterIdentifier($tenant, $site);
+            $routerIdentifier = $this->generateRouterIdentifier($tenant, $site, $nas->id);
+            if ($nas->router_identifier !== $routerIdentifier) {
+                $updates['router_identifier'] = $routerIdentifier;
             }
             if ($description !== null) {
                 $updates['description'] = $description;
@@ -264,7 +265,7 @@ class NasController extends Controller
         if (Schema::connection('central')->hasColumn('nas', 'site_id') && !empty($nas->site_id)) {
             $site = Site::where('tenant_id', $tenant->id)->where('id', $nas->site_id)->first();
         }
-        $newIdentifier = $this->generateRouterIdentifier($tenant, $site);
+        $newIdentifier = $this->generateRouterIdentifier($tenant, $site, $nas->id);
         
         DB::connection('central')->table('nas')
             ->where('id', $id)
@@ -327,16 +328,26 @@ class NasController extends Controller
     }
     
     /**
-     * Generate unique router identifier
-     * Format: ONLIFI-{tenant_id}-{timestamp}-{random}
+     * Generate readable router identifier.
+     * Format: {site-slug}-ONLIFI-1, with a numeric fallback if another tenant already uses it.
      */
-    private function generateRouterIdentifier($tenant, ?Site $site = null): string
+    private function generateRouterIdentifier($tenant, ?Site $site = null, ?int $ignoreNasId = null): string
     {
-        $timestamp = now()->format('ymd');
-        $random = strtoupper(Str::random(8));
-        $sitePart = strtoupper(Str::slug($site?->name ?: $tenant->slug ?: $tenant->name ?: 'SITE', '-'));
+        $sitePart = Str::slug($site?->name ?: $tenant->slug ?: $tenant->name ?: 'site', '-');
+        $base = "{$sitePart}-ONLIFI";
+        $sequence = 1;
 
-        return "ONLIFI-{$sitePart}-{$timestamp}-{$random}";
+        do {
+            $identifier = "{$base}-{$sequence}";
+            $exists = DB::connection('central')
+                ->table('nas')
+                ->where('router_identifier', $identifier)
+                ->when($ignoreNasId, fn ($query) => $query->where('id', '!=', $ignoreNasId))
+                ->exists();
+            $sequence++;
+        } while ($exists);
+
+        return $identifier;
     }
 
     private function ensureProvisioningToken($nas)

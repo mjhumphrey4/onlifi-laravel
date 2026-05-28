@@ -3,10 +3,13 @@
 namespace App\Support;
 
 use App\Models\Site;
+use App\Models\Tenant;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class SiteScope
 {
@@ -37,10 +40,29 @@ class SiteScope
             return null;
         }
 
-        return Site::where('tenant_id', $tenantId)
+        $site = Site::where('tenant_id', $tenantId)
             ->orderByDesc('is_active')
             ->orderBy('id')
             ->first();
+
+        if ($site) {
+            return $site;
+        }
+
+        $tenant = Tenant::find($tenantId);
+        $name = $tenant?->name ?: 'Default Site';
+
+        return Site::create([
+            'tenant_id' => $tenantId,
+            'name' => $name,
+            'slug' => Str::slug($name),
+            'description' => 'Default site created for existing tenant data.',
+            'is_active' => true,
+            'vpn_username' => Str::slug($name),
+            'vpn_password' => Str::random(24),
+            'vpn_public_host' => 'vpn.onlifi.net',
+            'vpn_status' => 'pending',
+        ]);
     }
 
     public static function selectedOrDefaultSite(Request $request): ?Site
@@ -53,6 +75,8 @@ class SiteScope
         if (!$site) {
             return;
         }
+
+        self::ensureTenantSiteColumns($tables);
 
         foreach ($tables as $table) {
             if (!Schema::connection('tenant')->hasTable($table) || !Schema::connection('tenant')->hasColumn($table, 'site_id')) {
@@ -72,6 +96,8 @@ class SiteScope
             return;
         }
 
+        self::ensureCentralSiteColumns($tables);
+
         foreach ($tables as $table) {
             if (!Schema::connection('central')->hasTable($table) || !Schema::connection('central')->hasColumn($table, 'site_id')) {
                 continue;
@@ -82,6 +108,29 @@ class SiteScope
                 ->where('tenant_id', $site->tenant_id)
                 ->whereNull('site_id')
                 ->update(['site_id' => $site->id]);
+        }
+    }
+
+    public static function ensureTenantSiteColumns(array $tables): void
+    {
+        self::ensureSiteColumns('tenant', $tables);
+    }
+
+    public static function ensureCentralSiteColumns(array $tables): void
+    {
+        self::ensureSiteColumns('central', $tables);
+    }
+
+    private static function ensureSiteColumns(string $connection, array $tables): void
+    {
+        foreach ($tables as $table) {
+            if (!Schema::connection($connection)->hasTable($table) || Schema::connection($connection)->hasColumn($table, 'site_id')) {
+                continue;
+            }
+
+            Schema::connection($connection)->table($table, function (Blueprint $blueprint) {
+                $blueprint->unsignedBigInteger('site_id')->nullable()->index();
+            });
         }
     }
 
