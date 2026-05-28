@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('vpn_password')->nullable();
             $table->string('vpn_public_host')->nullable();
             $table->unsignedInteger('vpn_public_port')->nullable();
-            $table->string('vpn_status')->default('pending');
+            $table->string('vpn_status')->default('active');
             $table->timestamp('vpn_last_seen_at')->nullable();
             $table->unsignedInteger('router_api_port')->nullable();
             $table->text('remote_access_notes')->nullable();

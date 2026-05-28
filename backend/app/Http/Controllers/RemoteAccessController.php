@@ -18,12 +18,15 @@ class RemoteAccessController extends Controller
     {
         $tenantId = $request->user()?->tenant_id;
         $selectedSite = SiteScope::selectedSite($request);
+        if ($tenantId) {
+            SiteScope::defaultSite($request);
+        }
 
         $sites = Site::where('tenant_id', $tenantId)
             ->when($selectedSite, fn ($query) => $query->where('id', $selectedSite->id))
             ->orderBy('name')
             ->get()
-            ->map(fn (Site $site) => $this->formatSite($site));
+            ->map(fn (Site $site) => $this->formatSite($this->ensureVpnDefaults($site)));
 
         return response()->json([
             'vpn_host' => 'vpn.onlifi.net',
@@ -39,10 +42,12 @@ class RemoteAccessController extends Controller
 
     public function adminIndex(Tenant $tenant)
     {
+        $this->ensureTenantDefaultSite($tenant);
+
         $sites = Site::where('tenant_id', $tenant->id)
             ->orderBy('name')
             ->get()
-            ->map(fn (Site $site) => $this->formatSite($site));
+            ->map(fn (Site $site) => $this->formatSite($this->ensureVpnDefaults($site)));
 
         return response()->json([
             'tenant' => [
@@ -163,7 +168,7 @@ class RemoteAccessController extends Controller
             'vpn_public_host' => $site->vpn_public_host ?: 'vpn.onlifi.net',
             'vpn_public_port' => $site->vpn_public_port,
             'vpn_public_endpoint' => $this->publicEndpoint($site),
-            'vpn_status' => $site->vpn_status ?: 'pending',
+            'vpn_status' => $site->vpn_status ?: 'active',
             'vpn_last_seen_at' => $site->vpn_last_seen_at?->toIso8601String(),
             'router_api_port' => $site->router_api_port ?: 8728,
             'remote_access_notes' => $site->remote_access_notes,
@@ -182,5 +187,47 @@ class RemoteAccessController extends Controller
     private function defaultVpnUsername(Site $site): string
     {
         return Str::slug($site->name) ?: 'site-' . $site->id;
+    }
+
+    private function ensureTenantDefaultSite(Tenant $tenant): void
+    {
+        if (Site::where('tenant_id', $tenant->id)->exists()) {
+            return;
+        }
+
+        Site::create([
+            'tenant_id' => $tenant->id,
+            'name' => $tenant->name,
+            'slug' => Site::uniqueSlug($tenant->name),
+            'description' => 'Default site created for remote access management.',
+            'is_active' => true,
+        ]);
+    }
+
+    private function ensureVpnDefaults(Site $site): Site
+    {
+        $updates = [];
+        if (!$site->vpn_username) {
+            $updates['vpn_username'] = $this->defaultVpnUsername($site);
+        }
+        if (!$site->vpn_password) {
+            $updates['vpn_password'] = Str::random(24);
+        }
+        if (!$site->vpn_public_host) {
+            $updates['vpn_public_host'] = 'vpn.onlifi.net';
+        }
+        if (!$site->vpn_public_port) {
+            $updates['vpn_public_port'] = Site::uniqueVpnPublicPort($site->id);
+        }
+        if (!$site->vpn_status || $site->vpn_status === 'pending') {
+            $updates['vpn_status'] = 'active';
+        }
+
+        if ($updates) {
+            $site->update($updates);
+            return $site->fresh();
+        }
+
+        return $site;
     }
 }

@@ -9,6 +9,7 @@ import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { CheckCircle, XCircle, Clock, Mail, Calendar } from 'lucide-react';
+import { API_BASE } from '../../utils/api';
 
 interface Tenant {
   id: number;
@@ -40,9 +41,10 @@ export default function TenantApproval() {
   const fetchPendingTenants = async () => {
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/super-admin/tenants/pending', {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/pending`, {
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
         },
       });
 
@@ -54,7 +56,7 @@ export default function TenantApproval() {
         throw new Error('Failed to fetch pending tenants');
       }
 
-      const data = await response.json();
+      const data = await readJson(response);
       setTenants(data.data || []);
     } catch (error) {
       console.error('Error fetching tenants:', error);
@@ -74,15 +76,16 @@ export default function TenantApproval() {
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/approve`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/approve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
       });
 
-      const data = await response.json();
+      const data = await readJson(response);
 
       if (!response.ok) {
         throw new Error(data.message || 'Approval failed');
@@ -115,16 +118,17 @@ export default function TenantApproval() {
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${selectedTenant.id}/reject`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${selectedTenant.id}/reject`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
         body: JSON.stringify({ reason: rejectionReason }),
       });
 
-      const data = await response.json();
+      const data = await readJson(response);
 
       if (!response.ok) {
         throw new Error(data.message || 'Rejection failed');
@@ -277,4 +281,13 @@ export default function TenantApproval() {
       </Dialog>
     </div>
   );
+}
+
+async function readJson(response: Response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`Server returned ${response.status} ${response.statusText}`);
+  }
 }

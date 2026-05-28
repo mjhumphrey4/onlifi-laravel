@@ -74,14 +74,14 @@ export function RemoteAccess() {
                   </td>
                   <td className="px-5 py-3">
                     <button onClick={() => copy(site.vpn_public_endpoint, `endpoint-${site.id}`)} className="inline-flex items-center gap-2 font-mono text-primary hover:underline disabled:text-muted-foreground" disabled={!site.vpn_public_endpoint}>
-                      {site.vpn_public_endpoint || 'Pending assignment'}
+                      {site.vpn_public_endpoint || 'Assigning endpoint'}
                       {site.vpn_public_endpoint && (copied === `endpoint-${site.id}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />)}
                     </button>
                   </td>
                   <td className="px-5 py-3">
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted capitalize">
                       <ShieldCheck className="w-3 h-3" />
-                      {site.vpn_status || 'pending'}
+                      {site.vpn_status || 'active'}
                     </span>
                   </td>
                 </tr>

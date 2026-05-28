@@ -15,12 +15,14 @@ import {
   DollarSign,
   Bell,
   Search,
+  Network,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const adminMenuItems = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/admin/tenants', label: 'All Tenants', icon: Users },
+  { path: '/admin/vpn-management', label: 'VPN Management', icon: Network },
   { path: '/admin/tenants/pending', label: 'Pending Approvals', icon: UserCheck },
   { path: '/admin/announcements', label: 'Announcements', icon: Megaphone },
   { path: '/admin/platform-fees', label: 'Platform Fees', icon: DollarSign },

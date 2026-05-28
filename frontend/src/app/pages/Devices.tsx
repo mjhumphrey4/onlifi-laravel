@@ -88,9 +88,9 @@ export function Devices() {
         <div>
           <h1 className="text-2xl sm:text-3xl text-foreground mb-1 flex items-center gap-2">
             <Server className="w-8 h-8 text-primary" />
-            Site Router
+            Network Devices
           </h1>
-          <p className="text-sm text-muted-foreground">Each site has one managed MikroTik router named after the site.</p>
+          <p className="text-sm text-muted-foreground">Each site has one managed MikroTik device named after the site.</p>
         </div>
         <button onClick={loadData} className="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted">
           <RefreshCw className="w-4 h-4" />

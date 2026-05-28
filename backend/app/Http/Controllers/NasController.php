@@ -689,7 +689,8 @@ RSC;
                 'vpn_username' => Str::slug($name),
                 'vpn_password' => Str::random(24),
                 'vpn_public_host' => 'vpn.onlifi.net',
-                'vpn_status' => 'pending',
+                'vpn_public_port' => Site::uniqueVpnPublicPort(),
+                'vpn_status' => 'active',
             ]);
         }
 
@@ -709,8 +710,11 @@ RSC;
         if (!$site->vpn_public_host) {
             $updates['vpn_public_host'] = 'vpn.onlifi.net';
         }
-        if (!$site->vpn_status) {
-            $updates['vpn_status'] = 'pending';
+        if (!$site->vpn_public_port) {
+            $updates['vpn_public_port'] = Site::uniqueVpnPublicPort($site->id);
+        }
+        if (!$site->vpn_status || $site->vpn_status === 'pending') {
+            $updates['vpn_status'] = 'active';
         }
 
         if ($updates) {

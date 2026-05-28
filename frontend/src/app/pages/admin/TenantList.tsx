@@ -23,6 +23,7 @@ import {
   Check,
   Network,
 } from 'lucide-react';
+import { API_BASE } from '../../utils/api';
 
 interface Tenant {
   id: number;
@@ -81,7 +82,7 @@ export default function TenantList() {
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (searchQuery) params.set('search', searchQuery);
 
-      const response = await fetch(`/api/super-admin/tenants?${params}`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
@@ -106,7 +107,7 @@ export default function TenantList() {
   const fetchRadiusSettings = async () => {
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/super-admin/settings/group/radius', {
+      const response = await fetch(`${API_BASE}/super-admin/settings/group/radius`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
@@ -124,7 +125,7 @@ export default function TenantList() {
     
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/suspend`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/suspend`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -141,7 +142,7 @@ export default function TenantList() {
   const handleActivate = async (tenant: Tenant) => {
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/activate`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/activate`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -160,7 +161,7 @@ export default function TenantList() {
     
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -179,7 +180,7 @@ export default function TenantList() {
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/repair`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/repair`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -215,7 +216,7 @@ export default function TenantList() {
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/extend-trial`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/extend-trial`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -251,7 +252,7 @@ export default function TenantList() {
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/sms-credits/adjust`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/sms-credits/adjust`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -301,7 +302,7 @@ export default function TenantList() {
     
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${selectedTenant.id}/reset-password`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${selectedTenant.id}/reset-password`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -672,7 +673,7 @@ function EditTenantModal({ tenant, onClose, onSave }: { tenant: Tenant; onClose:
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -857,7 +858,7 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
     setLoading(true);
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/remote-access`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/remote-access`, {
         headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
       });
       if (response.ok) {
@@ -871,7 +872,7 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
             vpn_password: site.vpn_password || '',
             vpn_public_host: site.vpn_public_host || 'vpn.onlifi.net',
             vpn_public_port: site.vpn_public_port || '',
-            vpn_status: site.vpn_status || 'pending',
+            vpn_status: site.vpn_status || 'active',
             router_api_port: site.router_api_port || 8728,
             remote_access_notes: site.remote_access_notes || '',
           };
@@ -891,7 +892,7 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
     setSavingId(siteId);
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${tenant.id}/remote-access/${siteId}`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/remote-access/${siteId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -948,8 +949,7 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
                 </label>
                 <label className="block text-sm">
                   <span className="text-slate-300">Status</span>
-                  <select value={forms[site.id]?.vpn_status || 'pending'} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_status: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
-                    <option value="pending">Pending</option>
+                  <select value={forms[site.id]?.vpn_status || 'active'} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_status: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
                     <option value="active">Active</option>
                     <option value="offline">Offline</option>
                     <option value="suspended">Suspended</option>

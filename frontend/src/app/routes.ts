@@ -74,6 +74,7 @@ export const router = createBrowserRouter([
     children: [
       { path: 'dashboard', Component: AdminDashboard },
       { path: 'tenants', Component: TenantList },
+      { path: 'vpn-management', Component: TenantList },
       { path: 'tenants/pending', Component: TenantApproval },
       { path: 'announcements', Component: Announcements },
       { path: 'settings', Component: SystemSettings },

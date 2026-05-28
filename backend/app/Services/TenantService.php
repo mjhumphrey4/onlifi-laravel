@@ -54,7 +54,7 @@ class TenantService
                 ]);
             }
 
-            $this->createDefaultSite($tenant, $data['site_name'] ?? $data['name']);
+            $this->ensureDefaultSite($tenant, $data['site_name'] ?? $data['name']);
 
             if ($autoApprove) {
                 $tenant->provisionDatabase();
@@ -70,11 +70,11 @@ class TenantService
         }
     }
 
-    private function createDefaultSite(Tenant $tenant, string $siteName): Site
+    public function ensureDefaultSite(Tenant $tenant, ?string $siteName = null): Site
     {
         SiteScope::ensureCentralSitesTable();
 
-        $name = trim($siteName) ?: $tenant->name;
+        $name = trim((string) $siteName) ?: $tenant->name;
         $existing = Site::where('tenant_id', $tenant->id)->orderBy('id')->first();
         if ($existing) {
             return $existing;
@@ -92,7 +92,8 @@ class TenantService
             'vpn_username' => $slug,
             'vpn_password' => Str::random(24),
             'vpn_public_host' => 'vpn.onlifi.net',
-            'vpn_status' => 'pending',
+            'vpn_public_port' => Site::uniqueVpnPublicPort(),
+            'vpn_status' => 'active',
         ]);
     }
 

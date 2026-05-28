@@ -31,6 +31,8 @@ export default function AdminLogin() {
         return;
       }
 
+      localStorage.removeItem('tenant_token');
+      localStorage.removeItem('tenant_user');
       localStorage.setItem('admin_token', data.token);
       localStorage.setItem('admin_user', JSON.stringify(data.admin));
       

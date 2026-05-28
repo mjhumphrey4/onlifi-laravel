@@ -52,7 +52,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { path: '/',               label: 'Dashboard',          icon: LayoutDashboard, adminOnly: false },
   { path: '/clients',        label: 'Clients',            icon: Users, adminOnly: false },
-  { path: '/devices',        label: 'Site Router',        icon: Server, adminOnly: false },
+  { path: '/devices',        label: 'Network Devices',    icon: Server, adminOnly: false },
   { 
     path: '/vouchers',       
     label: 'Manage Vouchers',           
@@ -132,7 +132,7 @@ export function Layout() {
         setNewSiteName('');
         setNewSiteDescription('');
       } else {
-        const error = await response.json();
+        const error = await readJson(response);
         alert(error.message || error.error || 'Failed to create site');
       }
     } catch (error) {
@@ -568,4 +568,13 @@ export function Layout() {
       )}
     </div>
   );
+}
+
+async function readJson(response: Response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { message: `Server returned ${response.status} ${response.statusText}` };
+  }
 }

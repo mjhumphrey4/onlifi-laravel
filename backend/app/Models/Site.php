@@ -48,6 +48,21 @@ class Site extends Model
             if (empty($site->api_token)) {
                 $site->api_token = Str::random(64);
             }
+            if (empty($site->vpn_username)) {
+                $site->vpn_username = Str::slug($site->name) ?: 'site';
+            }
+            if (empty($site->vpn_password)) {
+                $site->vpn_password = Str::random(24);
+            }
+            if (empty($site->vpn_public_host)) {
+                $site->vpn_public_host = 'vpn.onlifi.net';
+            }
+            if (empty($site->vpn_public_port)) {
+                $site->vpn_public_port = self::uniqueVpnPublicPort();
+            }
+            if (empty($site->vpn_status) || $site->vpn_status === 'pending') {
+                $site->vpn_status = 'active';
+            }
         });
     }
 
@@ -67,6 +82,18 @@ class Site extends Model
         }
 
         return $slug;
+    }
+
+    public static function uniqueVpnPublicPort(?int $ignoreId = null): int
+    {
+        do {
+            $port = random_int(20000, 65000);
+            $exists = self::where('vpn_public_port', $port)
+                ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+                ->exists();
+        } while ($exists);
+
+        return $port;
     }
 
     public function routers()

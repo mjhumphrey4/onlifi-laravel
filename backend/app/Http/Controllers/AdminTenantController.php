@@ -47,6 +47,7 @@ class AdminTenantController extends Controller
         try {
             $tenant->provisionDatabase();
             $tenant->runMigrations();
+            $this->tenantService->ensureDefaultSite($tenant);
         } catch (\Exception $e) {
             // Log the error but continue with approval
             \Log::warning("Database provisioning failed for tenant {$tenant->id}: " . $e->getMessage());
@@ -62,6 +63,14 @@ class AdminTenantController extends Controller
             'approved_by' => $admin->id,
             'trial_ends_at' => $tenant->trial_ends_at ?: now()->addDays($defaultTrialDays),
         ]);
+
+        try {
+            $this->tenantService->ensureDefaultSite($tenant->fresh());
+        } catch (\Exception $e) {
+            \Log::warning("Default site creation failed for tenant {$tenant->id}: " . $e->getMessage());
+            $dbProvisioningWarning = trim(($dbProvisioningWarning ? $dbProvisioningWarning . ' ' : '') . 'Default site creation failed: ' . $e->getMessage());
+        }
+
         app(EmailNotificationService::class)->sendActivationConfirmation($tenant->fresh('users'));
 
         $response = [
@@ -184,6 +193,13 @@ class AdminTenantController extends Controller
                 'trial_ends_at' => $tenant->trial_ends_at ?: now()->addDays((int) \App\Models\SystemSetting::get('default_trial_days', 15)),
             ]);
             $actions[] = 'tenant_activated';
+        }
+
+        try {
+            $this->tenantService->ensureDefaultSite($tenant);
+            $actions[] = 'default_site_ensured';
+        } catch (\Exception $e) {
+            $warnings[] = 'Default site: ' . $e->getMessage();
         }
 
         return response()->json([

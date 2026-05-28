@@ -451,7 +451,7 @@ export function Settings() {
 
           {selectedSite && (
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-              <h3 className="font-medium text-blue-600 mb-2">Site Router</h3>
+              <h3 className="font-medium text-blue-600 mb-2">Network Device</h3>
               <p className="text-sm text-card-foreground">{selectedSite.name}</p>
               <p className="text-xs text-blue-600/80 mt-2">
                 A site has exactly one router, and the script below is pre-configured for it.

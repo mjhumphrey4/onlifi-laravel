@@ -16,14 +16,14 @@ class CaptivePortalService
         return [
             [
                 'theme' => 'clean',
-                'name' => 'Clean Access',
-                'description' => 'Simple centered login and mobile money checkout',
+                'name' => 'Classic Old Flow',
+                'description' => 'Default hotspot payment page based on the OLD-Flow login.html design',
                 'design' => [
-                    'primary_color' => '#2563eb',
-                    'background_color' => '#f8fafc',
-                    'text_color' => '#0f172a',
-                    'headline' => 'Connect to WiFi',
-                    'subheadline' => 'Buy a voucher with mobile money or enter your voucher code.',
+                    'primary_color' => '#ff6b35',
+                    'background_color' => '#1e3c72',
+                    'text_color' => '#1f2937',
+                    'headline' => 'Internet Hotspot',
+                    'subheadline' => 'Pay with mobile money or enter your voucher code.',
                     'button_label' => 'Pay with Mobile Money',
                     'logo_url' => '',
                 ],

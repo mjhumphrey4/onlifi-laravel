@@ -43,18 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Try admin auth first
-      if (adminToken) {
-        const data = await adminMe();
-        setUser({
-          id: data.admin.id,
-          username: data.admin.email,
-          name: data.admin.name,
-          email: data.admin.email,
-          role: 'super_admin',
-        });
-      } else if (tenantToken) {
-        // Try tenant auth
+      // Prefer the tenant token when both tokens exist so tenant dashboards keep tenant context.
+      if (tenantToken) {
         const data = await tenantMe();
         setUser({
           id: data.user.id,
@@ -64,6 +54,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: 'tenant',
           tenant_id: data.user.tenant_id,
           tenant_name: data.user.tenant_name,
+        });
+      } else if (adminToken) {
+        const data = await adminMe();
+        setUser({
+          id: data.admin.id,
+          username: data.admin.email,
+          name: data.admin.name,
+          email: data.admin.email,
+          role: 'super_admin',
         });
       }
     } catch (error) {
@@ -81,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const data = await tenantLogin(email, password, twoFactorCode, twoFactorToken);
       if (data.requires_2fa) return data;
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
       localStorage.setItem('tenant_token', data.token);
       localStorage.setItem('tenant_user', JSON.stringify(data.user));
       
@@ -98,6 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const data = await adminLogin(email, password, twoFactorCode, twoFactorToken);
         if (data.requires_2fa) return data;
+        localStorage.removeItem('tenant_token');
+        localStorage.removeItem('tenant_user');
         localStorage.setItem('admin_token', data.token);
         localStorage.setItem('admin_user', JSON.stringify(data.admin));
 
@@ -118,6 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginAsTenant = async (email: string, password: string, twoFactorCode?: string, twoFactorToken?: string) => {
     const data = await tenantLogin(email, password, twoFactorCode, twoFactorToken);
     if (data.requires_2fa) return data;
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
     localStorage.setItem('tenant_token', data.token);
     localStorage.setItem('tenant_user', JSON.stringify(data.user));
     

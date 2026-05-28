@@ -32,7 +32,10 @@ class SiteController extends Controller
             $sites = $query->orderBy('id')->get();
         }
 
-        $sites->each(fn (Site $site) => $this->ensureNasForSite($site));
+        $sites->each(function (Site $site) {
+            $this->ensureSiteDefaults($site);
+            $this->ensureNasForSite($site->fresh());
+        });
         $sites = $query->orderBy('id')->get();
 
         return response()->json([
@@ -61,8 +64,16 @@ class SiteController extends Controller
             ], 422);
         }
 
+        $tenantId = $request->user()?->tenant_id;
+        if (!$tenantId) {
+            return response()->json([
+                'error' => 'Tenant context required',
+                'message' => 'Please sign in as a tenant before creating a site.',
+            ], 422);
+        }
+
         $site = Site::create([
-            'tenant_id' => $request->user()?->tenant_id,
+            'tenant_id' => $tenantId,
             'name' => $request->name,
             'slug' => Site::uniqueSlug($request->name),
             'description' => $request->description,
@@ -70,7 +81,8 @@ class SiteController extends Controller
             'vpn_username' => Str::slug($request->name),
             'vpn_password' => Str::random(24),
             'vpn_public_host' => 'vpn.onlifi.net',
-            'vpn_status' => 'pending',
+            'vpn_public_port' => Site::uniqueVpnPublicPort(),
+            'vpn_status' => 'active',
         ]);
 
         $this->ensureNasForSite($site);
@@ -161,6 +173,10 @@ class SiteController extends Controller
 
     private function ensureNasForSite(Site $site): void
     {
+        if (!$site->tenant_id) {
+            return;
+        }
+
         if (!Schema::connection('central')->hasTable('nas')) {
             return;
         }
@@ -211,6 +227,31 @@ class SiteController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function ensureSiteDefaults(Site $site): void
+    {
+        $updates = [];
+
+        if (!$site->vpn_public_host) {
+            $updates['vpn_public_host'] = 'vpn.onlifi.net';
+        }
+        if (!$site->vpn_public_port) {
+            $updates['vpn_public_port'] = Site::uniqueVpnPublicPort($site->id);
+        }
+        if (!$site->vpn_username) {
+            $updates['vpn_username'] = Str::slug($site->name) ?: 'site-' . $site->id;
+        }
+        if (!$site->vpn_password) {
+            $updates['vpn_password'] = Str::random(24);
+        }
+        if (!$site->vpn_status || $site->vpn_status === 'pending') {
+            $updates['vpn_status'] = 'active';
+        }
+
+        if ($updates) {
+            $site->update($updates);
+        }
     }
 
     private function routerIdentifierForSite(Site $site, ?int $ignoreNasId = null): string
