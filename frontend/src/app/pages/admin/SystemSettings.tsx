@@ -14,6 +14,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { TwoFactorPanel } from '@/app/components/TwoFactorPanel';
+import { API_BASE } from '../../utils/api';
 
 interface Setting {
   key: string;
@@ -54,7 +55,7 @@ export default function SystemSettings() {
     try {
       setLoading(true);
       const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/super-admin/settings', {
+      const response = await fetch(`${API_BASE}/super-admin/settings`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
@@ -85,7 +86,7 @@ export default function SystemSettings() {
     setSaving(true);
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/super-admin/settings/bulk-update', {
+      const response = await fetch(`${API_BASE}/super-admin/settings/bulk-update`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

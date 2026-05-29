@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Alert, AlertDescription } from '@/app/components/ui/alert';
 import { Plus, Edit, Trash2, Megaphone } from 'lucide-react';
+import { API_BASE } from '../../utils/api';
 
 interface Announcement {
   id: number;
@@ -47,7 +48,7 @@ export default function Announcements() {
   const fetchAnnouncements = async () => {
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/super-admin/announcements', {
+      const response = await fetch(`${API_BASE}/super-admin/announcements`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
 
@@ -65,8 +66,8 @@ export default function Announcements() {
     e.preventDefault();
     const token = localStorage.getItem('admin_token');
     const url = editingId 
-      ? `/api/super-admin/announcements/${editingId}`
-      : '/api/super-admin/announcements';
+      ? `${API_BASE}/super-admin/announcements/${editingId}`
+      : `${API_BASE}/super-admin/announcements`;
     
     try {
       const response = await fetch(url, {
@@ -94,7 +95,7 @@ export default function Announcements() {
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/announcements/${id}`, {
+      const response = await fetch(`${API_BASE}/super-admin/announcements/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` },
       });

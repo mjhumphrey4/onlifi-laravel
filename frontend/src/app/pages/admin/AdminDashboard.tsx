@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Users, UserCheck, UserX, Clock, TrendingUp, AlertCircle, Settings, Megaphone, ChevronRight, RefreshCw, DollarSign } from 'lucide-react';
+import { API_BASE } from '../../utils/api';
 
 interface Statistics {
   total_tenants: number;
@@ -32,7 +33,7 @@ export default function AdminDashboard() {
   const fetchStatistics = async () => {
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/super-admin/tenants/statistics', {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/statistics`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

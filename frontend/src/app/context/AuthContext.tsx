@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Token invalid, clear it
       localStorage.removeItem('admin_token');
       localStorage.removeItem('tenant_token');
+      localStorage.removeItem('selected_site_id');
       setUser(null);
     } finally {
       setLoading(false);
@@ -82,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.requires_2fa) return data;
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
+      localStorage.removeItem('selected_site_id');
       localStorage.setItem('tenant_token', data.token);
       localStorage.setItem('tenant_user', JSON.stringify(data.user));
       
@@ -101,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.requires_2fa) return data;
         localStorage.removeItem('tenant_token');
         localStorage.removeItem('tenant_user');
+        localStorage.removeItem('selected_site_id');
         localStorage.setItem('admin_token', data.token);
         localStorage.setItem('admin_user', JSON.stringify(data.admin));
 
@@ -123,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.requires_2fa) return data;
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
+    localStorage.removeItem('selected_site_id');
     localStorage.setItem('tenant_token', data.token);
     localStorage.setItem('tenant_user', JSON.stringify(data.user));
     
@@ -151,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('admin_user');
     localStorage.removeItem('tenant_token');
     localStorage.removeItem('tenant_user');
+    localStorage.removeItem('selected_site_id');
     setUser(null);
   };
 

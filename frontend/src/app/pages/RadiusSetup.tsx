@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle, Copy, Download, RefreshCw, Server } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
+import { API_BASE } from '../utils/api';
 
 interface NasEntry {
   id: number;
@@ -23,7 +24,7 @@ export function RadiusSetup() {
   const [copied, setCopied] = useState('');
 
   const getAuthHeaders = (): HeadersInit => {
-    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const token = localStorage.getItem('tenant_token');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -42,7 +43,7 @@ export function RadiusSetup() {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/nas', { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE}/nas`, { headers: getAuthHeaders() });
       const data = await response.json();
       setRadiusServer(data.radius_server || '');
       setRadiusPort(data.radius_port || 1812);
@@ -55,7 +56,7 @@ export function RadiusSetup() {
       }
 
       setNas(entry);
-      const detailResponse = await fetch(`/api/nas/${entry.id}`, { headers: getAuthHeaders() });
+      const detailResponse = await fetch(`${API_BASE}/nas/${entry.id}`, { headers: getAuthHeaders() });
       const detailData = await detailResponse.json();
       setMikrotikScript(detailData.mikrotik_script || '');
       setProvisioningUrl(detailData.provisioning_url || '');
@@ -84,7 +85,7 @@ export function RadiusSetup() {
 
   const handleDownloadScript = async () => {
     if (!nas) return;
-    const response = await fetch(`/api/nas/${nas.id}/mikrotik-script`, { headers: getAuthHeaders() });
+    const response = await fetch(`${API_BASE}/nas/${nas.id}/mikrotik-script`, { headers: getAuthHeaders() });
     if (!response.ok) {
       alert('Failed to download script');
       return;

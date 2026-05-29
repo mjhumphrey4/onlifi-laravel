@@ -19,8 +19,8 @@ class SiteController extends Controller
     {
         SiteScope::ensureCentralSitesTable();
 
-        $user = $request->user();
-        if (!$user?->tenant_id) {
+        $tenantId = $this->tenantId($request);
+        if (!$tenantId) {
             return response()->json([
                 'error' => 'Tenant context required',
                 'message' => 'Please sign in as a tenant to manage sites.',
@@ -30,10 +30,10 @@ class SiteController extends Controller
 
         $query = Site::query();
 
-        $query->where('tenant_id', $user->tenant_id);
+        $query->where('tenant_id', $tenantId);
 
         $sites = $query->orderBy('id')->get();
-        if ($sites->isEmpty() && $user && $user->tenant_id) {
+        if ($sites->isEmpty()) {
             SiteScope::defaultSite($request);
             $sites = $query->orderBy('id')->get();
         }
@@ -58,7 +58,7 @@ class SiteController extends Controller
                 'required',
                 'string',
                 'max:100',
-                Rule::unique('central.sites', 'name')->where(fn ($query) => $query->where('tenant_id', $request->user()?->tenant_id)),
+                Rule::unique('central.sites', 'name')->where(fn ($query) => $query->where('tenant_id', $this->tenantId($request))),
             ],
             'description' => 'nullable|string|max:255',
         ]);
@@ -70,7 +70,7 @@ class SiteController extends Controller
             ], 422);
         }
 
-        $tenantId = $request->user()?->tenant_id;
+        $tenantId = $this->tenantId($request);
         if (!$tenantId) {
             return response()->json([
                 'error' => 'Tenant context required',
@@ -122,7 +122,7 @@ class SiteController extends Controller
                 'max:100',
                 Rule::unique('central.sites', 'name')
                     ->ignore($id)
-                    ->where(fn ($query) => $query->where('tenant_id', $request->user()?->tenant_id)),
+                    ->where(fn ($query) => $query->where('tenant_id', $this->tenantId($request))),
             ],
             'description' => 'nullable|string|max:255',
             'is_active' => 'sometimes|boolean',
@@ -242,10 +242,17 @@ class SiteController extends Controller
 
     private function tenantSiteOrFail(Request $request, $id): Site
     {
-        $tenantId = $request->user()?->tenant_id;
+        $tenantId = $this->tenantId($request);
         abort_unless($tenantId, 403);
 
         return Site::where('tenant_id', $tenantId)->findOrFail($id);
+    }
+
+    private function tenantId(Request $request): ?int
+    {
+        return $request->user()?->tenant_id
+            ?? $request->attributes->get('tenant')?->id
+            ?? (app()->bound('tenant') ? app('tenant')->id : null);
     }
 
     private function ensureSiteDefaults(Site $site): void

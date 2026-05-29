@@ -23,7 +23,7 @@ interface SiteContextType {
 const SiteContext = createContext<SiteContextType | null>(null);
 
 function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+  const token = localStorage.getItem('tenant_token');
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
@@ -42,6 +42,8 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const [selectedSite, setSelectedSiteState] = useState<Site | null>(null);
   const [loadingSites, setLoadingSites] = useState(false);
   const selectedSiteIdRef = useRef<number | null>(null);
+  const tenantId = user?.role === 'tenant' ? user.tenant_id : undefined;
+  const selectedSiteStorageKey = tenantId ? `selected_site_id:${tenantId}` : 'selected_site_id';
 
   const applySelectedSite = useCallback((site: Site | null, notify = true) => {
     const previousId = selectedSiteIdRef.current;
@@ -52,6 +54,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 
     if (site) {
       localStorage.setItem('selected_site_id', String(site.id));
+      localStorage.setItem(selectedSiteStorageKey, String(site.id));
     } else {
       localStorage.removeItem('selected_site_id');
     }
@@ -59,7 +62,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     if (notify && previousId !== nextId) {
       window.dispatchEvent(new CustomEvent('onlifi:site-changed', { detail: { siteId: nextId } }));
     }
-  }, []);
+  }, [selectedSiteStorageKey]);
 
   const setSelectedSite = useCallback((site: Site | null) => {
     applySelectedSite(site, true);
@@ -68,7 +71,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const refreshSites = useCallback(async () => {
     const hasTenantToken = Boolean(localStorage.getItem('tenant_token'));
 
-    if (!user || !hasTenantToken) {
+    if (!tenantId || !hasTenantToken) {
       setSites([]);
       applySelectedSite(null, true);
       return;
@@ -90,11 +93,13 @@ export function SiteProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json();
       const nextSites: Site[] = data.sites || [];
-      const storedSiteId = Number(localStorage.getItem('selected_site_id'));
+      const storedSiteId = Number(localStorage.getItem(selectedSiteStorageKey));
+      const legacyStoredSiteId = Number(localStorage.getItem('selected_site_id'));
       const currentSiteId = selectedSiteIdRef.current;
       const nextSelected =
         nextSites.find((site) => site.id === currentSiteId) ||
         nextSites.find((site) => site.id === storedSiteId) ||
+        nextSites.find((site) => site.id === legacyStoredSiteId) ||
         nextSites[0] ||
         null;
 
@@ -107,7 +112,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoadingSites(false);
     }
-  }, [applySelectedSite, user]);
+  }, [applySelectedSite, selectedSiteStorageKey, tenantId]);
 
   useEffect(() => {
     if (loading) return;

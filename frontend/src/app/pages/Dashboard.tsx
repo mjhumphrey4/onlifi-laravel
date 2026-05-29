@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
-import { apiStats, getTelemetryStats } from '../utils/api';
+import { API_BASE, apiStats, getTelemetryStats } from '../utils/api';
 
 interface SiteStat {
   total_amount: number;
@@ -92,7 +92,7 @@ export function Dashboard() {
   const [deviceStats, setDeviceStats] = useState<DeviceStats>({ total_routers: 0, online_routers: 0, total_clients: 0, active_connections: 0, avg_cpu: 0, avg_memory: 0, bandwidth_up: 0, bandwidth_down: 0 });
 
   const getAuthHeaders = (): HeadersInit => {
-    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const token = localStorage.getItem('tenant_token');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -141,7 +141,7 @@ export function Dashboard() {
       // Fetch stats and filtered transactions
       const [statsRes, txResponse] = await Promise.all([
         apiStats(),
-        fetch(`/api/transactions?${params.toString()}`, { headers }),
+        fetch(`${API_BASE}/transactions?${params.toString()}`, { headers }),
       ]);
       const txRes = txResponse.ok ? await txResponse.json() : { data: [] };
       const transactions = txRes.transactions ?? txRes.data ?? [];
@@ -164,7 +164,7 @@ export function Dashboard() {
       // Fetch active clients from radacct (active hotspot users)
       let activeClientCount = 0;
       try {
-        const clientsRes = await fetch('/api/radius/active-users', { headers });
+        const clientsRes = await fetch(`${API_BASE}/radius/active-users`, { headers });
         
         if (clientsRes.ok) {
           const clientsData = await clientsRes.json();

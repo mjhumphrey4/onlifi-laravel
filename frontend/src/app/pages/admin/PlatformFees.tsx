@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from 'lucide-react';
+import { API_BASE } from '../../utils/api';
 
 interface FeeSettings {
   collection_fee_percent: number;
@@ -73,9 +74,9 @@ export default function PlatformFees() {
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const [settingsRes, revenueRes, balancesRes] = await Promise.all([
-        fetch('/api/super-admin/platform-fees/settings', { headers }),
-        fetch('/api/super-admin/platform-fees/revenue', { headers }),
-        fetch('/api/super-admin/platform-fees/tenant-balances', { headers }),
+        fetch(`${API_BASE}/super-admin/platform-fees/settings`, { headers }),
+        fetch(`${API_BASE}/super-admin/platform-fees/revenue`, { headers }),
+        fetch(`${API_BASE}/super-admin/platform-fees/tenant-balances`, { headers }),
       ]);
 
       if (settingsRes.ok) {
@@ -106,7 +107,7 @@ export default function PlatformFees() {
     setSaving(true);
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/super-admin/platform-fees/settings', {
+      const response = await fetch(`${API_BASE}/super-admin/platform-fees/settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

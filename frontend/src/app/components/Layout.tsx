@@ -108,7 +108,12 @@ export function Layout() {
     
     setSavingSite(true);
     try {
-      const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+      const token = localStorage.getItem('tenant_token');
+      if (!token || user?.role !== 'tenant' || !user?.tenant_id) {
+        alert('Please sign in as a tenant before creating a site.');
+        return;
+      }
+
       const response = await fetch(`${API_BASE}/sites`, {
         method: 'POST',
         headers: {
@@ -126,8 +131,8 @@ export function Layout() {
       if (response.ok) {
         const data = await response.json();
         const newSite = data.site;
-        setSelectedSite(newSite);
         await refreshSites();
+        setSelectedSite(newSite);
         setShowAddSiteModal(false);
         setNewSiteName('');
         setNewSiteDescription('');
@@ -149,10 +154,10 @@ export function Layout() {
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
-        const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+        const token = localStorage.getItem('tenant_token');
         if (!token) return;
         
-        const response = await fetch('/api/announcements/active', {
+        const response = await fetch(`${API_BASE}/announcements/active`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Users, RefreshCw, Wifi, HardDrive, Clock, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
-import { collectRouterTelemetry, getRouters } from '../utils/api';
+import { API_BASE, collectRouterTelemetry, getRouters } from '../utils/api';
 
 interface Client {
   id: number;
@@ -32,7 +32,7 @@ export function Clients() {
   const [telemetryMessage, setTelemetryMessage] = useState('');
 
   const getAuthHeaders = (): HeadersInit => {
-    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const token = localStorage.getItem('tenant_token');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -49,7 +49,7 @@ export function Clients() {
       else setLoading(true);
 
       const headers = getAuthHeaders();
-      const response = await fetch('/api/clients', { headers });
+      const response = await fetch(`${API_BASE}/clients`, { headers });
       
       if (response.ok) {
         const data = await response.json();

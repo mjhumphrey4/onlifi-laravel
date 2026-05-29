@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users as UsersIcon, Search, UserCheck, UserX, Shield, User, Database, Calendar, Activity, Trash2 } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
 interface User {
   id: number;
@@ -35,7 +36,7 @@ export function Users() {
     try {
       setLoading(true);
       const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/super-admin/tenants', {
+      const response = await fetch(`${API_BASE}/super-admin/tenants`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -80,7 +81,7 @@ export function Users() {
     try {
       const token = localStorage.getItem('admin_token');
       const action = newStatus === 'active' ? 'activate' : 'suspend';
-      const response = await fetch(`/api/super-admin/tenants/${userId}/${action}`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${userId}/${action}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -108,7 +109,7 @@ export function Users() {
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${userId}/approve`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${userId}/approve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -142,7 +143,7 @@ export function Users() {
 
     try {
       const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/super-admin/tenants/${userId}`, {
+      const response = await fetch(`${API_BASE}/super-admin/tenants/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

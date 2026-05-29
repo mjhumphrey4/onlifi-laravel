@@ -39,10 +39,10 @@ class IdentifyTenant
         }
 
         $tenant->configure();
-        $site = $this->configureSiteDatabase($request, $tenant);
-
         $request->attributes->set('tenant', $tenant);
         app()->instance('tenant', $tenant);
+
+        $site = $this->configureSiteDatabase($request, $tenant);
         if ($site) {
             $request->attributes->set('site', $site);
             app()->instance('active_site', $site);
@@ -66,15 +66,8 @@ class IdentifyTenant
             return null;
         }
 
-        $defaultSite = Site::where('tenant_id', $tenant->id)->orderBy('id')->first();
-
         if (!$site->database_name) {
-            if ($defaultSite && (int) $defaultSite->id === (int) $site->id) {
-                $site->useTenantDatabase($tenant);
-            } else {
-                $site->provisionDatabase($tenant);
-            }
-
+            $site->provisionDatabase($tenant);
             $site = $site->fresh();
         }
 
@@ -92,6 +85,9 @@ class IdentifyTenant
             if ($token && $token->tokenable_type === TenantUser::class) {
                 $tenantUser = $token->tokenable;
                 if ($tenantUser && $tenantUser->tenant) {
+                    $request->setUserResolver(fn () => $tenantUser);
+                    app()->instance('tenant_user', $tenantUser);
+
                     return $tenantUser->tenant;
                 }
             }

@@ -38,7 +38,7 @@ export function Settings() {
   }, [selectedSite]);
 
   const getAuthHeaders = (): HeadersInit => {
-    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const token = localStorage.getItem('tenant_token');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',

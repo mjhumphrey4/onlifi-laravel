@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CalendarDays, DollarSign, RefreshCw, Repeat, Users } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
+import { API_BASE } from '../utils/api';
 
 type DateFilter = 'today' | 'yesterday' | 'week' | 'month' | 'all';
 
@@ -51,8 +52,8 @@ export function Reports() {
 
     try {
       const [statsResponse, txResponse] = await Promise.all([
-        fetch(`/api/transactions/statistics?${params.toString()}`, { headers }),
-        fetch(`/api/transactions?${txParams.toString()}`, { headers }),
+        fetch(`${API_BASE}/transactions/statistics?${params.toString()}`, { headers }),
+        fetch(`${API_BASE}/transactions?${txParams.toString()}`, { headers }),
       ]);
       setStats(statsResponse.ok ? await statsResponse.json() : null);
       const txData = txResponse.ok ? await txResponse.json() : { data: [] };

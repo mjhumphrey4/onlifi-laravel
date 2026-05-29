@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, Loader2, Router, ShieldCheck } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
+import { API_BASE } from '../utils/api';
 
 interface ProvisioningDetails {
   nas?: {
@@ -35,12 +36,12 @@ export function Provisioning() {
 
     setLoading(true);
     try {
-      const listResponse = await fetch('/api/nas', { headers: headers() });
+      const listResponse = await fetch(`${API_BASE}/nas`, { headers: headers() });
       const listData = await listResponse.json();
       const siteRouter = listData.nas_entries?.[0];
 
       if (!siteRouter) {
-        const createResponse = await fetch('/api/nas', {
+        const createResponse = await fetch(`${API_BASE}/nas`, {
           method: 'POST',
           headers: headers(),
           body: JSON.stringify({ name: selectedSite.name }),
@@ -51,7 +52,7 @@ export function Provisioning() {
         return;
       }
 
-      const detailResponse = await fetch(`/api/nas/${siteRouter.id}`, { headers: headers() });
+      const detailResponse = await fetch(`${API_BASE}/nas/${siteRouter.id}`, { headers: headers() });
       const detailData = await detailResponse.json();
       setDetails(detailData);
     } catch (error: any) {

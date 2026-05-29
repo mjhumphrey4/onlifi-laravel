@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Users, Plus, MapPin, Phone, User, TrendingUp } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
 interface SalesPoint {
   id: number;
@@ -33,7 +34,7 @@ export function SalesPointsDialog({ onClose, onUpdate }: SalesPointsDialogProps)
   }, []);
 
   const getAuthHeaders = (): HeadersInit => {
-    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const token = localStorage.getItem('tenant_token');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -47,7 +48,7 @@ export function SalesPointsDialog({ onClose, onUpdate }: SalesPointsDialogProps)
   const loadSalesPoints = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/sales-points', { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE}/sales-points`, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setSalesPoints(Array.isArray(data) ? data : data.sales_points || []);
@@ -63,7 +64,7 @@ export function SalesPointsDialog({ onClose, onUpdate }: SalesPointsDialogProps)
     e.preventDefault();
     
     try {
-      const response = await fetch('/api/sales-points', {
+      const response = await fetch(`${API_BASE}/sales-points`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(formData),

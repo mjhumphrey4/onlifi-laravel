@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, Clock, Globe, MapPin, RefreshCw, Server, XCircle } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
+import { API_BASE } from '../utils/api';
 
 interface RouterRecord {
   id: number | null;
@@ -26,7 +27,7 @@ export function Devices() {
   }, [selectedSite?.id]);
 
   const getAuthHeaders = (): HeadersInit => {
-    const token = localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+    const token = localStorage.getItem('tenant_token');
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -44,7 +45,7 @@ export function Devices() {
     }
 
     try {
-      const response = await fetch('/api/routers', { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE}/routers`, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         const record = (Array.isArray(data) ? data : data.data || [])[0] || null;

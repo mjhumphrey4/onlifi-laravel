@@ -54,13 +54,12 @@ class TenantService
                 ]);
             }
 
-            $this->ensureDefaultSite($tenant, $data['site_name'] ?? $data['name']);
-
             if ($autoApprove) {
                 $tenant->provisionDatabase();
                 $tenant->runMigrations();
-                $this->ensureDefaultSite($tenant->fresh());
             }
+
+            $this->ensureDefaultSite($tenant->fresh(), $data['site_name'] ?? $data['name']);
 
             DB::connection('central')->commit();
 
@@ -78,13 +77,11 @@ class TenantService
         $name = trim((string) $siteName) ?: $tenant->name;
         $existing = Site::where('tenant_id', $tenant->id)->orderBy('id')->first();
         if ($existing) {
-            if ($tenant->database_name && (
-                $existing->database_name !== $tenant->database_name ||
-                $existing->database_username !== $tenant->database_username ||
-                $existing->database_password !== $tenant->database_password
-            )) {
-                $existing->useTenantDatabase($tenant);
+            if (!$existing->database_name && $this->tenantReadyForSiteDatabase($tenant)) {
+                $existing->provisionDatabase($tenant);
+                return $existing->fresh();
             }
+
             return $existing;
         }
 
@@ -104,11 +101,17 @@ class TenantService
             'vpn_status' => 'active',
         ]);
 
-        if ($tenant->database_name) {
-            $site->useTenantDatabase($tenant);
+        if ($this->tenantReadyForSiteDatabase($tenant)) {
+            $site->provisionDatabase($tenant);
+            $site = $site->fresh();
         }
 
         return $site;
+    }
+
+    private function tenantReadyForSiteDatabase(Tenant $tenant): bool
+    {
+        return (bool) $tenant->database_name && ($tenant->status === 'approved' || $tenant->is_active);
     }
 
     public function deleteTenant(Tenant $tenant): bool

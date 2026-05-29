@@ -3,10 +3,10 @@ export const API_BASE = import.meta.env.VITE_API_URL || 'http://api.onlifi.net/a
 // Get auth token from localStorage
 function getAuthToken(endpoint = ''): string | null {
   if (endpoint.startsWith('/super-admin')) {
-    return localStorage.getItem('admin_token') || localStorage.getItem('tenant_token');
+    return localStorage.getItem('admin_token');
   }
 
-  return localStorage.getItem('tenant_token') || localStorage.getItem('admin_token');
+  return localStorage.getItem('tenant_token');
 }
 
 // Build headers with auth token
