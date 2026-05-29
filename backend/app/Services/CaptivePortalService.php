@@ -101,10 +101,18 @@ class CaptivePortalService
             return null;
         }
 
-        $tenant->configure();
         $site = null;
         if (Schema::connection('central')->hasColumn('nas', 'site_id') && !empty($nas->site_id)) {
             $site = \App\Models\Site::where('tenant_id', $tenant->id)->where('id', $nas->site_id)->first();
+        }
+        if ($site) {
+            if (!$site->database_name) {
+                $site->provisionDatabase($tenant);
+                $site = $site->fresh();
+            }
+            $site->configureTenantConnection($tenant);
+        } else {
+            $tenant->configure();
         }
         $siteName = $site?->name ?: ($nas->shortname ?: $tenant->name);
 

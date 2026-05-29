@@ -20,6 +20,11 @@ return new class extends Migration
             $table->string('description', 255)->nullable();
             $table->boolean('is_active')->default(true);
             $table->string('api_token', 64)->unique();
+            $table->string('database_name')->nullable();
+            $table->string('database_host')->nullable();
+            $table->unsignedInteger('database_port')->nullable();
+            $table->string('database_username')->nullable();
+            $table->string('database_password')->nullable();
             $table->string('vpn_private_ip')->nullable();
             $table->string('vpn_username')->nullable();
             $table->string('vpn_password')->nullable();

@@ -6,6 +6,8 @@ use Closure;
 use Illuminate\Http\Request;
 use App\Models\Tenant;
 use App\Models\TenantUser;
+use App\Models\Site;
+use App\Support\SiteScope;
 use Illuminate\Support\Facades\Log;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -37,17 +39,48 @@ class IdentifyTenant
         }
 
         $tenant->configure();
+        $site = $this->configureSiteDatabase($request, $tenant);
 
         $request->attributes->set('tenant', $tenant);
         app()->instance('tenant', $tenant);
+        if ($site) {
+            $request->attributes->set('site', $site);
+            app()->instance('active_site', $site);
+        }
 
         Log::info('Tenant identified', [
             'tenant_id' => $tenant->id,
             'tenant_slug' => $tenant->slug,
-            'database' => $tenant->database_name,
+            'site_id' => $site?->id,
+            'database' => $site?->database_name ?: $tenant->database_name,
         ]);
 
         return $next($request);
+    }
+
+    private function configureSiteDatabase(Request $request, Tenant $tenant): ?Site
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$site || (int) $site->tenant_id !== (int) $tenant->id) {
+            return null;
+        }
+
+        $defaultSite = Site::where('tenant_id', $tenant->id)->orderBy('id')->first();
+
+        if (!$site->database_name) {
+            if ($defaultSite && (int) $defaultSite->id === (int) $site->id) {
+                $site->useTenantDatabase($tenant);
+            } else {
+                $site->provisionDatabase($tenant);
+            }
+
+            $site = $site->fresh();
+        }
+
+        $site->configureTenantConnection($tenant);
+
+        return $site;
     }
 
     protected function resolveTenant(Request $request): ?Tenant

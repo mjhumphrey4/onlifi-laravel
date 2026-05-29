@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Site;
 use App\Models\SystemSetting;
+use App\Models\Tenant;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,12 +20,17 @@ class SiteController extends Controller
         SiteScope::ensureCentralSitesTable();
 
         $user = $request->user();
+        if (!$user?->tenant_id) {
+            return response()->json([
+                'error' => 'Tenant context required',
+                'message' => 'Please sign in as a tenant to manage sites.',
+                'sites' => [],
+            ], 403);
+        }
+
         $query = Site::query();
 
-        // If authenticated user has a tenant_id, filter by their tenant
-        if ($user && $user->tenant_id) {
-            $query->where('tenant_id', $user->tenant_id);
-        }
+        $query->where('tenant_id', $user->tenant_id);
 
         $sites = $query->orderBy('id')->get();
         if ($sites->isEmpty() && $user && $user->tenant_id) {
@@ -85,24 +91,29 @@ class SiteController extends Controller
             'vpn_status' => 'active',
         ]);
 
+        $tenant = Tenant::find($tenantId);
+        if ($tenant) {
+            $site->provisionDatabase($tenant);
+        }
+
         $this->ensureNasForSite($site);
 
         return response()->json([
             'message' => 'Site created successfully',
-            'site' => $site,
+            'site' => $site->fresh(),
         ], 201);
     }
 
     public function show($id)
     {
-        $site = Site::findOrFail($id);
+        $site = $this->tenantSiteOrFail(request(), $id);
 
         return response()->json($site);
     }
 
     public function update(Request $request, $id)
     {
-        $site = Site::findOrFail($id);
+        $site = $this->tenantSiteOrFail($request, $id);
 
         $validator = Validator::make($request->all(), [
             'name' => [
@@ -141,7 +152,7 @@ class SiteController extends Controller
 
     public function destroy($id)
     {
-        $site = Site::findOrFail($id);
+        $site = $this->tenantSiteOrFail(request(), $id);
         
         // Skip router count check for now to avoid relationship errors
         $site->delete();
@@ -153,7 +164,7 @@ class SiteController extends Controller
 
     public function regenerateToken($id)
     {
-        $site = Site::findOrFail($id);
+        $site = $this->tenantSiteOrFail(request(), $id);
         $newToken = $site->regenerateApiToken();
 
         return response()->json([
@@ -164,7 +175,7 @@ class SiteController extends Controller
 
     public function getToken($id)
     {
-        $site = Site::findOrFail($id);
+        $site = $this->tenantSiteOrFail(request(), $id);
 
         return response()->json([
             'api_token' => $site->api_token,
@@ -227,6 +238,14 @@ class SiteController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function tenantSiteOrFail(Request $request, $id): Site
+    {
+        $tenantId = $request->user()?->tenant_id;
+        abort_unless($tenantId, 403);
+
+        return Site::where('tenant_id', $tenantId)->findOrFail($id);
     }
 
     private function ensureSiteDefaults(Site $site): void

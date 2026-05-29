@@ -59,6 +59,7 @@ class TenantService
             if ($autoApprove) {
                 $tenant->provisionDatabase();
                 $tenant->runMigrations();
+                $this->ensureDefaultSite($tenant->fresh());
             }
 
             DB::connection('central')->commit();
@@ -77,12 +78,19 @@ class TenantService
         $name = trim((string) $siteName) ?: $tenant->name;
         $existing = Site::where('tenant_id', $tenant->id)->orderBy('id')->first();
         if ($existing) {
+            if ($tenant->database_name && (
+                $existing->database_name !== $tenant->database_name ||
+                $existing->database_username !== $tenant->database_username ||
+                $existing->database_password !== $tenant->database_password
+            )) {
+                $existing->useTenantDatabase($tenant);
+            }
             return $existing;
         }
 
         $slug = Site::uniqueSlug($name ?: "site-{$tenant->id}");
 
-        return Site::create([
+        $site = Site::create([
             'tenant_id' => $tenant->id,
             'slug' => $slug,
             'name' => $name,
@@ -95,6 +103,12 @@ class TenantService
             'vpn_public_port' => Site::uniqueVpnPublicPort(),
             'vpn_status' => 'active',
         ]);
+
+        if ($tenant->database_name) {
+            $site->useTenantDatabase($tenant);
+        }
+
+        return $site;
     }
 
     public function deleteTenant(Tenant $tenant): bool

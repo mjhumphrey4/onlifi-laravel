@@ -47,7 +47,7 @@ class CaptivePaymentService
             : Site::where('tenant_id', $tenant->id)->where('name', $nas->shortname)->first();
         $siteName = $site?->name ?: $nas->shortname;
 
-        $tenant->configure();
+        $this->configureSiteDatabase($tenant, $site);
         $packageQuery = DB::connection('tenant')->table('voucher_groups')
             ->where('price', $data['amount']);
 
@@ -66,7 +66,7 @@ class CaptivePaymentService
             return ['status' => -1, 'errorMessage' => 'Selected WiFi package is not available'];
         }
 
-        $externalRef = sprintf('CAP_%d_%d_%s', $tenant->id, time(), uniqid());
+        $externalRef = sprintf('CAP_%d_%d_%d_%s', $tenant->id, $site?->id ?: 0, time(), uniqid());
         $msisdn = $this->normalizeMsisdn($data['msisdn']);
 
         $transactionData = [
@@ -133,7 +133,8 @@ class CaptivePaymentService
             return ['transactionStatus' => -1, 'errorMessage' => 'Tenant not found'];
         }
 
-        $tenant->configure();
+        $site = $this->siteFromReference($tenant, $reference);
+        $this->configureSiteDatabase($tenant, $site);
         $transaction = Transaction::where('external_ref', $reference)
             ->orWhere('transaction_ref', $reference)
             ->first();
@@ -172,7 +173,8 @@ class CaptivePaymentService
             return false;
         }
 
-        $tenant->configure();
+        $site = $this->siteFromReference($tenant, $externalRef);
+        $this->configureSiteDatabase($tenant, $site);
         $transaction = Transaction::where('external_ref', $externalRef)->first();
 
         if (!$transaction) {
@@ -205,12 +207,14 @@ class CaptivePaymentService
 
         $ref = $response['failed_transaction_reference'] ?? '';
         foreach (Tenant::where('status', 'approved')->get() as $tenant) {
-            $tenant->configure();
-            $updated = Transaction::where('transaction_ref', $ref)
-                ->where('status', 'pending')
-                ->update(['status' => 'failed', 'status_message' => 'Mobile money payment failed or was cancelled']);
-            if ($updated) {
-                return true;
+            foreach (Site::where('tenant_id', $tenant->id)->orderBy('id')->get() as $site) {
+                $this->configureSiteDatabase($tenant, $site);
+                $updated = Transaction::where('transaction_ref', $ref)
+                    ->where('status', 'pending')
+                    ->update(['status' => 'failed', 'status_message' => 'Mobile money payment failed or was cancelled']);
+                if ($updated) {
+                    return true;
+                }
             }
         }
 
@@ -221,6 +225,34 @@ class CaptivePaymentService
     {
         $parts = explode('_', $ref);
         return count($parts) >= 2 && $parts[0] === 'CAP' && is_numeric($parts[1]) ? (int) $parts[1] : null;
+    }
+
+    private function siteFromReference(Tenant $tenant, string $ref): ?Site
+    {
+        $parts = explode('_', $ref);
+        if (count($parts) >= 4 && $parts[0] === 'CAP' && is_numeric($parts[2]) && (int) $parts[2] > 0) {
+            return Site::where('tenant_id', $tenant->id)->where('id', (int) $parts[2])->first();
+        }
+
+        return Site::where('tenant_id', $tenant->id)->orderBy('id')->first();
+    }
+
+    private function configureSiteDatabase(Tenant $tenant, ?Site $site): void
+    {
+        if ($site) {
+            if (!$site->database_name) {
+                $site->provisionDatabase($tenant);
+                $site = $site->fresh();
+            }
+
+            $site->configureTenantConnection($tenant);
+            app()->instance('tenant', $tenant);
+            app()->instance('active_site', $site);
+            return;
+        }
+
+        $tenant->configure();
+        app()->instance('tenant', $tenant);
     }
 
     private function normalizeMsisdn(string $msisdn): string
