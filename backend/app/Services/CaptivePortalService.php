@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CaptivePortalTemplate;
+use App\Models\Site;
 use App\Models\SystemSetting;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,7 @@ class CaptivePortalService
         ];
     }
 
-    public function activeTemplateForTenant(Tenant $tenant, ?\App\Models\Site $site = null): array
+    public function activeTemplateForTenant(Tenant $tenant, ?Site $site = null): array
     {
         $template = CaptivePortalTemplate::where('tenant_id', $tenant->id)
             ->when(
@@ -149,6 +150,39 @@ class CaptivePortalService
             'md5.js' => $this->mikrotikMd5Js(),
             default => null,
         };
+    }
+
+    public function previewLoginHtml(Tenant $tenant, ?Site $site, ?array $template = null): string
+    {
+        $siteName = $site?->name ?: $tenant->name;
+        $activeTemplate = $template ?: $this->activeTemplateForTenant($tenant, $site);
+
+        return $this->loginHtml([
+            'tenant' => [
+                'name' => $tenant->name,
+                'slug' => $tenant->slug,
+            ],
+            'router' => [
+                'name' => $siteName,
+                'identifier' => Str::slug($siteName) . '-ONLIFI-1',
+                'token' => 'preview',
+            ],
+            'template' => $activeTemplate,
+            'api' => [
+                'base_url' => $this->apiBaseUrl(),
+                'pay_url' => $this->apiBaseUrl() . '/api/captive/pay',
+                'status_url' => $this->apiBaseUrl() . '/api/captive/payment-status',
+            ],
+            'manual_payment' => [
+                'site_name' => $siteName,
+                'site_slug' => $this->paymentSiteSlug($siteName),
+                'destination_directory' => $this->paymentSiteSlug($siteName),
+                'initiate_url' => $this->manualPaymentUrl($siteName),
+                'check_status_url' => $this->manualPaymentUrl($siteName, 'check_status.php'),
+                'voucher_lookup_url' => $this->manualPaymentUrl($siteName, 'look/voucher-lookup.php'),
+            ],
+            'packages' => collect(),
+        ]);
     }
 
     private function loginHtml(array $config): string
@@ -289,8 +323,7 @@ HTML;
             'accent_color' => '#ff6b35',
         ], $config['template']['design'] ?? []);
         $displayName = trim((string) ($design['site_display_name'] ?? '')) ?: $siteName;
-        $marqueeText = trim((string) ($design['marquee_text'] ?? ''))
-            ?: "Welcome to {$displayName}, you can buy a voucher or pay with mobile money for instant access. Happy Surfing!!!! Need help? Contact: <strong>{$design['support_contact']}</strong>";
+        $marqueeText = trim((string) ($design['marquee_text'] ?? ''));
 
         $replacements = [
             '{{SITE_NAME}}' => $siteName,
@@ -332,12 +365,14 @@ HTML;
 
         $html = str_replace(array_keys($legacyReplacements), array_values($legacyReplacements), $html);
 
-        $html = preg_replace(
-            '/<div class="marquee-content">.*?<\/div>/s',
-            '<div class="marquee-content">' . $marqueeText . '</div>',
-            $html,
-            1
-        ) ?? $html;
+        if ($marqueeText !== '') {
+            $html = preg_replace(
+                '/<div class="marquee-content">.*?<\/div>/s',
+                '<div class="marquee-content">' . $marqueeText . '</div>',
+                $html,
+                1
+            ) ?? $html;
+        }
 
         return str_replace(
             ['STK WIFI POINT', 'STK WIFI'],

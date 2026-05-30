@@ -135,6 +135,7 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::get('/billing/payment-status', [SubscriptionBillingController::class, 'paymentStatus']);
     Route::get('/captive-portal/templates', [CaptivePortalController::class, 'templates']);
     Route::post('/captive-portal/templates', [CaptivePortalController::class, 'saveTemplate']);
+    Route::post('/captive-portal/preview', [CaptivePortalController::class, 'preview']);
     Route::post('/captive-portal/templates/{template}/activate', [CaptivePortalController::class, 'activateTemplate']);
     Route::get('/sms-credits', [SmsCreditController::class, 'summary']);
     Route::put('/sms-credits/plan', [SmsCreditController::class, 'updatePlan']);

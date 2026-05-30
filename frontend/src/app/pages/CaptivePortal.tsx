@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle, Loader2, Paintbrush, Save } from 'lucide-react';
-import { activateCaptivePortalTemplate, getCaptivePortalTemplates, saveCaptivePortalTemplate } from '../utils/api';
+import { API_BASE, activateCaptivePortalTemplate, getCaptivePortalTemplates, saveCaptivePortalTemplate } from '../utils/api';
 import { useSite } from '../context/SiteContext';
 
 interface BaseTemplate {
@@ -19,11 +19,8 @@ export function CaptivePortal() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const previewStyle = useMemo(() => ({
-    background: `linear-gradient(135deg, ${design.secondary_color || '#1e3c72'} 0%, ${design.primary_color || '#2a5298'} 50%, ${design.accent_color || '#ff6b35'} 100%)`,
-    color: '#0f172a',
-  }), [design]);
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -44,6 +41,40 @@ export function CaptivePortal() {
   useEffect(() => {
     fetchTemplates();
   }, [selectedSite?.id]);
+
+  useEffect(() => {
+    if (!selected) return;
+
+    const timer = window.setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        const token = localStorage.getItem('tenant_token');
+        const siteId = localStorage.getItem('selected_site_id');
+        const response = await fetch(`${API_BASE}/tenant/captive-portal/preview`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'text/html',
+            'Content-Type': 'application/json',
+            ...(siteId ? { 'X-Site-ID': siteId } : {}),
+          },
+          body: JSON.stringify({
+            name,
+            theme: selected.theme,
+            design,
+          }),
+        });
+
+        setPreviewHtml(response.ok ? await response.text() : '<!doctype html><html><body><p>Preview unavailable.</p></body></html>');
+      } catch (error) {
+        setPreviewHtml('<!doctype html><html><body><p>Preview unavailable.</p></body></html>');
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [design, name, selected, selectedSite?.id]);
 
   const chooseTemplate = (template: BaseTemplate) => {
     setSelected(template);
@@ -143,21 +174,18 @@ export function CaptivePortal() {
 
           <div className="bg-card border border-border rounded-lg p-5">
             <h2 className="font-semibold text-card-foreground mb-4">Preview</h2>
-            <div className="rounded-lg border border-border p-6 min-h-[360px] grid place-items-center" style={previewStyle}>
-              <div className="w-full max-w-sm bg-white text-slate-900 rounded-[24px] shadow-xl overflow-hidden">
-                <div className="p-5 text-center text-white" style={{ background: `linear-gradient(135deg, ${design.primary_color || '#2a5298'} 0%, ${design.secondary_color || '#1e3c72'} 100%)` }}>
-                  <h3 className="text-2xl font-bold">{design.site_display_name || selectedSite?.name || 'Site Name'}</h3>
-                  <p className="text-sm opacity-90 mt-1">{design.subtitle}</p>
+            <div className="relative rounded-lg border border-border overflow-hidden bg-black/5">
+              {previewLoading && (
+                <div className="absolute inset-0 z-10 grid place-items-center bg-background/70">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary" />
                 </div>
-                <div className="p-5 space-y-3">
-                  <input placeholder="Enter Voucher Code" className="w-full border rounded-xl px-3 py-3" />
-                  <button style={{ background: `linear-gradient(135deg, ${design.accent_color || '#ff6b35'} 0%, #f7931e 100%)` }} className="w-full rounded-xl px-3 py-3 text-white font-semibold">Connect Now</button>
-                  <div className="rounded-xl border p-3 text-sm">
-                    <div className="flex justify-between"><span>24 Hours</span><strong>UGX 1,000</strong></div>
-                  </div>
-                  <p className="text-xs text-center text-slate-500">Need help? Contact: {design.support_contact}</p>
-                </div>
-              </div>
+              )}
+              <iframe
+                title="Captive page preview"
+                sandbox=""
+                srcDoc={previewHtml}
+                className="w-full h-[760px] bg-white"
+              />
             </div>
           </div>
         </div>

@@ -67,6 +67,31 @@ class CaptivePortalController extends Controller
         });
     }
 
+    public function preview(Request $request, CaptivePortalService $portal)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'nullable|string|max:100',
+            'theme' => 'nullable|string|max:50',
+            'design' => 'nullable|array',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        }
+
+        $tenant = $request->user()->tenant;
+        $site = SiteScope::selectedOrDefaultSite($request);
+        $template = [
+            'id' => null,
+            'name' => $request->input('name', 'Classic OLD-Flow'),
+            'theme' => $request->input('theme', 'old-flow'),
+            'design' => $request->input('design', []),
+        ];
+
+        return response($portal->previewLoginHtml($tenant, $site, $template))
+            ->header('Content-Type', 'text/html');
+    }
+
     public function activateTemplate(Request $request, CaptivePortalTemplate $template)
     {
         $tenant = $request->user()->tenant;
