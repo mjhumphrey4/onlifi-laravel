@@ -33,10 +33,9 @@ class RadiusService
                 ->where('username', $voucher->voucher_code)
                 ->delete();
             
-            // Calculate remaining session time
-            $totalValiditySeconds = $voucher->validity_hours * 3600;
-            $usedSeconds = ($voucher->total_session_time_minutes ?? 0) * 60;
-            $remainingSeconds = max(0, $totalValiditySeconds - $usedSeconds);
+            // Calculate remaining session time. Once first_used_at is known, the
+            // voucher is an absolute wall-clock lease from that first login.
+            $remainingSeconds = $this->remainingSessionSeconds($voucher);
             
             // Session-Timeout attribute
             if ($remainingSeconds > 0) {
@@ -62,20 +61,19 @@ class RadiusService
             // Mikrotik-Total-Limit attribute (data limit in bytes)
             if ($voucher->data_limit_mb) {
                 $remainingDataMb = $voucher->data_limit_mb - ($voucher->total_data_used_mb ?? 0);
-                $remainingDataBytes = max(0, $remainingDataMb * 1048576);
+                $remainingDataBytes = max(0, (int) round($remainingDataMb * 1048576));
                 
                 if ($remainingDataBytes > 0) {
-                    DB::connection('tenant')->table('radreply')->insert([
-                        'username' => $voucher->voucher_code,
-                        'attribute' => 'Mikrotik-Total-Limit',
-                        'op' => '=',
-                        'value' => (string) $remainingDataBytes,
-                    ]);
+                    foreach ($this->mikrotikTotalLimitAttributes($remainingDataBytes) as $attribute => $value) {
+                        DB::connection('tenant')->table('radreply')->insert([
+                            'username' => $voucher->voucher_code,
+                            'attribute' => $attribute,
+                            'op' => '=',
+                            'value' => (string) $value,
+                        ]);
+                    }
                 }
             }
-            
-            // Mikrotik-Total-Limit-Gigawords for data > 4GB
-            // (Mikrotik-Total-Limit is 32-bit, so we need gigawords for larger limits)
             
             DB::connection('tenant')->commit();
             
@@ -234,5 +232,39 @@ class RadiusService
         }
         
         return $cleaned;
+    }
+
+    public function remainingSessionSeconds(Voucher $voucher): int
+    {
+        $validitySeconds = $this->validitySeconds($voucher);
+
+        if ($voucher->expires_at) {
+            return max(0, now()->diffInSeconds($voucher->expires_at, false));
+        }
+
+        if ($voucher->first_used_at) {
+            return max(0, now()->diffInSeconds($voucher->first_used_at->copy()->addSeconds($validitySeconds), false));
+        }
+
+        return $validitySeconds;
+    }
+
+    public function validitySeconds(Voucher $voucher): int
+    {
+        if (!empty($voucher->validity_minutes)) {
+            return max(60, (int) $voucher->validity_minutes * 60);
+        }
+
+        return max(60, (int) $voucher->validity_hours * 3600);
+    }
+
+    private function mikrotikTotalLimitAttributes(int $bytes): array
+    {
+        $gigaword = 4294967296;
+
+        return [
+            'Mikrotik-Total-Limit' => $bytes % $gigaword,
+            'Mikrotik-Total-Limit-Gigawords' => intdiv($bytes, $gigaword),
+        ];
     }
 }

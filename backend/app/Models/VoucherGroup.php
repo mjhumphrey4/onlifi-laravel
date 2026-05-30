@@ -16,6 +16,7 @@ class VoucherGroup extends Model
         'description',
         'profile_name',
         'validity_hours',
+        'validity_minutes',
         'data_limit_mb',
         'speed_limit_kbps',
         'price',
@@ -28,6 +29,7 @@ class VoucherGroup extends Model
     protected $casts = [
         'price' => 'decimal:2',
         'validity_hours' => 'integer',
+        'validity_minutes' => 'integer',
         'data_limit_mb' => 'integer',
         'speed_limit_kbps' => 'integer',
         'created_at' => 'datetime',

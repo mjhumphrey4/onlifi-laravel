@@ -13,6 +13,7 @@ interface VoucherType {
   id: number;
   type_name: string;
   duration_hours: number;
+  validity_minutes?: number | null;
   base_amount: number;
   description: string;
   data_limit_mb: number | null;
@@ -86,6 +87,7 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
         description: formData.description,
         profile_name: formData.profile_name || selectedType.type_name,
         validity_hours: selectedType.duration_hours,
+        validity_minutes: selectedType.validity_minutes || selectedType.duration_hours * 60,
         price: selectedType.base_amount,
         count: formData.quantity,
         data_limit_mb: selectedType.data_limit_mb,
@@ -111,9 +113,22 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
 
   const selectedType = voucherTypes.find(t => t.id === formData.voucher_type_id);
   const validity_hours = selectedType?.duration_hours || 0;
+  const validity_minutes = selectedType?.validity_minutes || validity_hours * 60;
   const price = selectedType?.base_amount || 0;
   const data_limit_mb = selectedType?.data_limit_mb || 0;
   const speed_limit_kbps = selectedType?.speed_limit_kbps || 0;
+
+  const formatDuration = (type: Pick<VoucherType, 'duration_hours' | 'validity_minutes'>) => {
+    const minutes = type.validity_minutes || type.duration_hours * 60;
+    if (minutes >= 1440 && minutes % 1440 === 0) {
+      const days = minutes / 1440;
+      return `${days} day${days > 1 ? 's' : ''}`;
+    }
+    if (minutes >= 60 && minutes % 60 === 0) {
+      return `${minutes / 60}h`;
+    }
+    return `${minutes} min`;
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -184,7 +199,7 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
                 <option value="0">-- Select a voucher type --</option>
                 {voucherTypes.map((type) => (
                   <option key={type.id} value={type.id}>
-                    {type.type_name} - {type.duration_hours}h - UGX {type.base_amount.toLocaleString()}
+                    {type.type_name} - {formatDuration(type)} - UGX {type.base_amount.toLocaleString()}
                   </option>
                 ))}
               </select>
@@ -197,7 +212,7 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
               <div className="bg-muted/50 rounded-lg p-4 space-y-2">
                 <p className="text-sm font-medium text-card-foreground">Selected Type Details:</p>
                 <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                  <div>Duration: {selectedType.duration_hours} hours</div>
+                  <div>Duration: {formatDuration(selectedType)}</div>
                   <div>Price: UGX {selectedType.base_amount.toLocaleString()}</div>
                   <div>Data Limit: {selectedType.data_limit_mb ? `${selectedType.data_limit_mb} MB` : 'Unlimited'}</div>
                   <div>Speed Limit: {selectedType.speed_limit_kbps ? `${(selectedType.speed_limit_kbps / 1024).toFixed(1)} Mbps` : 'Unlimited'}</div>
@@ -304,7 +319,7 @@ export function CreateVoucherDialog({ onClose, onSuccess }: CreateVoucherDialogP
               <div className="space-y-1 text-sm text-muted-foreground">
                 <p>• {formData.quantity} vouchers will be created</p>
                 <p>• Type: {selectedType.type_name}</p>
-                <p>• Valid for {validity_hours} hours</p>
+                <p>• Valid for {formatDuration({ duration_hours: validity_hours, validity_minutes })}</p>
                 <p>• Price: UGX {price.toLocaleString()} each</p>
                 {data_limit_mb > 0 && <p>• Data limit: {data_limit_mb} MB</p>}
                 {speed_limit_kbps > 0 && <p>• Speed limit: {(speed_limit_kbps / 1024).toFixed(1)} Mbps</p>}

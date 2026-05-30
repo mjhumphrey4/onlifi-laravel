@@ -55,9 +55,8 @@ class VoucherService
 
         $voucher->update([
             'status' => 'used',
-            'first_used_at' => now(),
-            'last_used_at' => now(),
-            'expires_at' => now()->addHours($voucher->validity_hours),
+            'last_used_at' => null,
+            'expires_at' => null,
             'used_by_mac' => $transaction->client_mac,
         ]);
 
@@ -115,6 +114,7 @@ class VoucherService
             'group_id' => $group->id,
             'profile_name' => $group->profile_name,
             'validity_hours' => $group->validity_hours,
+            'validity_minutes' => $group->validity_minutes ?? null,
             'data_limit_mb' => $group->data_limit_mb,
             'speed_limit_kbps' => $group->speed_limit_kbps,
             'price' => $group->price,
@@ -126,6 +126,9 @@ class VoucherService
         if (!Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
             unset($voucherData['site_id']);
         }
+        if (!Schema::connection('tenant')->hasColumn('vouchers', 'validity_minutes')) {
+            unset($voucherData['validity_minutes']);
+        }
 
         $voucher = Voucher::create($voucherData);
 
@@ -134,6 +137,7 @@ class VoucherService
             'voucher_code' => $voucher->voucher_code,
             'password' => $voucher->password,
             'validity_hours' => $voucher->validity_hours,
+            'validity_minutes' => $voucher->validity_minutes,
             'data_limit_mb' => $voucher->data_limit_mb,
             'speed_limit_kbps' => $voucher->speed_limit_kbps,
         ]);
@@ -220,6 +224,7 @@ class VoucherService
             'description' => $data['description'] ?? null,
             'profile_name' => $data['profile_name'],
             'validity_hours' => $data['validity_hours'],
+            'validity_minutes' => $data['validity_minutes'] ?? null,
             'data_limit_mb' => $data['data_limit_mb'] ?? null,
             'speed_limit_kbps' => $data['speed_limit_kbps'] ?? null,
             'price' => $data['price'],
@@ -231,6 +236,9 @@ class VoucherService
         $groupData = SiteScope::tenantCompatColumns('voucher_groups', $groupData);
         if (!Schema::connection('tenant')->hasColumn('voucher_groups', 'site_id')) {
             unset($groupData['site_id']);
+        }
+        if (!Schema::connection('tenant')->hasColumn('voucher_groups', 'validity_minutes')) {
+            unset($groupData['validity_minutes']);
         }
 
         $group = VoucherGroup::create($groupData);
@@ -258,6 +266,7 @@ class VoucherService
                 'group_id' => $group->id,
                 'profile_name' => $group->profile_name,
                 'validity_hours' => $group->validity_hours,
+                'validity_minutes' => $group->validity_minutes ?? null,
                 'data_limit_mb' => $group->data_limit_mb,
                 'speed_limit_kbps' => $group->speed_limit_kbps,
                 'price' => $group->price,
@@ -271,6 +280,9 @@ class VoucherService
             $vouchersData[array_key_last($vouchersData)] = SiteScope::tenantCompatColumns('vouchers', $vouchersData[array_key_last($vouchersData)]);
             if (!Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
                 unset($vouchersData[array_key_last($vouchersData)]['site_id']);
+            }
+            if (!Schema::connection('tenant')->hasColumn('vouchers', 'validity_minutes')) {
+                unset($vouchersData[array_key_last($vouchersData)]['validity_minutes']);
             }
         }
 

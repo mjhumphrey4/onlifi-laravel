@@ -4,16 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Models\Voucher;
 use App\Services\RadiusService;
+use App\Services\VoucherAccountingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class RadiusController extends Controller
 {
     private $radiusService;
+    private $voucherAccountingService;
 
-    public function __construct(RadiusService $radiusService)
+    public function __construct(RadiusService $radiusService, VoucherAccountingService $voucherAccountingService)
     {
         $this->radiusService = $radiusService;
+        $this->voucherAccountingService = $voucherAccountingService;
     }
 
     /**
@@ -61,11 +64,14 @@ class RadiusController extends Controller
      */
     public function cleanupExpired(Request $request)
     {
-        $cleaned = $this->radiusService->cleanupExpiredVouchers();
+        $result = $this->voucherAccountingService->cleanupCurrentTenantDatabase(true);
 
         return response()->json([
             'message' => 'Cleanup completed',
-            'cleaned' => $cleaned,
+            'reconciled' => $result['reconciled'],
+            'expired' => $result['expired'],
+            'kicked' => $result['kicked'],
+            'failed' => $result['failed'],
         ]);
     }
 

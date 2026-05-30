@@ -234,4 +234,25 @@ class MikrotikService
             return false;
         }
     }
+
+    public function removeActiveHotspotUser(MikrotikRouter $router, string $username): bool
+    {
+        if (!$this->connect($router)) {
+            return false;
+        }
+
+        try {
+            $result = $this->api->removeActiveHotspotUser($username);
+            $this->disconnect();
+            return $result;
+        } catch (\Exception $e) {
+            Log::error("Failed to remove active HotSpot user from MikroTik", [
+                'router' => $router->ip_address,
+                'username' => $username,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return false;
+        }
+    }
 }

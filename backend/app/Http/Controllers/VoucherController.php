@@ -87,6 +87,7 @@ class VoucherController extends Controller
             'group_name' => 'required|string|max:100',
             'profile_name' => 'required|string|max:64',
             'validity_hours' => 'required|integer|min:1',
+            'validity_minutes' => 'nullable|integer|min:1',
             'price' => 'required|numeric|min:0',
             'count' => 'required|integer|min:1|max:1000',
             'description' => 'nullable|string',
@@ -183,7 +184,7 @@ class VoucherController extends Controller
             ]);
         }
 
-        if ($voucher->status === 'expired') {
+        if ($voucher->status === 'expired' || ($voucher->expires_at && $voucher->expires_at->isPast())) {
             return response()->json([
                 'valid' => false,
                 'message' => 'Voucher has expired',
@@ -227,6 +228,7 @@ class VoucherController extends Controller
         $validator = Validator::make($request->all(), [
             'type_name' => 'required|string|max:100',
             'duration_hours' => 'required|integer|min:1',
+            'validity_minutes' => 'nullable|integer|min:1',
             'base_amount' => 'required|numeric|min:0',
             'description' => 'nullable|string|max:255',
             'data_limit_mb' => 'nullable|integer|min:0',
@@ -243,6 +245,7 @@ class VoucherController extends Controller
         $data = [
             'type_name' => $request->type_name,
             'duration_hours' => $request->duration_hours,
+            'validity_minutes' => $request->validity_minutes,
             'base_amount' => $request->base_amount,
             'description' => $request->description,
             'data_limit_mb' => $request->data_limit_mb,
@@ -268,6 +271,9 @@ class VoucherController extends Controller
             $data['tenant_id'] = app('tenant')->id;
         }
         $data = SiteScope::withSiteColumn('voucher_types', $data, $site);
+        if (!Schema::connection('tenant')->hasColumn('voucher_types', 'validity_minutes')) {
+            unset($data['validity_minutes']);
+        }
 
         $type = VoucherType::create($data);
 
@@ -290,6 +296,7 @@ class VoucherController extends Controller
         $validator = Validator::make($request->all(), [
             'type_name' => 'sometimes|string|max:100',
             'duration_hours' => 'sometimes|integer|min:1',
+            'validity_minutes' => 'nullable|integer|min:1',
             'base_amount' => 'sometimes|numeric|min:0',
             'description' => 'nullable|string|max:255',
             'data_limit_mb' => 'nullable|integer|min:0',
@@ -304,10 +311,15 @@ class VoucherController extends Controller
             ], 422);
         }
 
-        $type->update($request->only([
-            'type_name', 'duration_hours', 'base_amount', 'description',
+        $updateData = $request->only([
+            'type_name', 'duration_hours', 'validity_minutes', 'base_amount', 'description',
             'data_limit_mb', 'speed_limit_kbps', 'is_active'
-        ]));
+        ]);
+        if (!Schema::connection('tenant')->hasColumn('voucher_types', 'validity_minutes')) {
+            unset($updateData['validity_minutes']);
+        }
+
+        $type->update($updateData);
 
         return response()->json([
             'message' => 'Voucher type updated successfully',

@@ -14,6 +14,7 @@ class VoucherType extends Model
     protected $fillable = [
         'type_name',
         'duration_hours',
+        'validity_minutes',
         'base_amount',
         'description',
         'data_limit_mb',
@@ -26,6 +27,7 @@ class VoucherType extends Model
     protected $casts = [
         'base_amount' => 'decimal:2',
         'duration_hours' => 'integer',
+        'validity_minutes' => 'integer',
         'data_limit_mb' => 'integer',
         'speed_limit_kbps' => 'integer',
         'is_active' => 'boolean',

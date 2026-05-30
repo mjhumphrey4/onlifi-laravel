@@ -314,6 +314,41 @@ class MikrotikAPI {
     }
 
     /**
+     * Disconnect active HotSpot sessions for a username.
+     */
+    public function removeActiveHotspotUser($username) {
+        if (!$this->connect()) {
+            return false;
+        }
+
+        $response = $this->communicate([
+            '/ip/hotspot/active/print',
+            '?user=' . $username,
+            '=.proplist=.id,user',
+        ]);
+
+        $users = $this->parseResponse($response);
+        $removed = false;
+
+        foreach ($users as $user) {
+            if (empty($user['.id'])) {
+                continue;
+            }
+
+            $removeResponse = $this->communicate([
+                '/ip/hotspot/active/remove',
+                '=.id=' . $user['.id'],
+            ]);
+
+            if (isset($removeResponse[0]) && $removeResponse[0] === '!done') {
+                $removed = true;
+            }
+        }
+
+        return $removed;
+    }
+
+    /**
      * Detect device type from MAC address (OUI lookup)
      */
     private function detectDeviceType($mac) {

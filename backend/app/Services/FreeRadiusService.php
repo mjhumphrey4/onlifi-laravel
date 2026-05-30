@@ -15,12 +15,13 @@ class FreeRadiusService
             $username = $voucherData['voucher_code'];
             $password = $voucherData['password'];
             $validityHours = $voucherData['validity_hours'];
+            $validityMinutes = $voucherData['validity_minutes'] ?? null;
             $dataLimitMb = $voucherData['data_limit_mb'];
             $speedLimitKbps = $voucherData['speed_limit_kbps'];
 
             $this->insertRadcheck($username, $password);
 
-            $this->insertRadreply($username, $validityHours, $dataLimitMb, $speedLimitKbps);
+            $this->insertRadreply($username, $validityHours, $dataLimitMb, $speedLimitKbps, $validityMinutes);
 
             DB::connection('tenant')->commit();
 
@@ -56,9 +57,9 @@ class FreeRadiusService
         );
     }
 
-    private function insertRadreply(string $username, int $validityHours, ?int $dataLimitMb, ?int $speedLimitKbps): void
+    private function insertRadreply(string $username, int $validityHours, ?int $dataLimitMb, ?int $speedLimitKbps, ?int $validityMinutes = null): void
     {
-        $sessionTimeout = $validityHours * 3600;
+        $sessionTimeout = $this->validitySeconds($validityHours, $validityMinutes);
         DB::connection('tenant')->table('radreply')->updateOrInsert(
             ['username' => $username, 'attribute' => 'Session-Timeout'],
             [
@@ -78,13 +79,15 @@ class FreeRadiusService
 
         if ($dataLimitMb) {
             $dataLimitBytes = $dataLimitMb * 1048576;
-            DB::connection('tenant')->table('radreply')->updateOrInsert(
-                ['username' => $username, 'attribute' => 'Mikrotik-Total-Limit'],
-                [
-                    'op' => '=',
-                    'value' => (string)$dataLimitBytes,
-                ]
-            );
+            foreach ($this->mikrotikTotalLimitAttributes((int) $dataLimitBytes) as $attribute => $value) {
+                DB::connection('tenant')->table('radreply')->updateOrInsert(
+                    ['username' => $username, 'attribute' => $attribute],
+                    [
+                        'op' => '=',
+                        'value' => (string) $value,
+                    ]
+                );
+            }
         }
 
         if ($speedLimitKbps) {
@@ -162,7 +165,7 @@ class FreeRadiusService
                     'username' => $voucher->voucher_code,
                     'attribute' => 'Session-Timeout',
                     'op' => '=',
-                    'value' => (string) ((int) $voucher->validity_hours * 3600),
+                    'value' => (string) $this->remainingSessionSeconds($voucher),
                 ];
 
                 $radreplyRows[] = [
@@ -173,12 +176,17 @@ class FreeRadiusService
                 ];
 
                 if ($voucher->data_limit_mb) {
-                    $radreplyRows[] = [
-                        'username' => $voucher->voucher_code,
-                        'attribute' => 'Mikrotik-Total-Limit',
-                        'op' => '=',
-                        'value' => (string) ((int) $voucher->data_limit_mb * 1048576),
-                    ];
+                    $remainingBytes = $this->remainingDataBytes($voucher);
+                    if ($remainingBytes > 0) {
+                        foreach ($this->mikrotikTotalLimitAttributes($remainingBytes) as $attribute => $value) {
+                            $radreplyRows[] = [
+                                'username' => $voucher->voucher_code,
+                                'attribute' => $attribute,
+                                'op' => '=',
+                                'value' => (string) $value,
+                            ];
+                        }
+                    }
                 }
 
                 if ($voucher->speed_limit_kbps) {
@@ -276,5 +284,47 @@ class FreeRadiusService
 
             return null;
         }
+    }
+
+    private function validitySeconds(int $validityHours, ?int $validityMinutes = null): int
+    {
+        if ($validityMinutes) {
+            return max(60, $validityMinutes * 60);
+        }
+
+        return max(60, $validityHours * 3600);
+    }
+
+    private function remainingSessionSeconds($voucher): int
+    {
+        $validitySeconds = $this->validitySeconds((int) $voucher->validity_hours, $voucher->validity_minutes ? (int) $voucher->validity_minutes : null);
+
+        if (!empty($voucher->expires_at)) {
+            return max(0, now()->diffInSeconds($voucher->expires_at, false));
+        }
+
+        if (!empty($voucher->first_used_at)) {
+            return max(0, now()->diffInSeconds($voucher->first_used_at->copy()->addSeconds($validitySeconds), false));
+        }
+
+        return $validitySeconds;
+    }
+
+    private function remainingDataBytes($voucher): int
+    {
+        $limitMb = (float) ($voucher->data_limit_mb ?? 0);
+        $usedMb = (float) ($voucher->total_data_used_mb ?? 0);
+
+        return max(0, (int) round(($limitMb - $usedMb) * 1048576));
+    }
+
+    private function mikrotikTotalLimitAttributes(int $bytes): array
+    {
+        $gigaword = 4294967296;
+
+        return [
+            'Mikrotik-Total-Limit' => $bytes % $gigaword,
+            'Mikrotik-Total-Limit-Gigawords' => intdiv($bytes, $gigaword),
+        ];
     }
 }
