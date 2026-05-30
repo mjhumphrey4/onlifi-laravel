@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation, Navigate, useNavigate } from 'react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -16,14 +16,17 @@ import {
   Bell,
   Search,
   Network,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE } from '../utils/api';
 
 const adminMenuItems = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/admin/tenants', label: 'All Tenants', icon: Users },
   { path: '/admin/vpn-management', label: 'VPN Management', icon: Network },
   { path: '/admin/tenants/pending', label: 'Pending Approvals', icon: UserCheck },
+  { path: '/admin/support-tickets', label: 'Support Tickets', icon: MessageSquare },
   { path: '/admin/announcements', label: 'Announcements', icon: Megaphone },
   { path: '/admin/platform-fees', label: 'Platform Fees', icon: DollarSign },
   { path: '/admin/settings', label: 'System Settings', icon: Settings },
@@ -34,6 +37,8 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const { user, loading, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [ticketNotifications, setTicketNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -41,6 +46,32 @@ export function AdminLayout() {
     await logout();
     navigate('/admin/login');
   };
+
+  useEffect(() => {
+    if (!user || user.role !== 'super_admin') return;
+
+    const loadTicketNotifications = async () => {
+      try {
+        const token = localStorage.getItem('admin_token');
+        const response = await fetch(`${API_BASE}/super-admin/support-tickets/notifications`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setTicketNotifications(data.notifications || []);
+        }
+      } catch (error) {
+        console.error('Failed to load admin ticket notifications:', error);
+      }
+    };
+
+    loadTicketNotifications();
+    const interval = window.setInterval(loadTicketNotifications, 60000);
+    return () => window.clearInterval(interval);
+  }, [user]);
 
   if (loading) {
     return (
@@ -159,10 +190,43 @@ export function AdminLayout() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="p-2 text-slate-400 hover:bg-slate-700 rounded-lg relative">
+            <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-slate-400 hover:bg-slate-700 rounded-lg relative">
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+              {ticketNotifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                  {ticketNotifications.length > 9 ? '9+' : ticketNotifications.length}
+                </span>
+              )}
             </button>
+            {showNotifications && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
+                <div className="fixed top-16 right-6 z-50 w-80 max-h-[70vh] overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-2xl">
+                  <div className="px-4 py-3 border-b border-slate-700">
+                    <p className="text-sm font-semibold text-white">Support Notifications</p>
+                  </div>
+                  <div className="max-h-[calc(70vh-48px)] overflow-y-auto">
+                    {ticketNotifications.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-slate-400">No unread support tickets.</div>
+                    ) : ticketNotifications.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setShowNotifications(false);
+                          setTicketNotifications((items) => items.filter((notification) => notification.id !== item.id));
+                          navigate(`/admin/support-tickets?ticket=${item.ticket_id}`);
+                        }}
+                        className="w-full text-left p-4 border-b border-slate-700/70 hover:bg-slate-700/60"
+                      >
+                        <p className="text-sm font-medium text-white">{item.title}</p>
+                        <p className="text-xs text-slate-300 mt-1 line-clamp-2">{item.content}</p>
+                        <p className="text-xs text-slate-500 mt-2">{item.created_at ? new Date(item.created_at).toLocaleString() : ''}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </header>
 

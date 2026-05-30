@@ -25,6 +25,7 @@ use App\Http\Controllers\CaptivePortalController;
 use App\Http\Controllers\SmsCreditController;
 use App\Http\Controllers\RemoteAccessController;
 use App\Http\Controllers\PppoeClientController;
+use App\Http\Controllers\SupportTicketController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -120,6 +121,14 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
         Route::get('/records', [PlatformFeeController::class, 'getFeeRecords']);
         Route::get('/tenant-balances', [PlatformFeeController::class, 'getTenantBalances']);
     });
+
+    Route::prefix('support-tickets')->group(function () {
+        Route::get('/', [SupportTicketController::class, 'adminIndex']);
+        Route::get('/notifications', [SupportTicketController::class, 'adminNotifications']);
+        Route::get('/{id}', [SupportTicketController::class, 'adminShow']);
+        Route::post('/{id}/reply', [SupportTicketController::class, 'adminReply']);
+        Route::put('/{id}/status', [SupportTicketController::class, 'adminUpdateStatus']);
+    });
 });
 
 // Tenant authenticated routes
@@ -144,6 +153,15 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/sms-credits/top-up', [SmsCreditController::class, 'topUp']);
     Route::get('/sms-credits/payment-status', [SmsCreditController::class, 'paymentStatus']);
     Route::get('/remote-access', [RemoteAccessController::class, 'tenantIndex']);
+
+    Route::prefix('support-tickets')->group(function () {
+        Route::get('/', [SupportTicketController::class, 'tenantIndex']);
+        Route::post('/', [SupportTicketController::class, 'tenantStore']);
+        Route::get('/notifications', [SupportTicketController::class, 'tenantNotifications']);
+        Route::get('/{id}', [SupportTicketController::class, 'tenantShow']);
+        Route::put('/{id}', [SupportTicketController::class, 'tenantUpdate']);
+        Route::post('/{id}/reply', [SupportTicketController::class, 'tenantReply']);
+    });
 });
 
 // Active announcements for all authenticated users

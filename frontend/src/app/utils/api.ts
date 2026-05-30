@@ -171,6 +171,30 @@ export const checkSmsCreditPaymentStatus = (ref: string) => get(`/tenant/sms-cre
 export const getRemoteAccess = () => get('/tenant/remote-access');
 export const collectRouterTelemetry = (id: number) => post(`/routers/${id}/collect-telemetry`);
 
+export const getTenantSupportTickets = (params?: { status?: string; page?: number }) => {
+  const query = new URLSearchParams();
+  if (params?.status) query.set('status', params.status);
+  if (params?.page) query.set('page', String(params.page));
+  return get(`/tenant/support-tickets${query.toString() ? `?${query.toString()}` : ''}`);
+};
+export const createTenantSupportTicket = (data: Record<string, unknown>) => post('/tenant/support-tickets', data);
+export const getTenantSupportTicket = (id: number) => get(`/tenant/support-tickets/${id}`);
+export const updateTenantSupportTicket = (id: number, data: Record<string, unknown>) => put(`/tenant/support-tickets/${id}`, data);
+export const replyTenantSupportTicket = (id: number, body: string) => post(`/tenant/support-tickets/${id}/reply`, { body });
+export const getTenantSupportTicketNotifications = () => get('/tenant/support-tickets/notifications');
+
+export const getAdminSupportTickets = (params?: { status?: string; search?: string; page?: number }) => {
+  const query = new URLSearchParams();
+  if (params?.status) query.set('status', params.status);
+  if (params?.search) query.set('search', params.search);
+  if (params?.page) query.set('page', String(params.page));
+  return get(`/super-admin/support-tickets${query.toString() ? `?${query.toString()}` : ''}`);
+};
+export const getAdminSupportTicket = (id: number) => get(`/super-admin/support-tickets/${id}`);
+export const replyAdminSupportTicket = (id: number, body: string, status?: string) => post(`/super-admin/support-tickets/${id}/reply`, { body, status });
+export const updateAdminSupportTicketStatus = (id: number, data: Record<string, unknown>) => put(`/super-admin/support-tickets/${id}/status`, data);
+export const getAdminSupportTicketNotifications = () => get('/super-admin/support-tickets/notifications');
+
 export const tenantChangePassword = (current_password: string, new_password: string, new_password_confirmation: string) =>
   post('/tenant/change-password', { current_password, new_password, new_password_confirmation });
 

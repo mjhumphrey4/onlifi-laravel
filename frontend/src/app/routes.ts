@@ -21,6 +21,7 @@ import { RemoteAccess } from './pages/RemoteAccess';
 import { Reports } from './pages/Reports';
 import { PppoeClients } from './pages/PppoeClients';
 import { Routers } from './pages/Routers';
+import { SupportTickets } from './pages/SupportTickets';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { ForgotPassword } from './pages/ForgotPassword';
@@ -35,6 +36,7 @@ import TenantList from './pages/admin/TenantList';
 import Announcements from './pages/admin/Announcements';
 import SystemSettings from './pages/admin/SystemSettings';
 import PlatformFees from './pages/admin/PlatformFees';
+import AdminSupportTickets from './pages/admin/SupportTickets';
 
 export const router = createBrowserRouter([
   // Tenant Dashboard Routes
@@ -47,6 +49,7 @@ export const router = createBrowserRouter([
       { path: 'withdrawals', Component: Withdrawals },
       { path: 'performance', Component: AnalyzePerformance },
       { path: 'reports', Component: Reports },
+      { path: 'support-tickets', Component: SupportTickets },
       { path: 'remote-access', Component: RemoteAccess },
       { path: 'pppoe', Component: PppoeClients },
       { path: 'routers', Component: Routers },
@@ -80,6 +83,7 @@ export const router = createBrowserRouter([
       { path: 'tenants', Component: TenantList },
       { path: 'vpn-management', Component: TenantList },
       { path: 'tenants/pending', Component: TenantApproval },
+      { path: 'support-tickets', Component: AdminSupportTickets },
       { path: 'announcements', Component: Announcements },
       { path: 'settings', Component: SystemSettings },
       { path: 'platform-fees', Component: PlatformFees },

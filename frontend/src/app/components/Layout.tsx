@@ -33,12 +33,13 @@ import { API_BASE } from '../utils/api';
 import { BillingGate } from './BillingGate';
 
 interface Announcement {
-  id: number;
+  id: number | string;
   title: string;
   content: string;
   type: 'info' | 'warning' | 'success' | 'error';
   created_at: string;
   is_read?: boolean;
+  ticket_id?: number;
 }
 
 interface MenuItem {
@@ -73,6 +74,7 @@ const menuItems: MenuItem[] = [
   { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false },
   { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false },
   { path: '/reports',        label: 'Reports',            icon: BarChart3, adminOnly: false },
+  { path: '/support-tickets', label: 'Support Tickets',    icon: MessageSquare, adminOnly: false },
   { path: '/remote-access',  label: 'Remote Access',      icon: Network, adminOnly: false },
   { path: '/sms-gateway',     label: 'SMS Gateway',        icon: MessageSquare, adminOnly: false },
   {
@@ -152,42 +154,60 @@ export function Layout() {
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
-  // Fetch announcements
+  // Fetch announcements and ticket notifications
   useEffect(() => {
     const fetchAnnouncements = async () => {
       try {
         const token = localStorage.getItem('tenant_token');
         if (!token) return;
         
-        const response = await fetch(`${API_BASE}/announcements/active`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-        });
-        
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        };
+
+        const [response, ticketResponse] = await Promise.all([
+          fetch(`${API_BASE}/announcements/active`, {
+            headers,
+          }),
+          fetch(`${API_BASE}/tenant/support-tickets/notifications`, {
+            headers,
+          }),
+        ]);
+
+        let items: Announcement[] = [];
+
         if (response.ok) {
           const data = await response.json();
-          const items = data.announcements || data.data || [];
-          setAnnouncements(items);
-          
-          // Count unread (check localStorage for read IDs)
-          const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
-          const unread = items.filter((a: Announcement) => !readIds.includes(a.id)).length;
-          setUnreadCount(unread);
+          items = data.announcements || data.data || [];
         }
+
+        if (ticketResponse.ok) {
+          const ticketData = await ticketResponse.json();
+          items = [
+            ...(ticketData.notifications || []),
+            ...items,
+          ];
+        }
+
+        setAnnouncements(items);
+
+        // Count unread (check localStorage for read IDs)
+        const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
+        const unread = items.filter((a: Announcement) => !readIds.includes(a.id)).length;
+        setUnreadCount(unread);
       } catch (error) {
         console.error('Failed to fetch announcements:', error);
       }
     };
 
     fetchAnnouncements();
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchAnnouncements, 300000);
+    // Refresh ticket notifications quickly while still carrying announcements.
+    const interval = setInterval(fetchAnnouncements, 60000);
     return () => clearInterval(interval);
   }, []);
 
-  const markAsRead = (id: number) => {
+  const markAsRead = (id: number | string) => {
     const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
     if (!readIds.includes(id)) {
       readIds.push(id);
@@ -473,7 +493,13 @@ export function Layout() {
                     return (
                       <div
                         key={announcement.id}
-                        onClick={() => markAsRead(announcement.id)}
+                        onClick={() => {
+                          markAsRead(announcement.id);
+                          if (announcement.ticket_id) {
+                            setShowNotifications(false);
+                            navigate(`/support-tickets?ticket=${announcement.ticket_id}`);
+                          }
+                        }}
                         className={`p-4 border-b border-border/50 cursor-pointer hover:bg-muted/50 transition-colors ${
                           !isRead ? 'bg-primary/5' : ''
                         }`}
