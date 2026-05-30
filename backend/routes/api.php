@@ -37,7 +37,7 @@ Route::post('/billing/ipn', [SubscriptionBillingController::class, 'ipn']);
 Route::post('/billing/failure', [SubscriptionBillingController::class, 'failure']);
 Route::get('/captive/config/{token}', [CaptivePortalController::class, 'config']);
 Route::get('/captive/hotspot/{token}/{file}', [CaptivePortalController::class, 'hotspotFile'])
-    ->where('file', 'login\.html|status\.html|alogin\.html');
+    ->where('file', 'login\.html|status\.html|alogin\.html|md5\.js');
 Route::post('/captive/pay', [CaptivePortalController::class, 'pay']);
 Route::get('/captive/payment-status', [CaptivePortalController::class, 'paymentStatus']);
 Route::post('/captive/ipn', [CaptivePortalController::class, 'ipn']);

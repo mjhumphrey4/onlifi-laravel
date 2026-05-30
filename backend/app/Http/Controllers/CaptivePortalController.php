@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\CaptivePortalTemplate;
 use App\Services\CaptivePaymentService;
 use App\Services\CaptivePortalService;
+use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class CaptivePortalController extends Controller
@@ -14,11 +16,15 @@ class CaptivePortalController extends Controller
     public function templates(CaptivePortalService $portal)
     {
         $tenant = request()->user()?->tenant;
+        $site = SiteScope::selectedOrDefaultSite(request());
+        $templateQuery = CaptivePortalTemplate::where('tenant_id', $tenant->id)
+            ->when($site && Schema::connection('central')->hasColumn('captive_portal_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id));
 
         return response()->json([
             'base_templates' => $portal->templates(),
-            'templates' => CaptivePortalTemplate::where('tenant_id', $tenant->id)->latest()->get(),
-            'active_template' => $portal->activeTemplateForTenant($tenant),
+            'templates' => $templateQuery->latest()->get(),
+            'active_template' => $portal->activeTemplateForTenant($tenant, $site),
+            'active_site' => $site ? ['id' => $site->id, 'name' => $site->name, 'slug' => $site->slug] : null,
         ]);
     }
 
@@ -36,14 +42,18 @@ class CaptivePortalController extends Controller
         }
 
         $tenant = $request->user()->tenant;
+        $site = SiteScope::selectedOrDefaultSite($request);
 
-        return DB::connection('central')->transaction(function () use ($request, $tenant) {
+        return DB::connection('central')->transaction(function () use ($request, $tenant, $site) {
             if ($request->boolean('is_active')) {
-                CaptivePortalTemplate::where('tenant_id', $tenant->id)->update(['is_active' => false]);
+                CaptivePortalTemplate::where('tenant_id', $tenant->id)
+                    ->when($site && Schema::connection('central')->hasColumn('captive_portal_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
+                    ->update(['is_active' => false]);
             }
 
             $template = CaptivePortalTemplate::create([
                 'tenant_id' => $tenant->id,
+                ...(Schema::connection('central')->hasColumn('captive_portal_templates', 'site_id') && $site ? ['site_id' => $site->id] : []),
                 'name' => $request->name,
                 'theme' => $request->theme,
                 'design' => $request->design,
@@ -60,12 +70,18 @@ class CaptivePortalController extends Controller
     public function activateTemplate(Request $request, CaptivePortalTemplate $template)
     {
         $tenant = $request->user()->tenant;
+        $site = SiteScope::selectedOrDefaultSite($request);
 
         if ((int) $template->tenant_id !== (int) $tenant->id) {
             return response()->json(['message' => 'Template not found'], 404);
         }
+        if ($site && Schema::connection('central')->hasColumn('captive_portal_templates', 'site_id') && $template->site_id && (int) $template->site_id !== (int) $site->id) {
+            return response()->json(['message' => 'Template not found for this site'], 404);
+        }
 
-        CaptivePortalTemplate::where('tenant_id', $tenant->id)->update(['is_active' => false]);
+        CaptivePortalTemplate::where('tenant_id', $tenant->id)
+            ->when($site && Schema::connection('central')->hasColumn('captive_portal_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
+            ->update(['is_active' => false]);
         $template->update(['is_active' => true]);
 
         return response()->json(['message' => 'Captive portal template activated', 'template' => $template->fresh()]);
@@ -82,10 +98,11 @@ class CaptivePortalController extends Controller
 
     public function hotspotFile(string $token, string $file, CaptivePortalService $portal)
     {
-        $html = $portal->hotspotFile($token, $file);
+        $contents = $portal->hotspotFile($token, $file);
+        $contentType = $file === 'md5.js' ? 'application/javascript' : 'text/html';
 
-        return $html
-            ? response($html)->header('Content-Type', 'text/html')
+        return $contents
+            ? response($contents)->header('Content-Type', $contentType)
             : response('Not found', 404);
     }
 

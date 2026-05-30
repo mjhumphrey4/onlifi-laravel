@@ -600,6 +600,7 @@ class NasController extends Controller
   /ip hotspot walled-garden add dst-host=\$hotspotDnsName action=allow comment="OnLiFi local captive host"
 }
 :do { /tool fetch url=(\$hotspotBaseUrl . "/login.html") mode=\$hotspotFetchMode dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html" }
+:do { /tool fetch url=(\$hotspotBaseUrl . "/md5.js") mode=\$hotspotFetchMode dst-path="hotspot/md5.js" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch md5.js" }
 :do { /tool fetch url=(\$hotspotBaseUrl . "/status.html") mode=\$hotspotFetchMode dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html" }
 :do { /tool fetch url=(\$hotspotBaseUrl . "/alogin.html") mode=\$hotspotFetchMode dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html" }
 
