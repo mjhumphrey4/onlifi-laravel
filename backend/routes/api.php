@@ -50,6 +50,7 @@ Route::post('/sms-credits/failure', [SmsCreditController::class, 'failure']);
 // Public telemetry endpoint for routers (authenticated via API token in request)
 Route::post('/telemetry', [TelemetryController::class, 'receive']);
 Route::get('/router/provision/{token}', [\App\Http\Controllers\NasController::class, 'publicProvisioningScript']);
+Route::get('/router/telemetry/{token}', [\App\Http\Controllers\NasController::class, 'publicTelemetryScript']);
 
 // Telemetry data endpoints (authenticated)
 Route::middleware('auth:sanctum')->group(function () {

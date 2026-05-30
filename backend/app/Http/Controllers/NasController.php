@@ -326,6 +326,21 @@ class NasController extends Controller
         return response($this->generateFullProvisioningScript($nas))
             ->header('Content-Type', 'text/plain');
     }
+
+    public function publicTelemetryScript(string $token)
+    {
+        $nas = DB::connection('central')->table('nas')
+            ->where('provisioning_token', $token)
+            ->first();
+
+        if (!$nas) {
+            return response('# Invalid or expired OnLiFi telemetry token', 404)
+                ->header('Content-Type', 'text/plain');
+        }
+
+        return response($this->generateTelemetryInstallScript($nas))
+            ->header('Content-Type', 'text/plain');
+    }
     
     /**
      * Generate readable router identifier.
@@ -368,10 +383,15 @@ class NasController extends Controller
         return $this->apiBaseUrl() . "/api/router/provision/{$token}";
     }
 
+    private function telemetryScriptUrl(string $token): string
+    {
+        return $this->apiBaseUrl() . "/api/router/telemetry/{$token}";
+    }
+
     private function fetchCommand(string $token): string
     {
         $url = $this->provisioningUrl($token);
-        return ":do { /file remove [find name=\"onlifi-setup.rsc\"] } on-error={}; /tool fetch url=\"{$url}\" mode={$this->fetchModeForUrl($url)} dst-path=\"onlifi-setup.rsc\" keep-result=yes; :delay 2s; /import file-name=\"onlifi-setup.rsc\"";
+        return ":do { /file remove [find name=\"onlifi-setup.rsc\"] } on-error={}; /tool fetch url=\"{$url}\" mode={$this->fetchModeForUrl($url)} dst-path=\"onlifi-setup.rsc\" keep-result=yes; :delay 3s; :if ([:len [/file find name=\"onlifi-setup.rsc\"]] > 0) do={ /import file-name=\"onlifi-setup.rsc\" } else={ :error \"OnLiFi provisioning download failed\" }";
     }
 
     private function apiBaseUrl(): string
@@ -439,8 +459,14 @@ class NasController extends Controller
         $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
         $portalConfigUrl = $apiBaseUrl . "/api/captive/config/{$nas->provisioning_token}";
+        $loginHtmlUrl = $hotspotBaseUrl . '/login.html';
+        $md5JsUrl = $hotspotBaseUrl . '/md5.js';
+        $statusHtmlUrl = $hotspotBaseUrl . '/status.html';
+        $aloginHtmlUrl = $hotspotBaseUrl . '/alogin.html';
+        $telemetryScriptUrl = $this->telemetryScriptUrl($nas->provisioning_token);
         $hotspotFetchMode = $this->fetchModeForUrl($hotspotBaseUrl);
         $telemetryFetchMode = $this->fetchModeForUrl($telemetryUrl);
+        $telemetryScriptFetchMode = $this->fetchModeForUrl($telemetryScriptUrl);
         $generatedAt = now()->toIso8601String();
 
         $routerIdentifier = $this->rscString($routerIdentifier);
@@ -468,8 +494,14 @@ class NasController extends Controller
         $paymentHost = $this->rscString($paymentHost);
         $hotspotBaseUrl = $this->rscString($hotspotBaseUrl);
         $portalConfigUrl = $this->rscString($portalConfigUrl);
+        $loginHtmlUrl = $this->rscString($loginHtmlUrl);
+        $md5JsUrl = $this->rscString($md5JsUrl);
+        $statusHtmlUrl = $this->rscString($statusHtmlUrl);
+        $aloginHtmlUrl = $this->rscString($aloginHtmlUrl);
+        $telemetryScriptUrl = $this->rscString($telemetryScriptUrl);
         $hotspotFetchMode = $this->rscString($hotspotFetchMode);
         $telemetryFetchMode = $this->rscString($telemetryFetchMode);
+        $telemetryScriptFetchMode = $this->rscString($telemetryScriptFetchMode);
 
         return <<<RSC
 # ============================================
@@ -518,10 +550,14 @@ class NasController extends Controller
 :local paymentHost "{$paymentHost}"
 :local hotspotBaseUrl "{$hotspotBaseUrl}"
 :local portalConfigUrl "{$portalConfigUrl}"
+:local loginHtmlUrl "{$loginHtmlUrl}"
+:local md5JsUrl "{$md5JsUrl}"
+:local statusHtmlUrl "{$statusHtmlUrl}"
+:local aloginHtmlUrl "{$aloginHtmlUrl}"
 :local hotspotFetchMode "{$hotspotFetchMode}"
 :local telemetryFetchMode "{$telemetryFetchMode}"
-:local telemetryScriptName "onlifi-telemetry"
-:local telemetrySchedulerName "onlifi-telemetry-scheduler"
+:local telemetryScriptUrl "{$telemetryScriptUrl}"
+:local telemetryScriptFetchMode "{$telemetryScriptFetchMode}"
 
 :put "OnLiFi: Starting full router provisioning..."
 
@@ -530,9 +566,9 @@ class NasController extends Controller
 
 # WAN DHCP client
 :if ([:len [/ip dhcp-client find interface=\$wanInterface]] = 0) do={
-  /ip dhcp-client add interface=\$wanInterface disabled=no use-peer-dns=no use-peer-ntp=yes comment="OnLiFi WAN"
+  /ip dhcp-client add interface=\$wanInterface disabled=no use-peer-dns=no comment="OnLiFi WAN"
 } else={
-  /ip dhcp-client set [find interface=\$wanInterface] disabled=no use-peer-dns=no use-peer-ntp=yes
+  /ip dhcp-client set [find interface=\$wanInterface] disabled=no use-peer-dns=no
 }
 
 # LAN bridge
@@ -573,10 +609,14 @@ class NasController extends Controller
 :do { /ip service set winbox address=\$remoteVpnCidr } on-error={}
 
 # SSTP VPN client for managed remote access
-:if ([:len [/interface sstp-client find name=\$sstpClientName]] = 0) do={
-  /interface sstp-client add name=\$sstpClientName connect-to=\$sstpHost port=\$sstpPort user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no verify-server-certificate=no comment="OnLiFi managed SSTP"
-} else={
-  /interface sstp-client set [find name=\$sstpClientName] connect-to=\$sstpHost port=\$sstpPort user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no verify-server-certificate=no comment="OnLiFi managed SSTP"
+:do {
+  :if ([:len [/interface sstp-client find name=\$sstpClientName]] = 0) do={
+    /interface sstp-client add name=\$sstpClientName connect-to=\$sstpHost port=\$sstpPort user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no verify-server-certificate=no comment="OnLiFi managed SSTP"
+  } else={
+    /interface sstp-client set [find name=\$sstpClientName] connect-to=\$sstpHost port=\$sstpPort user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no verify-server-certificate=no comment="OnLiFi managed SSTP"
+  }
+} on-error={
+  :log warning "OnLiFi SSTP setup failed; check RouterOS SSTP package/version"
 }
 
 # DHCP
@@ -612,10 +652,19 @@ class NasController extends Controller
 :do { /radius incoming set accept=yes port=3799 } on-error={ :log warning "OnLiFi failed to enable RADIUS incoming CoA" }
 
 # Hotspot profile and server
-:if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
-  /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
-} else={
-  /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+:do {
+  :if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
+    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+  } else={
+    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+  }
+} on-error={
+  :log warning "OnLiFi hotspot profile failed with html-directory; retrying basic profile"
+  :if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
+    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+  } else={
+    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+  }
 }
 
 :if ([:len [/ip hotspot user profile find name=\$userProfile]] = 0) do={
@@ -639,19 +688,19 @@ class NasController extends Controller
 :if ([:len [/ip hotspot walled-garden find dst-host=\$hotspotDnsName]] = 0) do={
   /ip hotspot walled-garden add dst-host=\$hotspotDnsName action=allow comment="OnLiFi local captive host"
 }
-:do { /tool fetch url=(\$hotspotBaseUrl . "/login.html") mode=\$hotspotFetchMode dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html" }
-:do { /tool fetch url=(\$hotspotBaseUrl . "/md5.js") mode=\$hotspotFetchMode dst-path="hotspot/md5.js" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch md5.js" }
-:do { /tool fetch url=(\$hotspotBaseUrl . "/status.html") mode=\$hotspotFetchMode dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html" }
-:do { /tool fetch url=(\$hotspotBaseUrl . "/alogin.html") mode=\$hotspotFetchMode dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html" }
+:do { /tool fetch url=\$loginHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html" }
+:do { /tool fetch url=\$md5JsUrl mode=\$hotspotFetchMode dst-path="hotspot/md5.js" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch md5.js" }
+:do { /tool fetch url=\$statusHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html" }
+:do { /tool fetch url=\$aloginHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html" }
 
-# Telemetry script
-/system script remove [find name=\$telemetryScriptName]
-/system script add name=\$telemetryScriptName policy=read,write,test source=":local dashboardUrl \\"\$telemetryUrl\\"; :local fetchMode \\"\$telemetryFetchMode\\"; :local apiToken \\"\$telemetryToken\\"; :local routerIdentity [/system identity get name]; :local cpuVal [/system resource get cpu-load]; :local memTotal [/system resource get total-memory]; :local memFree [/system resource get free-memory]; :local memUsed (\\\$memTotal - \\\$memFree); :local activeUsers 0; :do { :set activeUsers [/ip hotspot active print count-only] } on-error={}; :local tx 0; :local rx 0; :foreach i in=[/interface find] do={ :do { :set tx (\\\$tx + [/interface get \\\$i tx-byte]); :set rx (\\\$rx + [/interface get \\\$i rx-byte]) } on-error={} }; :local json \\"{\\\\\\"router_identity\\\\\\":\\\\\\"\\" . \\\$routerIdentity . \\"\\\\\\",\\\\\\"cpu_load\\\\\\":\\" . \\\$cpuVal . \\",\\\\\\"memory_total_mb\\\\\\":\\" . (\\\$memTotal / 1048576) . \\",\\\\\\"memory_used_mb\\\\\\":\\" . (\\\$memUsed / 1048576) . \\",\\\\\\"active_connections\\\\\\":\\" . \\\$activeUsers . \\",\\\\\\"total_tx_bytes\\\\\\":\\" . \\\$tx . \\",\\\\\\"total_rx_bytes\\\\\\":\\" . \\\$rx . \\"}\\"; :local headers (\\"Authorization: Bearer \\" . \\\$apiToken . \\",Content-Type: application/json\\"); :do { /tool fetch url=\\\$dashboardUrl mode=\\\$fetchMode http-method=post http-data=\\\$json http-header-field=\\\$headers keep-result=no } on-error={ :log warning \\"OnLiFi telemetry post failed\\" }"
-
-:if ([:len [/system scheduler find name=\$telemetrySchedulerName]] = 0) do={
-  /system scheduler add name=\$telemetrySchedulerName start-time=startup interval=30s on-event="/system script run onlifi-telemetry"
-} else={
-  /system scheduler set [find name=\$telemetrySchedulerName] interval=30s on-event="/system script run onlifi-telemetry"
+# Telemetry script is fetched separately to keep this installer import-safe.
+:do { /file remove [find name="onlifi-telemetry.rsc"] } on-error={}
+:do {
+  /tool fetch url=\$telemetryScriptUrl mode=\$telemetryScriptFetchMode dst-path="onlifi-telemetry.rsc" keep-result=yes
+  :delay 1s
+  /import file-name="onlifi-telemetry.rsc"
+} on-error={
+  :log warning "OnLiFi telemetry install failed; router provisioning continued"
 }
 
 :log info "OnLiFi full router provisioning completed"
@@ -665,6 +714,103 @@ class NasController extends Controller
 :put ""
 :put "Users can now authenticate with OnLiFi voucher codes."
 :put "============================================"
+RSC;
+    }
+
+    private function generateTelemetryInstallScript($nas): string
+    {
+        $tenant = DB::connection('central')->table('tenants')->where('id', $nas->tenant_id)->first();
+        $tenantName = $tenant->name ?? 'Unknown Tenant';
+        $site = $this->getOrCreateProvisioningSite($nas, $tenant);
+        $siteName = $site?->name ?: ($nas->shortname ?: $tenantName);
+        $apiUrl = $this->apiBaseUrl() . '/api/telemetry';
+        $fetchMode = $this->fetchModeForUrl($apiUrl);
+        $apiToken = $site?->api_token ?? '';
+        $routerIdentifier = $nas->router_identifier ?: Str::slug($siteName) . '-ONLIFI-1';
+        $generatedAt = now()->toIso8601String();
+
+        $apiUrl = $this->rscString($apiUrl);
+        $fetchMode = $this->rscString($fetchMode);
+        $apiToken = $this->rscString($apiToken);
+        $routerIdentifier = $this->rscString($routerIdentifier);
+        $siteName = $this->rscString($siteName);
+
+        return <<<RSC
+# ============================================
+# OnLiFi Router Telemetry Installer
+# ============================================
+# Router Identifier: {$routerIdentifier}
+# Site: {$siteName}
+# Generated: {$generatedAt}
+# ============================================
+
+:do { /system script remove [find name="onlifi-telemetry"] } on-error={}
+:do { /system scheduler remove [find name="onlifi-telemetry-scheduler"] } on-error={}
+
+/system script add name="onlifi-telemetry" policy=read,write,test source={
+  :local dashboardUrl "{$apiUrl}"
+  :local fetchMode "{$fetchMode}"
+  :local apiToken "{$apiToken}"
+  :local routerIdentity [/system identity get name]
+  :if ([:len \$routerIdentity] = 0) do={ :set routerIdentity "{$routerIdentifier}" }
+
+  :local cpuVal 0
+  :local memTotal 0
+  :local memFree 0
+  :local memUsed 0
+  :local activeUsers 0
+  :local totalTxBytes 0
+  :local totalRxBytes 0
+  :local routerVersion ""
+  :local routerBoard ""
+  :local currentTime ""
+  :local currentDate ""
+
+  :do { :set cpuVal [/system resource get cpu-load] } on-error={}
+  :do { :set memTotal [/system resource get total-memory] } on-error={}
+  :do { :set memFree [/system resource get free-memory] } on-error={}
+  :do { :set routerVersion [/system resource get version] } on-error={}
+  :do { :set routerBoard [/system resource get board-name] } on-error={}
+  :do { :set activeUsers [/ip hotspot active print count-only] } on-error={}
+  :do { :set currentTime [/system clock get time] } on-error={}
+  :do { :set currentDate [/system clock get date] } on-error={}
+  :set memUsed (\$memTotal - \$memFree)
+
+  :foreach interface in=[/interface find] do={
+    :do {
+      :set totalTxBytes (\$totalTxBytes + [/interface get \$interface tx-byte])
+      :set totalRxBytes (\$totalRxBytes + [/interface get \$interface rx-byte])
+    } on-error={}
+  }
+
+  :local memTotalMb (\$memTotal / 1048576)
+  :local memUsedMb (\$memUsed / 1048576)
+  :local timestamp (\$currentDate . " " . \$currentTime)
+  :local postData ("router_identity=" . \$routerIdentity)
+  :set postData (\$postData . "&router_version=" . \$routerVersion)
+  :set postData (\$postData . "&router_board=" . \$routerBoard)
+  :set postData (\$postData . "&timestamp=" . \$timestamp)
+  :set postData (\$postData . "&cpu_load=" . \$cpuVal)
+  :set postData (\$postData . "&memory_total_mb=" . \$memTotalMb)
+  :set postData (\$postData . "&memory_used_mb=" . \$memUsedMb)
+  :set postData (\$postData . "&uptime_seconds=0")
+  :set postData (\$postData . "&active_connections=" . \$activeUsers)
+  :set postData (\$postData . "&bandwidth_download_kbps=0")
+  :set postData (\$postData . "&bandwidth_upload_kbps=0")
+  :set postData (\$postData . "&total_tx_bytes=" . \$totalTxBytes)
+  :set postData (\$postData . "&total_rx_bytes=" . \$totalRxBytes)
+
+  :do {
+    /tool fetch url=\$dashboardUrl mode=\$fetchMode http-method=post http-data=\$postData http-header-field=("Authorization: Bearer " . \$apiToken . ",Content-Type: application/x-www-form-urlencoded") keep-result=no
+    :log info "OnLiFi telemetry posted"
+  } on-error={
+    :log warning "OnLiFi telemetry post failed"
+  }
+}
+
+/system scheduler add name="onlifi-telemetry-scheduler" start-time=startup interval=30s on-event="/system script run onlifi-telemetry"
+:do { /system script run onlifi-telemetry } on-error={ :log warning "OnLiFi telemetry first run failed" }
+:log info "OnLiFi telemetry installed"
 RSC;
     }
 
