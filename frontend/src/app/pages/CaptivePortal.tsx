@@ -263,8 +263,8 @@ export function CaptivePortal() {
                 {[
                   ['site_display_name', 'Site display name'],
                   ['subtitle', 'Subtitle'],
+                  ['pricing_title', 'Mobile money heading'],
                   ['support_contact', 'Support contact'],
-                  ['powered_by', 'Footer brand'],
                 ].map(([field, label]) => (
                   <label key={field} className="block text-sm">
                     <span className="text-muted-foreground">{label}</span>

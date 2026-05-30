@@ -22,9 +22,9 @@ class CaptivePortalService
                 'design' => [
                     'site_display_name' => '',
                     'subtitle' => 'Faster, Affordable Internet with a Smile',
+                    'pricing_title' => "Don't have a voucher? Buy with Mobile Money",
                     'marquee_text' => '',
                     'support_contact' => '0788770102 or 0704169987',
-                    'powered_by' => 'Powered by Onlus Technologies',
                     'primary_color' => '#2a5298',
                     'secondary_color' => '#1e3c72',
                     'accent_color' => '#ff6b35',
@@ -40,12 +40,12 @@ class CaptivePortalService
                 'design' => [
                     'site_display_name' => '',
                     'subtitle' => 'Faster, Affordable Internet with a Smile',
+                    'pricing_title' => "Don't have a voucher? Buy with Mobile Money",
                     'marquee_text' => '',
                     'support_contact' => '0788770102 or 0704169987',
-                    'powered_by' => 'Powered by Onlus Technologies',
-                    'primary_color' => '#38bdf8',
-                    'secondary_color' => '#0f172a',
-                    'accent_color' => '#a78bfa',
+                    'primary_color' => '#67e8f9',
+                    'secondary_color' => '#172554',
+                    'accent_color' => '#c4b5fd',
                     'package_layout' => 'table',
                     'packages' => $this->defaultPackages(),
                     'features' => $this->defaultFeatures(),
@@ -58,9 +58,9 @@ class CaptivePortalService
                 'design' => [
                     'site_display_name' => '',
                     'subtitle' => 'Faster, Affordable Internet with a Smile',
+                    'pricing_title' => "Don't have a voucher? Buy with Mobile Money",
                     'marquee_text' => '',
                     'support_contact' => '0788770102 or 0704169987',
-                    'powered_by' => 'Powered by Onlus Technologies',
                     'primary_color' => '#0f766e',
                     'secondary_color' => '#042f2e',
                     'accent_color' => '#f59e0b',
@@ -482,7 +482,7 @@ HTML;
             '<h1>STK WIFI POINT</h1>' => '<h1>' . htmlspecialchars($displayName, ENT_QUOTES) . '</h1>',
             '<p class="subtitle">Faster, Affordable Internet with a Smile</p>' => '<p class="subtitle">' . htmlspecialchars((string) $design['subtitle'], ENT_QUOTES) . '</p>',
             'Need help? Contact: <strong>0788770102 or 0704169987</strong>' => 'Need help? Contact: <strong>' . htmlspecialchars((string) $design['support_contact'], ENT_QUOTES) . '</strong>',
-            'Powered by Onlus Technologies' => htmlspecialchars((string) $design['powered_by'], ENT_QUOTES),
+            'Powered by Onlus Technologies' => 'Powered by Onlus Technologies',
             '#2a5298' => $this->safeCssColor((string) $design['primary_color'], '#2a5298'),
             '#1e3c72' => $this->safeCssColor((string) $design['secondary_color'], '#1e3c72'),
             '#ff6b35' => $this->safeCssColor((string) $design['accent_color'], '#ff6b35'),
@@ -499,7 +499,7 @@ HTML;
             ) ?? $html;
         }
 
-        $html = $this->replacePricingSection($html, $packages, (string) ($design['package_layout'] ?? 'table'));
+        $html = $this->replacePricingSection($html, $packages, (string) ($design['package_layout'] ?? 'table'), (string) ($design['pricing_title'] ?? "Don't have a voucher? Buy with Mobile Money"));
         $html = $this->applyFeatureToggles($html, $features);
         $html = $this->applyThemeVariant($html, $theme, $design);
 
@@ -515,11 +515,11 @@ HTML;
         return preg_match('/^#[0-9a-fA-F]{6}$/', $value) ? $value : $fallback;
     }
 
-    private function replacePricingSection(string $html, array $packages, string $layout): string
+    private function replacePricingSection(string $html, array $packages, string $layout, string $title): string
     {
         $pricingHtml = $layout === 'grid'
-            ? $this->packageGridHtml($packages)
-            : $this->packageTableHtml($packages);
+            ? $this->packageGridHtml($packages, $title)
+            : $this->packageTableHtml($packages, $title);
 
         return preg_replace(
             '/<div class="pricing-section">.*?<\/div>\s*<div class="footer">/s',
@@ -529,11 +529,12 @@ HTML;
         ) ?? $html;
     }
 
-    private function packageTableHtml(array $packages): string
+    private function packageTableHtml(array $packages, string $title): string
     {
         $rows = array_map(fn ($package) => $this->packageTableRow($package), $packages);
+        $title = htmlspecialchars($title, ENT_QUOTES);
 
-        return "        <div class=\"pricing-section\">\n            <h2 class=\"pricing-title\">Don't have a voucher? Buy with Mobile Money</h2>\n            <table class=\"pricing-table\">\n" . implode("\n", $rows) . "\n            </table>\n        </div>";
+        return "        <div class=\"pricing-section\">\n            <h2 class=\"pricing-title\">{$title}</h2>\n            <table class=\"pricing-table\">\n" . implode("\n", $rows) . "\n            </table>\n        </div>";
     }
 
     private function packageTableRow(array $package): string
@@ -557,11 +558,12 @@ HTML;
 HTML;
     }
 
-    private function packageGridHtml(array $packages): string
+    private function packageGridHtml(array $packages, string $title): string
     {
         $cards = array_map(fn ($package) => $this->packageGridCard($package), $packages);
+        $title = htmlspecialchars($title, ENT_QUOTES);
 
-        return "        <div class=\"pricing-section package-grid-section\">\n            <h2 class=\"pricing-title\">Don't have a voucher? Buy with Mobile Money</h2>\n            <div class=\"package-grid\">\n" . implode("\n", $cards) . "\n            </div>\n        </div>";
+        return "        <div class=\"pricing-section package-grid-section\">\n            <h2 class=\"pricing-title\">{$title}</h2>\n            <div class=\"package-grid\">\n" . implode("\n", $cards) . "\n            </div>\n        </div>";
     }
 
     private function packageGridCard(array $package): string
@@ -634,25 +636,77 @@ HTML;
 
         body {
             background:
-                radial-gradient(circle at top left, rgba(56, 189, 248, .35), transparent 32%),
-                radial-gradient(circle at bottom right, rgba(167, 139, 250, .38), transparent 34%),
-                linear-gradient(135deg, {$secondary} 0%, #111827 48%, {$primary} 100%);
-            backdrop-filter: blur(18px);
+                radial-gradient(circle at 14% 6%, rgba(103, 232, 249, .64), transparent 31%),
+                radial-gradient(circle at 86% 14%, rgba(196, 181, 253, .56), transparent 29%),
+                radial-gradient(circle at 48% 100%, rgba(34, 211, 238, .32), transparent 34%),
+                linear-gradient(135deg, {$secondary} 0%, #0f172a 48%, #164e63 100%);
+            background-attachment: fixed;
         }
-        .container, .modal {
-            background: rgba(255, 255, 255, .72);
-            border: 1px solid rgba(255, 255, 255, .55);
-            box-shadow: 0 24px 70px rgba(2, 6, 23, .38);
-            backdrop-filter: blur(22px);
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(115deg, rgba(255,255,255,.18), transparent 32%, rgba(255,255,255,.10) 58%, transparent 72%),
+                radial-gradient(circle at 50% 20%, rgba(255,255,255,.20), transparent 26%);
+        }
+        .container {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(145deg, rgba(255, 255, 255, .20), rgba(255,255,255,.08));
+            border: 1px solid rgba(255, 255, 255, .44);
+            box-shadow: 0 30px 90px rgba(2, 6, 23, .46), inset 0 1px 0 rgba(255,255,255,.44);
+            backdrop-filter: blur(30px) saturate(165%);
+            -webkit-backdrop-filter: blur(30px) saturate(165%);
+        }
+        .container::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(120deg, rgba(255,255,255,.32), transparent 34%, rgba(255,255,255,.10));
         }
         .header {
-            background: linear-gradient(135deg, rgba(255,255,255,.24), rgba(255,255,255,.08));
-            border-bottom: 1px solid rgba(255,255,255,.32);
+            position: relative;
+            background: linear-gradient(135deg, rgba(255,255,255,.24), rgba(255,255,255,.07));
+            border-bottom: 1px solid rgba(255,255,255,.28);
+        }
+        .form-container, .pricing-section, .footer {
+            position: relative;
+            background: rgba(255,255,255,.28);
+            border-color: rgba(255,255,255,.34);
+            color: rgba(15,23,42,.92);
+            backdrop-filter: blur(22px) saturate(145%);
+            -webkit-backdrop-filter: blur(22px) saturate(145%);
+        }
+        input[type="text"], input[type="tel"], select, .input-group input {
+            background: rgba(255,255,255,.46);
+            border-color: rgba(255,255,255,.68);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.46), 0 8px 24px rgba(15,23,42,.08);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .submit-btn, .buy-btn, .btn-proceed {
+            background: linear-gradient(135deg, {$primary} 0%, {$accent} 100%);
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .20);
         }
         .pricing-table tr, .package-card {
-            background: rgba(255,255,255,.62);
-            border: 1px solid rgba(255,255,255,.7);
-            box-shadow: 0 10px 30px rgba(15, 23, 42, .12);
+            background: rgba(255,255,255,.30);
+            border: 1px solid rgba(255,255,255,.48);
+            box-shadow: 0 12px 34px rgba(15, 23, 42, .14), inset 0 1px 0 rgba(255,255,255,.38);
+            backdrop-filter: blur(18px) saturate(140%);
+            -webkit-backdrop-filter: blur(18px) saturate(140%);
+        }
+        .pricing-table tr:hover, .package-card:hover {
+            background: rgba(255,255,255,.42);
+        }
+        .modal {
+            background: rgba(255,255,255,.48);
+            border: 1px solid rgba(255,255,255,.62);
+            box-shadow: 0 24px 70px rgba(2,6,23,.36), inset 0 1px 0 rgba(255,255,255,.42);
+            backdrop-filter: blur(28px) saturate(155%);
+            -webkit-backdrop-filter: blur(28px) saturate(155%);
         }
 CSS;
         }

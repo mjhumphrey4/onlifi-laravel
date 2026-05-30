@@ -24,6 +24,7 @@ use App\Http\Controllers\SubscriptionBillingController;
 use App\Http\Controllers\CaptivePortalController;
 use App\Http\Controllers\SmsCreditController;
 use App\Http\Controllers\RemoteAccessController;
+use App\Http\Controllers\PppoeClientController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -227,6 +228,15 @@ Route::middleware(['tenant'])->group(function () {
         Route::get('/{id}/telemetry/latest', [MikrotikController::class, 'getRealtimeStats']);
         Route::post('/{id}/collect-telemetry', [MikrotikController::class, 'collectTelemetry']);
         Route::post('/telemetry/ingest', [MikrotikController::class, 'ingestTelemetry']);
+    });
+
+    Route::prefix('pppoe')->group(function () {
+        Route::get('/clients', [PppoeClientController::class, 'index']);
+        Route::post('/clients', [PppoeClientController::class, 'store']);
+        Route::put('/clients/{id}', [PppoeClientController::class, 'update']);
+        Route::post('/clients/{id}/enable', [PppoeClientController::class, 'enable']);
+        Route::post('/clients/{id}/disable', [PppoeClientController::class, 'disable']);
+        Route::delete('/clients/{id}', [PppoeClientController::class, 'destroy']);
     });
 
     // RADIUS sync endpoints

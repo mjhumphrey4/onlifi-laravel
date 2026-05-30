@@ -52,7 +52,9 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { path: '/',               label: 'Dashboard',          icon: LayoutDashboard, adminOnly: false },
   { path: '/clients',        label: 'Clients',            icon: Users, adminOnly: false },
-  { path: '/devices',        label: 'Network Devices',    icon: Server, adminOnly: false },
+  { path: '/devices',        label: 'Monitor Router',     icon: Server, adminOnly: false },
+  { path: '/pppoe',          label: 'PPPoE',              icon: Network, adminOnly: false },
+  { path: '/routers',        label: 'Routers',            icon: Router, adminOnly: false },
   { 
     path: '/vouchers',       
     label: 'Manage Vouchers',           

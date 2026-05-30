@@ -19,6 +19,8 @@ import { CaptivePortal } from './pages/CaptivePortal';
 import { SmsGateway } from './pages/SmsGateway';
 import { RemoteAccess } from './pages/RemoteAccess';
 import { Reports } from './pages/Reports';
+import { PppoeClients } from './pages/PppoeClients';
+import { Routers } from './pages/Routers';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { ForgotPassword } from './pages/ForgotPassword';
@@ -46,6 +48,8 @@ export const router = createBrowserRouter([
       { path: 'performance', Component: AnalyzePerformance },
       { path: 'reports', Component: Reports },
       { path: 'remote-access', Component: RemoteAccess },
+      { path: 'pppoe', Component: PppoeClients },
+      { path: 'routers', Component: Routers },
       { path: 'captive-portal', Component: CaptivePortal },
       { path: 'sms-gateway', Component: SmsGateway },
       { path: 'voucher-stock', Component: VoucherStock },

@@ -217,6 +217,14 @@ export const deleteRouter = (id: number) => del(`/routers/${id}`);
 export const testRouterConnection = (id: number) => post(`/routers/${id}/test-connection`);
 export const getRouterActiveUsers = (id: number) => get(`/routers/${id}/active-users`);
 
+// ============ PPPOE CLIENTS (Tenant) ============
+export const getPppoeClients = () => get('/pppoe/clients');
+export const createPppoeClient = (data: Record<string, unknown>) => post('/pppoe/clients', data);
+export const updatePppoeClient = (id: number, data: Record<string, unknown>) => put(`/pppoe/clients/${id}`, data);
+export const enablePppoeClient = (id: number) => post(`/pppoe/clients/${id}/enable`);
+export const disablePppoeClient = (id: number) => post(`/pppoe/clients/${id}/disable`);
+export const deletePppoeClient = (id: number) => del(`/pppoe/clients/${id}`);
+
 // ============ TRANSACTIONS (Tenant) ============
 export const getTransactions = (params?: { page?: number; per_page?: number; status?: string; search?: string }) => {
   let endpoint = '/transactions';
