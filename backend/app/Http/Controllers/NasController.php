@@ -371,7 +371,7 @@ class NasController extends Controller
     private function fetchCommand(string $token): string
     {
         $url = $this->provisioningUrl($token);
-        return "/tool fetch url=\"{$url}\" mode={$this->fetchModeForUrl($url)} dst-path=onlifi-setup.rsc; /import file-name=onlifi-setup.rsc";
+        return ":do { /file remove [find name=\"onlifi-setup.rsc\"] } on-error={}; /tool fetch url=\"{$url}\" mode={$this->fetchModeForUrl($url)} dst-path=\"onlifi-setup.rsc\" keep-result=yes; :delay 2s; /import file-name=\"onlifi-setup.rsc\"";
     }
 
     private function apiBaseUrl(): string
@@ -414,6 +414,8 @@ class NasController extends Controller
         $tenant = DB::connection('central')->table('tenants')->where('id', $nas->tenant_id)->first();
         $tenantName = $tenant->name ?? 'Unknown Tenant';
         $site = $this->getOrCreateProvisioningSite($nas, $tenant);
+        $siteName = $site?->name ?: ($nas->shortname ?: $tenantName);
+        $siteSlug = Str::slug($siteName) ?: 'site';
         $apiBaseUrl = $this->apiBaseUrl();
         $telemetryUrl = $apiBaseUrl . '/api/telemetry';
         $telemetryToken = $site?->api_token ?? '';
@@ -425,7 +427,7 @@ class NasController extends Controller
         $dhcpNetwork = $this->dhcpNetworkFromCidr($lanAddress);
         $poolRange = (string) SystemSetting::get('router_default_dhcp_pool', '10.10.0.10-10.10.0.254');
         $dnsServers = (string) SystemSetting::get('router_default_dns_servers', '1.1.1.1,8.8.8.8');
-        $hotspotDns = (string) SystemSetting::get('router_default_hotspot_dns', 'wifi.onlifi.local');
+        $hotspotDns = "{$siteSlug}.wifi";
         $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
         $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
         $remoteVpnCidr = (string) SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24');
@@ -439,6 +441,35 @@ class NasController extends Controller
         $portalConfigUrl = $apiBaseUrl . "/api/captive/config/{$nas->provisioning_token}";
         $hotspotFetchMode = $this->fetchModeForUrl($hotspotBaseUrl);
         $telemetryFetchMode = $this->fetchModeForUrl($telemetryUrl);
+        $generatedAt = now()->toIso8601String();
+
+        $routerIdentifier = $this->rscString($routerIdentifier);
+        $secret = $this->rscString($secret);
+        $tenantName = $this->rscString($tenantName);
+        $lanAddress = $this->rscString($lanAddress);
+        $lanGateway = $this->rscString($lanGateway);
+        $dhcpNetwork = $this->rscString($dhcpNetwork);
+        $poolRange = $this->rscString($poolRange);
+        $dnsServers = $this->rscString($dnsServers);
+        $hotspotDns = $this->rscString($hotspotDns);
+        $serverIp = $this->rscString($serverIp);
+        $authPort = $this->rscString((string) $authPort);
+        $acctPort = $this->rscString((string) $acctPort);
+        $remoteAdminUser = $this->rscString($remoteAdminUser);
+        $remoteAdminPassword = $this->rscString($remoteAdminPassword);
+        $remoteVpnCidr = $this->rscString($remoteVpnCidr);
+        $vpnHost = $this->rscString($vpnHost);
+        $vpnPort = $this->rscString((string) $vpnPort);
+        $vpnUsername = $this->rscString($vpnUsername);
+        $vpnPassword = $this->rscString($vpnPassword);
+        $telemetryUrl = $this->rscString($telemetryUrl);
+        $telemetryToken = $this->rscString($telemetryToken);
+        $appHost = $this->rscString($appHost);
+        $paymentHost = $this->rscString($paymentHost);
+        $hotspotBaseUrl = $this->rscString($hotspotBaseUrl);
+        $portalConfigUrl = $this->rscString($portalConfigUrl);
+        $hotspotFetchMode = $this->rscString($hotspotFetchMode);
+        $telemetryFetchMode = $this->rscString($telemetryFetchMode);
 
         return <<<RSC
 # ============================================
@@ -446,7 +477,7 @@ class NasController extends Controller
 # ============================================
 # Router Identifier: {$routerIdentifier}
 # Tenant: {$tenantName}
-# Generated: {now()->toIso8601String()}
+# Generated: {$generatedAt}
 #
 # This script is idempotent and safe to run more than once.
 # Defaults:
@@ -464,6 +495,7 @@ class NasController extends Controller
 :local dhcpServer "onlifi-dhcp"
 :local lanAddress "{$lanAddress}"
 :local lanGateway "{$lanGateway}"
+:local dhcpNetwork "{$dhcpNetwork}"
 :local poolRange "{$poolRange}"
 :local dnsServers "{$dnsServers}"
 :local hotspotDnsName "{$hotspotDns}"
@@ -525,6 +557,11 @@ class NasController extends Controller
 
 # DNS
 /ip dns set allow-remote-requests=yes servers=\$dnsServers
+:if ([:len [/ip dns static find name=\$hotspotDnsName]] = 0) do={
+  /ip dns static add name=\$hotspotDnsName address=\$lanGateway ttl=5m comment="OnLiFi hotspot DNS"
+} else={
+  /ip dns static set [find name=\$hotspotDnsName] address=\$lanGateway ttl=5m comment="OnLiFi hotspot DNS"
+}
 
 # Dedicated OnLiFi administrator user for VPN telemetry and support access
 :if ([:len [/user find name=\$remoteAdminUser]] = 0) do={
@@ -555,8 +592,10 @@ class NasController extends Controller
   /ip dhcp-server set [find name=\$dhcpServer] interface=\$bridgeName address-pool=\$dhcpPool disabled=no
 }
 
-:if ([:len [/ip dhcp-server network find address={$dhcpNetwork}]] = 0) do={
-  /ip dhcp-server network add address={$dhcpNetwork} gateway=\$lanGateway dns-server=\$lanGateway
+:if ([:len [/ip dhcp-server network find address=\$dhcpNetwork]] = 0) do={
+  /ip dhcp-server network add address=\$dhcpNetwork gateway=\$lanGateway dns-server=\$lanGateway
+} else={
+  /ip dhcp-server network set [find address=\$dhcpNetwork] gateway=\$lanGateway dns-server=\$lanGateway
 }
 
 # NAT
@@ -570,12 +609,13 @@ class NasController extends Controller
 } else={
   /radius set [find comment="OnLiFi RADIUS Server"] service=hotspot,login address=\$radiusAddress secret=\$radiusSecret timeout=3000ms authentication-port=\$radiusAuthPort accounting-port=\$radiusAcctPort
 }
+:do { /radius incoming set accept=yes port=3799 } on-error={ :log warning "OnLiFi failed to enable RADIUS incoming CoA" }
 
 # Hotspot profile and server
 :if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
-  /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+  /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
 } else={
-  /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+  /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
 }
 
 :if ([:len [/ip hotspot user profile find name=\$userProfile]] = 0) do={
@@ -642,6 +682,15 @@ RSC;
         }
 
         return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0/24";
+    }
+
+    private function rscString(?string $value): string
+    {
+        return str_replace(
+            ["\\", "\"", "\r", "\n"],
+            ["\\\\", "\\\"", '', ' '],
+            (string) $value
+        );
     }
 
     private function getOrCreateProvisioningSite($nas, $tenant)

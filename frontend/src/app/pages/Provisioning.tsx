@@ -82,7 +82,7 @@ export function Provisioning() {
     <div className="min-h-screen bg-background p-6 lg:p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Router Provisioning</h1>
-        <p className="text-muted-foreground mt-1">Each site has one router. Run this command once on the MikroTik for the selected site.</p>
+        <p className="text-muted-foreground mt-1">Each site has one router. Paste the one-command install into MikroTik Terminal so it downloads and immediately imports the setup script.</p>
       </div>
 
       {!details ? (
@@ -115,7 +115,7 @@ export function Provisioning() {
           <div className="bg-card border border-border rounded-lg p-5 space-y-5">
             <div>
               <h2 className="font-semibold">One-command install</h2>
-              <p className="text-sm text-muted-foreground mt-1">Paste this into the MikroTik terminal for this site.</p>
+              <p className="text-sm text-muted-foreground mt-1">Paste this exact command into the MikroTik terminal. Opening the URL alone only saves the script; this command also runs it.</p>
             </div>
             <div className="rounded-lg bg-slate-950 text-green-300 p-4 text-sm font-mono overflow-x-auto">
               {details.fetch_command}

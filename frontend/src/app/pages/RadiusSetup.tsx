@@ -166,7 +166,7 @@ export function RadiusSetup() {
           <div className="bg-card border border-border rounded-lg p-6">
             <div className="flex items-start gap-2 mb-4">
               <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-muted-foreground">Run the one-line command on the MikroTik terminal. It configures LAN, DHCP, NAT, hotspot, RADIUS, SSTP VPN, captive files, and telemetry for this site.</p>
+              <p className="text-sm text-muted-foreground">Run the one-line command on the MikroTik terminal. It downloads and immediately imports the setup script, then configures LAN, DHCP, NAT, hotspot, RADIUS, SSTP VPN, captive files, and telemetry for this site.</p>
             </div>
 
             <label className="block text-sm font-medium text-card-foreground mb-2">One-line RouterOS command</label>
