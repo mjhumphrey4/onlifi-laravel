@@ -453,6 +453,7 @@ class NasController extends Controller
         $remoteVpnCidr = (string) SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24');
         $vpnHost = $site?->vpn_public_host ?: 'vpn.onlifi.net';
         $vpnPort = $site?->vpn_public_port ?: 443;
+        $vpnConnectTo = $vpnPort ? "{$vpnHost}:{$vpnPort}" : $vpnHost;
         $vpnUsername = $site?->vpn_username ?: Str::slug($site?->name ?: $tenantName);
         $vpnPassword = $site?->vpn_password ?: Str::random(24);
         $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
@@ -486,6 +487,7 @@ class NasController extends Controller
         $remoteVpnCidr = $this->rscString($remoteVpnCidr);
         $vpnHost = $this->rscString($vpnHost);
         $vpnPort = $this->rscString((string) $vpnPort);
+        $vpnConnectTo = $this->rscString($vpnConnectTo);
         $vpnUsername = $this->rscString($vpnUsername);
         $vpnPassword = $this->rscString($vpnPassword);
         $telemetryUrl = $this->rscString($telemetryUrl);
@@ -541,6 +543,7 @@ class NasController extends Controller
 :local remoteVpnCidr "{$remoteVpnCidr}"
 :local sstpHost "{$vpnHost}"
 :local sstpPort "{$vpnPort}"
+:local sstpConnectTo "{$vpnConnectTo}"
 :local sstpUser "{$vpnUsername}"
 :local sstpPassword "{$vpnPassword}"
 :local sstpClientName "onlifi-sstp"
@@ -611,9 +614,9 @@ class NasController extends Controller
 # SSTP VPN client for managed remote access
 :do {
   :if ([:len [/interface sstp-client find name=\$sstpClientName]] = 0) do={
-    /interface sstp-client add name=\$sstpClientName connect-to=\$sstpHost port=\$sstpPort user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no verify-server-certificate=no comment="OnLiFi managed SSTP"
+    /interface sstp-client add name=\$sstpClientName connect-to=\$sstpConnectTo user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no comment="OnLiFi managed SSTP"
   } else={
-    /interface sstp-client set [find name=\$sstpClientName] connect-to=\$sstpHost port=\$sstpPort user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no verify-server-certificate=no comment="OnLiFi managed SSTP"
+    /interface sstp-client set [find name=\$sstpClientName] connect-to=\$sstpConnectTo user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no comment="OnLiFi managed SSTP"
   }
 } on-error={
   :log warning "OnLiFi SSTP setup failed; check RouterOS SSTP package/version"
