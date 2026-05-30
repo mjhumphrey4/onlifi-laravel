@@ -16,9 +16,9 @@ class CaptivePortalService
     {
         return [
             [
-                'theme' => 'old-flow',
-                'name' => 'Classic OLD-Flow',
-                'description' => 'Full MikroTik-ready OLD-Flow login.html with site-specific payment endpoints',
+                'theme' => 'default-theme',
+                'name' => 'Default Theme',
+                'description' => 'Original OLD-Flow layout with the classic vertical package table',
                 'design' => [
                     'site_display_name' => '',
                     'subtitle' => 'Faster, Affordable Internet with a Smile',
@@ -28,6 +28,45 @@ class CaptivePortalService
                     'primary_color' => '#2a5298',
                     'secondary_color' => '#1e3c72',
                     'accent_color' => '#ff6b35',
+                    'package_layout' => 'table',
+                    'packages' => $this->defaultPackages(),
+                    'features' => $this->defaultFeatures(),
+                ],
+            ],
+            [
+                'theme' => 'glassy',
+                'name' => 'Glassy',
+                'description' => 'Same hotspot/payment flow with a translucent glass style',
+                'design' => [
+                    'site_display_name' => '',
+                    'subtitle' => 'Faster, Affordable Internet with a Smile',
+                    'marquee_text' => '',
+                    'support_contact' => '0788770102 or 0704169987',
+                    'powered_by' => 'Powered by Onlus Technologies',
+                    'primary_color' => '#38bdf8',
+                    'secondary_color' => '#0f172a',
+                    'accent_color' => '#a78bfa',
+                    'package_layout' => 'table',
+                    'packages' => $this->defaultPackages(),
+                    'features' => $this->defaultFeatures(),
+                ],
+            ],
+            [
+                'theme' => 'square-grid',
+                'name' => 'Square Grid',
+                'description' => 'Same hotspot/payment flow with two package cards per row',
+                'design' => [
+                    'site_display_name' => '',
+                    'subtitle' => 'Faster, Affordable Internet with a Smile',
+                    'marquee_text' => '',
+                    'support_contact' => '0788770102 or 0704169987',
+                    'powered_by' => 'Powered by Onlus Technologies',
+                    'primary_color' => '#0f766e',
+                    'secondary_color' => '#042f2e',
+                    'accent_color' => '#f59e0b',
+                    'package_layout' => 'grid',
+                    'packages' => $this->defaultPackages(),
+                    'features' => $this->defaultFeatures(),
                 ],
             ],
         ];
@@ -45,15 +84,17 @@ class CaptivePortalService
             ->first();
 
         if ($template) {
+            $theme = $template->theme === 'old-flow' ? 'default-theme' : $template->theme;
             return [
                 'id' => $template->id,
                 'name' => $template->name,
-                'theme' => $template->theme,
-                'design' => $template->design ?? [],
+                'theme' => $theme,
+                'design' => $this->designForTheme($theme, $template->design ?? []),
             ];
         }
 
-        $theme = (string) SystemSetting::get('default_captive_theme', 'old-flow');
+        $theme = (string) SystemSetting::get('default_captive_theme', 'default-theme');
+        $theme = $theme === 'old-flow' ? 'default-theme' : $theme;
         $default = collect($this->templates())->firstWhere('theme', $theme) ?: $this->templates()[0];
 
         return [
@@ -61,6 +102,88 @@ class CaptivePortalService
             'name' => $default['name'],
             'theme' => $default['theme'],
             'design' => $default['design'],
+        ];
+    }
+
+    private function designForTheme(string $theme, array $overrides = []): array
+    {
+        $theme = $theme === 'old-flow' ? 'default-theme' : $theme;
+        $base = collect($this->templates())->firstWhere('theme', $theme)
+            ?: collect($this->templates())->firstWhere('theme', 'default-theme')
+            ?: $this->templates()[0];
+
+        return array_replace_recursive($base['design'], $overrides);
+    }
+
+    private function defaultFeatures(): array
+    {
+        return [
+            'show_logo' => true,
+            'show_marquee' => true,
+            'show_find_voucher' => true,
+            'show_trial' => true,
+            'show_footer' => true,
+            'show_payment_modal' => true,
+        ];
+    }
+
+    private function defaultPackages(): array
+    {
+        return [
+            [
+                'duration' => '3 Hours',
+                'description' => '',
+                'display_price' => 'UGX 500',
+                'amount' => '492',
+                'package_type' => '3hours',
+                'package_name' => '3 Hours',
+                'is_family_package' => false,
+            ],
+            [
+                'duration' => '24 Hours',
+                'description' => 'Full Day',
+                'display_price' => 'UGX 1,000',
+                'amount' => '985',
+                'package_type' => '24hours',
+                'package_name' => '24 Hours',
+                'is_family_package' => false,
+            ],
+            [
+                'duration' => '7 Days',
+                'description' => 'One Week',
+                'display_price' => 'UGX 6,000',
+                'amount' => '5910',
+                'package_type' => '7days',
+                'package_name' => '7 Days',
+                'is_family_package' => false,
+            ],
+            [
+                'duration' => '30 Days',
+                'description' => 'One Month',
+                'display_price' => 'UGX 25,000',
+                'amount' => '25000',
+                'package_type' => '30days',
+                'package_name' => '30 Days',
+                'is_family_package' => false,
+            ],
+            [
+                'duration' => 'Family (Weekly)',
+                'description' => 'Smart TV, 2-3 Devices',
+                'display_price' => 'UGX 10,000',
+                'amount' => '10000',
+                'package_type' => '7days',
+                'package_name' => '7 Days',
+                'is_family_package' => false,
+            ],
+            [
+                'duration' => 'Family (Monthly)',
+                'description' => 'Smart TV, 2-3 Devices',
+                'display_price' => 'UGX 40,000',
+                'amount' => '40000',
+                'package_type' => 'family_monthly',
+                'package_name' => 'Family Monthly',
+                'is_family_package' => true,
+            ],
         ];
     }
 
@@ -156,6 +279,9 @@ class CaptivePortalService
     {
         $siteName = $site?->name ?: $tenant->name;
         $activeTemplate = $template ?: $this->activeTemplateForTenant($tenant, $site);
+        $theme = $activeTemplate['theme'] ?? 'default-theme';
+        $activeTemplate['theme'] = $theme === 'old-flow' ? 'default-theme' : $theme;
+        $activeTemplate['design'] = $this->designForTheme($activeTemplate['theme'], $activeTemplate['design'] ?? []);
 
         return $this->loginHtml([
             'tenant' => [
@@ -183,6 +309,11 @@ class CaptivePortalService
             ],
             'packages' => collect(),
         ]);
+    }
+
+    public function downloadLoginHtml(Tenant $tenant, ?Site $site, ?array $template = null): string
+    {
+        return $this->previewLoginHtml($tenant, $site, $template);
     }
 
     private function loginHtml(array $config): string
@@ -312,16 +443,10 @@ HTML;
     private function renderManualLoginTemplate(string $template, array $config): string
     {
         $siteName = $config['manual_payment']['site_name'];
-        $design = array_merge([
-            'site_display_name' => '',
-            'subtitle' => 'Faster, Affordable Internet with a Smile',
-            'marquee_text' => '',
-            'support_contact' => '0788770102 or 0704169987',
-            'powered_by' => 'Powered by Onlus Technologies',
-            'primary_color' => '#2a5298',
-            'secondary_color' => '#1e3c72',
-            'accent_color' => '#ff6b35',
-        ], $config['template']['design'] ?? []);
+        $theme = $config['template']['theme'] ?? 'default-theme';
+        $design = $this->designForTheme($theme, $config['template']['design'] ?? []);
+        $features = array_replace($this->defaultFeatures(), is_array($design['features'] ?? null) ? $design['features'] : []);
+        $packages = is_array($design['packages'] ?? null) ? $design['packages'] : $this->defaultPackages();
         $displayName = trim((string) ($design['site_display_name'] ?? '')) ?: $siteName;
         $marqueeText = trim((string) ($design['marquee_text'] ?? ''));
 
@@ -374,6 +499,10 @@ HTML;
             ) ?? $html;
         }
 
+        $html = $this->replacePricingSection($html, $packages, (string) ($design['package_layout'] ?? 'table'));
+        $html = $this->applyFeatureToggles($html, $features);
+        $html = $this->applyThemeVariant($html, $theme, $design);
+
         return str_replace(
             ['STK WIFI POINT', 'STK WIFI'],
             [htmlspecialchars($displayName, ENT_QUOTES), htmlspecialchars($siteName, ENT_QUOTES)],
@@ -384,6 +513,200 @@ HTML;
     private function safeCssColor(string $value, string $fallback): string
     {
         return preg_match('/^#[0-9a-fA-F]{6}$/', $value) ? $value : $fallback;
+    }
+
+    private function replacePricingSection(string $html, array $packages, string $layout): string
+    {
+        $pricingHtml = $layout === 'grid'
+            ? $this->packageGridHtml($packages)
+            : $this->packageTableHtml($packages);
+
+        return preg_replace(
+            '/<div class="pricing-section">.*?<\/div>\s*<div class="footer">/s',
+            $pricingHtml . "\n\n        <div class=\"footer\">",
+            $html,
+            1
+        ) ?? $html;
+    }
+
+    private function packageTableHtml(array $packages): string
+    {
+        $rows = array_map(fn ($package) => $this->packageTableRow($package), $packages);
+
+        return "        <div class=\"pricing-section\">\n            <h2 class=\"pricing-title\">Don't have a voucher? Buy with Mobile Money</h2>\n            <table class=\"pricing-table\">\n" . implode("\n", $rows) . "\n            </table>\n        </div>";
+    }
+
+    private function packageTableRow(array $package): string
+    {
+        $duration = htmlspecialchars((string) ($package['duration'] ?? $package['package_name'] ?? 'Package'), ENT_QUOTES);
+        $description = trim((string) ($package['description'] ?? ''));
+        $descriptionHtml = $description !== ''
+            ? "\n                        <span class=\"package-desc\">" . htmlspecialchars($description, ENT_QUOTES) . '</span>'
+            : '';
+        $displayPrice = htmlspecialchars((string) ($package['display_price'] ?? 'UGX ' . number_format((float) ($package['amount'] ?? 0))), ENT_QUOTES);
+        $button = $this->packageBuyButton($package);
+
+        return <<<HTML
+                <tr>
+                    <td>
+                        <span class="package-duration">{$duration}</span>{$descriptionHtml}
+                    </td>
+                    <td class="package-price">{$displayPrice}</td>
+                    <td>{$button}</td>
+                </tr>
+HTML;
+    }
+
+    private function packageGridHtml(array $packages): string
+    {
+        $cards = array_map(fn ($package) => $this->packageGridCard($package), $packages);
+
+        return "        <div class=\"pricing-section package-grid-section\">\n            <h2 class=\"pricing-title\">Don't have a voucher? Buy with Mobile Money</h2>\n            <div class=\"package-grid\">\n" . implode("\n", $cards) . "\n            </div>\n        </div>";
+    }
+
+    private function packageGridCard(array $package): string
+    {
+        $duration = htmlspecialchars((string) ($package['duration'] ?? $package['package_name'] ?? 'Package'), ENT_QUOTES);
+        $description = htmlspecialchars((string) ($package['description'] ?? ''), ENT_QUOTES);
+        $displayPrice = htmlspecialchars((string) ($package['display_price'] ?? 'UGX ' . number_format((float) ($package['amount'] ?? 0))), ENT_QUOTES);
+        $button = $this->packageBuyButton($package);
+
+        return <<<HTML
+                <div class="package-card">
+                    <span class="package-duration">{$duration}</span>
+                    <span class="package-desc">{$description}</span>
+                    <span class="package-price">{$displayPrice}</span>
+                    {$button}
+                </div>
+HTML;
+    }
+
+    private function packageBuyButton(array $package): string
+    {
+        $amount = $this->jsString((string) ($package['amount'] ?? '0'));
+        $type = $this->jsString((string) ($package['package_type'] ?? Str::slug((string) ($package['package_name'] ?? 'package'), '_')));
+        $name = $this->jsString((string) ($package['package_name'] ?? $package['duration'] ?? 'Package'));
+        $family = !empty($package['is_family_package']) ? ', true' : '';
+
+        return "<button class=\"buy-btn\" onclick=\"openPaymentModal(this, '{$amount}', '{$type}', '{$name}', '$(mac-esc)', '$(link-orig-esc)', '$(link-login-only)'{$family})\">Buy</button>";
+    }
+
+    private function jsString(string $value): string
+    {
+        return str_replace(["\\", "'", "\r", "\n"], ["\\\\", "\\'", '', ' '], $value);
+    }
+
+    private function applyFeatureToggles(string $html, array $features): string
+    {
+        if (empty($features['show_logo'])) {
+            $html = preg_replace('/\s*<div class="wifi-icon">.*?<\/div>\s*/s', "\n", $html, 1) ?? $html;
+        }
+        if (empty($features['show_marquee'])) {
+            $html = preg_replace('/\s*<div class="marquee-container">\s*<div class="marquee-content">.*?<\/div>\s*<\/div>\s*/s', "\n", $html, 1) ?? $html;
+        }
+        if (empty($features['show_find_voucher'])) {
+            $html = preg_replace('/\s*<button type="button" class="btn-find-voucher".*?<\/button>\s*/s', "\n", $html, 1) ?? $html;
+        }
+        if (empty($features['show_trial'])) {
+            $html = preg_replace('/\s*\$\(if trial == \'yes\'\).*?\$\(endif\)\s*/s', "\n", $html, 1) ?? $html;
+        }
+        if (empty($features['show_footer'])) {
+            $html = preg_replace('/\s*<div class="footer">.*?<\/div>\s*(?=<\/div>\s*<script>)/s', "\n", $html, 1) ?? $html;
+        }
+        if (empty($features['show_payment_modal'])) {
+            $html = preg_replace('/\s*<div class="pricing-section.*?<\/div>\s*(?=<div class="footer">)/s', "\n", $html, 1) ?? $html;
+            $html = preg_replace('/\s*<!-- Payment Modal -->.*?<!-- MikroTik CHAP support/s', "\n    <!-- MikroTik CHAP support", $html, 1) ?? $html;
+        }
+
+        return $html;
+    }
+
+    private function applyThemeVariant(string $html, string $theme, array $design): string
+    {
+        $theme = $theme === 'old-flow' ? 'default-theme' : $theme;
+        $primary = $this->safeCssColor((string) ($design['primary_color'] ?? '#2a5298'), '#2a5298');
+        $secondary = $this->safeCssColor((string) ($design['secondary_color'] ?? '#1e3c72'), '#1e3c72');
+        $accent = $this->safeCssColor((string) ($design['accent_color'] ?? '#ff6b35'), '#ff6b35');
+        $css = '';
+
+        if ($theme === 'glassy') {
+            $css = <<<CSS
+
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, .35), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(167, 139, 250, .38), transparent 34%),
+                linear-gradient(135deg, {$secondary} 0%, #111827 48%, {$primary} 100%);
+            backdrop-filter: blur(18px);
+        }
+        .container, .modal {
+            background: rgba(255, 255, 255, .72);
+            border: 1px solid rgba(255, 255, 255, .55);
+            box-shadow: 0 24px 70px rgba(2, 6, 23, .38);
+            backdrop-filter: blur(22px);
+        }
+        .header {
+            background: linear-gradient(135deg, rgba(255,255,255,.24), rgba(255,255,255,.08));
+            border-bottom: 1px solid rgba(255,255,255,.32);
+        }
+        .pricing-table tr, .package-card {
+            background: rgba(255,255,255,.62);
+            border: 1px solid rgba(255,255,255,.7);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, .12);
+        }
+CSS;
+        }
+
+        if ($theme === 'square-grid') {
+            $css .= <<<CSS
+
+        .package-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .package-card {
+            min-height: 142px;
+            border: 1px solid rgba(42, 82, 152, .16);
+            border-radius: 16px;
+            padding: 14px;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 8px;
+            box-shadow: 0 8px 24px rgba(42, 82, 152, .10);
+        }
+        .package-card .package-duration {
+            color: {$secondary};
+            font-size: 14px;
+            font-weight: 800;
+        }
+        .package-card .package-desc {
+            min-height: 28px;
+            color: #64748b;
+            font-size: 11px;
+        }
+        .package-card .package-price {
+            color: {$accent};
+            font-size: 17px;
+            font-weight: 900;
+        }
+        .package-card .buy-btn {
+            width: 100%;
+            padding: 10px;
+        }
+        @media (max-width: 380px) {
+            .package-grid { grid-template-columns: 1fr; }
+        }
+CSS;
+        }
+
+        if ($css === '') {
+            return $html;
+        }
+
+        return str_replace('</style>', $css . "\n    </style>", $html);
     }
 
     private function apiBaseUrl(): string

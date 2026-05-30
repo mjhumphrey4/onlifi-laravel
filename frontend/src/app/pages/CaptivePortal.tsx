@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle, Loader2, Paintbrush, Save } from 'lucide-react';
+import { CheckCircle, Download, Loader2, Paintbrush, Plus, Save, Trash2 } from 'lucide-react';
 import { API_BASE, activateCaptivePortalTemplate, getCaptivePortalTemplates, saveCaptivePortalTemplate } from '../utils/api';
 import { useSite } from '../context/SiteContext';
 
@@ -7,7 +7,17 @@ interface BaseTemplate {
   theme: string;
   name: string;
   description: string;
-  design: Record<string, string>;
+  design: Record<string, any>;
+}
+
+interface PackageRow {
+  duration: string;
+  description: string;
+  display_price: string;
+  amount: string;
+  package_type: string;
+  package_name: string;
+  is_family_package: boolean;
 }
 
 export function CaptivePortal() {
@@ -15,12 +25,15 @@ export function CaptivePortal() {
   const [baseTemplates, setBaseTemplates] = useState<BaseTemplate[]>([]);
   const [savedTemplates, setSavedTemplates] = useState<any[]>([]);
   const [selected, setSelected] = useState<BaseTemplate | null>(null);
-  const [design, setDesign] = useState<Record<string, string>>({});
+  const [design, setDesign] = useState<Record<string, any>>({});
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'design' | 'packages' | 'features'>('design');
+
+  const cloneDesign = (value: Record<string, any>) => JSON.parse(JSON.stringify(value || {}));
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -30,8 +43,9 @@ export function CaptivePortal() {
       setSavedTemplates(data.templates || []);
       const first = data.base_templates?.[0];
       const active = data.active_template;
-      setSelected(first);
-      setDesign(active?.design || first?.design || {});
+      const activeBase = data.base_templates?.find((template: BaseTemplate) => template.theme === active?.theme) || first;
+      setSelected(activeBase);
+      setDesign(cloneDesign(active?.design || activeBase?.design || {}));
       setName(active?.name || first?.name || 'Captive Portal');
     } finally {
       setLoading(false);
@@ -78,8 +92,87 @@ export function CaptivePortal() {
 
   const chooseTemplate = (template: BaseTemplate) => {
     setSelected(template);
-    setDesign(template.design);
+    setDesign(cloneDesign(template.design));
     setName(template.name);
+  };
+
+  const packages: PackageRow[] = Array.isArray(design.packages) ? design.packages : [];
+  const features = {
+    show_logo: true,
+    show_marquee: true,
+    show_find_voucher: true,
+    show_trial: true,
+    show_footer: true,
+    show_payment_modal: true,
+    ...(design.features || {}),
+  };
+
+  const updatePackage = (index: number, field: keyof PackageRow, value: string | boolean) => {
+    const next = [...packages];
+    next[index] = { ...next[index], [field]: value };
+    setDesign({ ...design, packages: next });
+  };
+
+  const addPackage = () => {
+    setDesign({
+      ...design,
+      packages: [
+        ...packages,
+        {
+          duration: 'New Package',
+          description: '',
+          display_price: 'UGX 1,000',
+          amount: '1000',
+          package_type: 'new_package',
+          package_name: 'New Package',
+          is_family_package: false,
+        },
+      ],
+    });
+  };
+
+  const removePackage = (index: number) => {
+    setDesign({ ...design, packages: packages.filter((_, itemIndex) => itemIndex !== index) });
+  };
+
+  const updateFeature = (field: keyof typeof features, value: boolean) => {
+    setDesign({ ...design, features: { ...features, [field]: value } });
+  };
+
+  const downloadGenerated = async () => {
+    if (!selected) return;
+
+    const token = localStorage.getItem('tenant_token');
+    const siteId = localStorage.getItem('selected_site_id');
+    const response = await fetch(`${API_BASE}/tenant/captive-portal/download`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'text/html',
+        'Content-Type': 'application/json',
+        ...(siteId ? { 'X-Site-ID': siteId } : {}),
+      },
+      body: JSON.stringify({
+        name,
+        theme: selected.theme,
+        design,
+      }),
+    });
+
+    if (!response.ok) {
+      alert('Failed to download captive page');
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(selectedSite?.slug || selectedSite?.name || 'site').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-login.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   const save = async () => {
@@ -113,8 +206,16 @@ export function CaptivePortal() {
   return (
     <div className="min-h-screen bg-background p-6 lg:p-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Captive Page</h1>
-        <p className="text-muted-foreground mt-1">Choose the full hotspot page, adjust the site-specific details, and deploy it through router provisioning.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-foreground">Captive Page</h1>
+            <p className="text-muted-foreground mt-1">Choose the full hotspot page, adjust the site-specific details, and deploy it through router provisioning.</p>
+          </div>
+          <button onClick={downloadGenerated} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
+            <Download className="w-4 h-4" />
+            Download login.html
+          </button>
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-[280px_1fr] gap-6">
@@ -136,36 +237,106 @@ export function CaptivePortal() {
 
         <div className="grid xl:grid-cols-2 gap-6">
           <div className="bg-card border border-border rounded-lg p-5 space-y-4">
-            <h2 className="font-semibold text-card-foreground">Visual Editor</h2>
-            <label className="block text-sm">
-              <span className="text-muted-foreground">Template name</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
-            </label>
-            {[
-              ['site_display_name', 'Site display name'],
-              ['subtitle', 'Subtitle'],
-              ['support_contact', 'Support contact'],
-              ['powered_by', 'Footer brand'],
-            ].map(([field, label]) => (
-              <label key={field} className="block text-sm">
-                <span className="text-muted-foreground">{label}</span>
-                <input value={design[field] || ''} onChange={(e) => setDesign({ ...design, [field]: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
-              </label>
-            ))}
-            <label className="block text-sm">
-              <span className="text-muted-foreground">Marquee text</span>
-              <textarea value={design.marquee_text || ''} onChange={(e) => setDesign({ ...design, marquee_text: e.target.value })} rows={3} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
-            </label>
-            {[
-              ['primary_color', 'Primary color'],
-              ['secondary_color', 'Secondary color'],
-              ['accent_color', 'Accent color'],
-            ].map(([field, label]) => (
-              <label key={field} className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-muted-foreground">{label}</span>
-                <input type="color" value={design[field] || '#2563eb'} onChange={(e) => setDesign({ ...design, [field]: e.target.value })} className="h-10 w-16 rounded border border-input bg-background" />
-              </label>
-            ))}
+            <h2 className="font-semibold text-card-foreground">Template Editor</h2>
+            <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted p-1">
+              {[
+                ['design', 'Design'],
+                ['packages', 'Packages'],
+                ['features', 'Features'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id as typeof activeTab)}
+                  className={`px-3 py-2 rounded-md text-sm transition-colors ${activeTab === id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === 'design' && (
+              <div className="space-y-4">
+                <label className="block text-sm">
+                  <span className="text-muted-foreground">Template name</span>
+                  <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
+                </label>
+                {[
+                  ['site_display_name', 'Site display name'],
+                  ['subtitle', 'Subtitle'],
+                  ['support_contact', 'Support contact'],
+                  ['powered_by', 'Footer brand'],
+                ].map(([field, label]) => (
+                  <label key={field} className="block text-sm">
+                    <span className="text-muted-foreground">{label}</span>
+                    <input value={design[field] || ''} onChange={(e) => setDesign({ ...design, [field]: e.target.value })} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
+                  </label>
+                ))}
+                <label className="block text-sm">
+                  <span className="text-muted-foreground">Marquee text</span>
+                  <textarea value={design.marquee_text || ''} onChange={(e) => setDesign({ ...design, marquee_text: e.target.value })} rows={3} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
+                </label>
+                {[
+                  ['primary_color', 'Primary color'],
+                  ['secondary_color', 'Secondary color'],
+                  ['accent_color', 'Accent color'],
+                ].map(([field, label]) => (
+                  <label key={field} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-muted-foreground">{label}</span>
+                    <input type="color" value={design[field] || '#2563eb'} onChange={(e) => setDesign({ ...design, [field]: e.target.value })} className="h-10 w-16 rounded border border-input bg-background" />
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'packages' && (
+              <div className="space-y-3">
+                {packages.map((pkg, index) => (
+                  <div key={index} className="rounded-lg border border-border p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-card-foreground">Package {index + 1}</span>
+                      <button onClick={() => removePackage(index)} className="p-2 rounded-md text-destructive hover:bg-destructive/10">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <input value={pkg.duration} onChange={(e) => updatePackage(index, 'duration', e.target.value)} placeholder="Display name" className="px-3 py-2 rounded-lg bg-background border border-input text-sm" />
+                      <input value={pkg.description} onChange={(e) => updatePackage(index, 'description', e.target.value)} placeholder="Description" className="px-3 py-2 rounded-lg bg-background border border-input text-sm" />
+                      <input value={pkg.display_price} onChange={(e) => updatePackage(index, 'display_price', e.target.value)} placeholder="Display price" className="px-3 py-2 rounded-lg bg-background border border-input text-sm" />
+                      <input value={pkg.amount} onChange={(e) => updatePackage(index, 'amount', e.target.value)} placeholder="Payment amount" className="px-3 py-2 rounded-lg bg-background border border-input text-sm" />
+                      <input value={pkg.package_type} onChange={(e) => updatePackage(index, 'package_type', e.target.value)} placeholder="Package code" className="px-3 py-2 rounded-lg bg-background border border-input text-sm" />
+                      <input value={pkg.package_name} onChange={(e) => updatePackage(index, 'package_name', e.target.value)} placeholder="Modal package name" className="px-3 py-2 rounded-lg bg-background border border-input text-sm" />
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <input type="checkbox" checked={Boolean(pkg.is_family_package)} onChange={(e) => updatePackage(index, 'is_family_package', e.target.checked)} />
+                      Family package modal
+                    </label>
+                  </div>
+                ))}
+                <button onClick={addPackage} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-muted">
+                  <Plus className="w-4 h-4" />
+                  Add Package
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'features' && (
+              <div className="space-y-3">
+                {[
+                  ['show_logo', 'Show WiFi logo'],
+                  ['show_marquee', 'Show moving marquee'],
+                  ['show_find_voucher', 'Show Find Lost Voucher'],
+                  ['show_trial', 'Show MikroTik trial button'],
+                  ['show_footer', 'Show footer'],
+                  ['show_payment_modal', 'Show Mobile Money packages'],
+                ].map(([field, label]) => (
+                  <label key={field} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                    <span className="text-card-foreground">{label}</span>
+                    <input type="checkbox" checked={Boolean(features[field as keyof typeof features])} onChange={(e) => updateFeature(field as keyof typeof features, e.target.checked)} />
+                  </label>
+                ))}
+              </div>
+            )}
+
             <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save and activate

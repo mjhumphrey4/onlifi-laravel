@@ -92,6 +92,33 @@ class CaptivePortalController extends Controller
             ->header('Content-Type', 'text/html');
     }
 
+    public function download(Request $request, CaptivePortalService $portal)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => 'nullable|string|max:100',
+            'theme' => 'nullable|string|max:50',
+            'design' => 'nullable|array',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        }
+
+        $tenant = $request->user()->tenant;
+        $site = SiteScope::selectedOrDefaultSite($request);
+        $template = [
+            'id' => null,
+            'name' => $request->input('name', 'Default Theme'),
+            'theme' => $request->input('theme', 'default-theme'),
+            'design' => $request->input('design', []),
+        ];
+        $siteSlug = $site?->slug ?: \Illuminate\Support\Str::slug($site?->name ?: $tenant->name);
+
+        return response($portal->downloadLoginHtml($tenant, $site, $template))
+            ->header('Content-Type', 'text/html')
+            ->header('Content-Disposition', 'attachment; filename="' . ($siteSlug ?: 'site') . '-login.html"');
+    }
+
     public function activateTemplate(Request $request, CaptivePortalTemplate $template)
     {
         $tenant = $request->user()->tenant;
