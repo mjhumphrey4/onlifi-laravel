@@ -14,4 +14,4 @@
 - Add SMS delivery provider integration beyond the current Comms placeholder and track failed sends without consuming credits.
 - Add FreeRADIUS deployment checks that verify the Perl module, environment variables, dynamic clients, and tenant DB connectivity.
 - Add customer-facing forgot-password flows with signed reset links instead of only admin-triggered password reset notices.
-- Add a provider-specific SMS adapter once the final SMS API documentation is supplied.
+- Add a provider-specific SMS adapter once the final SMS API documentation is supplied. Use Ego SMS (Attach API Flow in project)

@@ -60,8 +60,8 @@ server default {
         #
         # If Perl module found the user, check password
         #
-        pap
         chap
+        pap
         mschap
     }
     

@@ -545,6 +545,16 @@ class NasController extends Controller
 
 :put "OnLiFi: Starting full router provisioning..."
 
+# Download captive portal and telemetry files before changing LAN/hotspot settings.
+# This keeps provisioning resilient if the router's active uplink changes during setup.
+:do { /file make-directory hotspot } on-error={}
+:do { /tool fetch url=\$loginHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html before setup" }
+:do { /tool fetch url=\$md5JsUrl mode=\$hotspotFetchMode dst-path="hotspot/md5.js" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch md5.js before setup" }
+:do { /tool fetch url=\$statusHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html before setup" }
+:do { /tool fetch url=\$aloginHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html before setup" }
+:do { /file remove [find name="onlifi-telemetry.rsc"] } on-error={}
+:do { /tool fetch url=\$telemetryScriptUrl mode=\$telemetryScriptFetchMode dst-path="onlifi-telemetry.rsc" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch telemetry installer before setup" }
+
 # Identity
 /system identity set name=\$routerIdentifier
 
@@ -650,16 +660,16 @@ class NasController extends Controller
 # Hotspot profile and server
 :do {
   :if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
-    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-pap
   } else={
-    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-pap
   }
 } on-error={
   :log warning "OnLiFi hotspot profile failed with html-directory; retrying basic profile"
   :if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
-    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-pap
   } else={
-    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-chap,http-pap
+    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-pap
   }
 }
 
@@ -673,8 +683,7 @@ class NasController extends Controller
   /ip hotspot set [find name=\$hotspotName] interface=\$bridgeName profile=\$hotspotProfile address-pool=\$dhcpPool disabled=no
 }
 
-# Captive portal files and payment API allow-list
-:do { /file make-directory hotspot } on-error={}
+# Captive portal payment API allow-list
 :if ([:len [/ip hotspot walled-garden find comment="OnLiFi API access"]] = 0) do={
   /ip hotspot walled-garden add dst-host=\$appHost action=allow comment="OnLiFi API access"
 }
@@ -684,16 +693,9 @@ class NasController extends Controller
 :if ([:len [/ip hotspot walled-garden find dst-host=\$hotspotDnsName]] = 0) do={
   /ip hotspot walled-garden add dst-host=\$hotspotDnsName action=allow comment="OnLiFi local captive host"
 }
-:do { /tool fetch url=\$loginHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html" }
-:do { /tool fetch url=\$md5JsUrl mode=\$hotspotFetchMode dst-path="hotspot/md5.js" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch md5.js" }
-:do { /tool fetch url=\$statusHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html" }
-:do { /tool fetch url=\$aloginHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html" }
 
-# Telemetry script is fetched separately to keep this installer import-safe.
-:do { /file remove [find name="onlifi-telemetry.rsc"] } on-error={}
+# Telemetry script was fetched before network changes; import it now.
 :do {
-  /tool fetch url=\$telemetryScriptUrl mode=\$telemetryScriptFetchMode dst-path="onlifi-telemetry.rsc" keep-result=yes
-  :delay 1s
   /import file-name="onlifi-telemetry.rsc"
 } on-error={
   :log warning "OnLiFi telemetry install failed; router provisioning continued"
