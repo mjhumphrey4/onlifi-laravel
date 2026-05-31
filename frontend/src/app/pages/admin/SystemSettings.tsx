@@ -103,7 +103,10 @@ export default function SystemSettings() {
         alert('Settings saved successfully');
       } else {
         const data = await response.json();
-        alert(data.message || 'Failed to save settings');
+        const validationMessage = data.errors
+          ? Object.values(data.errors).flat().join('\n')
+          : '';
+        alert(data.message || validationMessage || 'Failed to save settings');
       }
     } catch (error) {
       console.error('Error saving settings:', error);
