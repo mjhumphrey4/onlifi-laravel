@@ -450,12 +450,6 @@ class NasController extends Controller
         $hotspotDns = "{$siteSlug}.wifi";
         $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
         $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
-        $remoteVpnCidr = (string) SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24');
-        $vpnHost = $site?->vpn_public_host ?: 'vpn.onlifi.net';
-        $vpnPort = $site?->vpn_public_port ?: 443;
-        $vpnConnectTo = $vpnPort ? "{$vpnHost}:{$vpnPort}" : $vpnHost;
-        $vpnUsername = $site?->vpn_username ?: Str::slug($site?->name ?: $tenantName);
-        $vpnPassword = $site?->vpn_password ?: Str::random(24);
         $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
         $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
@@ -484,12 +478,6 @@ class NasController extends Controller
         $acctPort = $this->rscString((string) $acctPort);
         $remoteAdminUser = $this->rscString($remoteAdminUser);
         $remoteAdminPassword = $this->rscString($remoteAdminPassword);
-        $remoteVpnCidr = $this->rscString($remoteVpnCidr);
-        $vpnHost = $this->rscString($vpnHost);
-        $vpnPort = $this->rscString((string) $vpnPort);
-        $vpnConnectTo = $this->rscString($vpnConnectTo);
-        $vpnUsername = $this->rscString($vpnUsername);
-        $vpnPassword = $this->rscString($vpnPassword);
         $telemetryUrl = $this->rscString($telemetryUrl);
         $telemetryToken = $this->rscString($telemetryToken);
         $appHost = $this->rscString($appHost);
@@ -540,13 +528,6 @@ class NasController extends Controller
 :local routerIdentifier "{$routerIdentifier}"
 :local remoteAdminUser "{$remoteAdminUser}"
 :local remoteAdminPassword "{$remoteAdminPassword}"
-:local remoteVpnCidr "{$remoteVpnCidr}"
-:local sstpHost "{$vpnHost}"
-:local sstpPort "{$vpnPort}"
-:local sstpConnectTo "{$vpnConnectTo}"
-:local sstpUser "{$vpnUsername}"
-:local sstpPassword "{$vpnPassword}"
-:local sstpClientName "onlifi-sstp"
 :local telemetryUrl "{$telemetryUrl}"
 :local telemetryToken "{$telemetryToken}"
 :local appHost "{$appHost}"
@@ -584,7 +565,7 @@ class NasController extends Controller
   :local ifaceName [/interface ethernet get \$iface name]
   :if (\$ifaceName != \$wanInterface) do={
     :if ([:len [/interface bridge port find bridge=\$bridgeName interface=\$ifaceName]] = 0) do={
-      /interface bridge port add bridge=\$bridgeName interface=\$ifaceName
+      :do { /interface bridge port add bridge=\$bridgeName interface=\$ifaceName } on-error={ :log warning ("OnLiFi could not add " . \$ifaceName . " to bridge") }
     }
   }
 }
@@ -608,19 +589,8 @@ class NasController extends Controller
 } else={
   /user set [find name=\$remoteAdminUser] password=\$remoteAdminPassword group=full disabled=no comment="OnLiFi remote telemetry administrator"
 }
-:do { /ip service set api disabled=no port=8728 address=\$remoteVpnCidr } on-error={ :log warning "OnLiFi failed to restrict API service to VPN range" }
-:do { /ip service set winbox address=\$remoteVpnCidr } on-error={}
-
-# SSTP VPN client for managed remote access
-:do {
-  :if ([:len [/interface sstp-client find name=\$sstpClientName]] = 0) do={
-    /interface sstp-client add name=\$sstpClientName connect-to=\$sstpConnectTo user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no comment="OnLiFi managed SSTP"
-  } else={
-    /interface sstp-client set [find name=\$sstpClientName] connect-to=\$sstpConnectTo user=\$sstpUser password=\$sstpPassword disabled=no profile=default-encryption add-default-route=no comment="OnLiFi managed SSTP"
-  }
-} on-error={
-  :log warning "OnLiFi SSTP setup failed; check RouterOS SSTP package/version"
-}
+# Router management services are intentionally left unchanged.
+# Winbox/API/SSH/www ports and allowed-address settings remain under the router owner's control.
 
 # DHCP
 :if ([:len [/ip pool find name=\$dhcpPool]] = 0) do={
@@ -641,9 +611,32 @@ class NasController extends Controller
   /ip dhcp-server network set [find address=\$dhcpNetwork] gateway=\$lanGateway dns-server=\$lanGateway
 }
 
-# NAT
+# Interface lists and firewall rules needed for hotspot internet access.
+# Input-chain management access is not changed.
+:do { /interface list add name=WAN comment="OnLiFi WAN list" } on-error={}
+:do { /interface list add name=LAN comment="OnLiFi LAN list" } on-error={}
+:do {
+  :if ([:len [/interface list member find list=WAN interface=\$wanInterface]] = 0) do={
+    /interface list member add list=WAN interface=\$wanInterface comment="OnLiFi WAN"
+  }
+} on-error={}
+:do {
+  :if ([:len [/interface list member find list=LAN interface=\$bridgeName]] = 0) do={
+    /interface list member add list=LAN interface=\$bridgeName comment="OnLiFi LAN"
+  }
+} on-error={}
+
 :if ([:len [/ip firewall nat find comment="OnLiFi internet masquerade"]] = 0) do={
   /ip firewall nat add chain=srcnat out-interface=\$wanInterface action=masquerade comment="OnLiFi internet masquerade"
+}
+:if ([:len [/ip firewall filter find comment="OnLiFi allow established hotspot forward"]] = 0) do={
+  /ip firewall filter add chain=forward action=accept connection-state=established,related comment="OnLiFi allow established hotspot forward"
+}
+:if ([:len [/ip firewall filter find comment="OnLiFi drop invalid hotspot forward"]] = 0) do={
+  /ip firewall filter add chain=forward action=drop connection-state=invalid comment="OnLiFi drop invalid hotspot forward"
+}
+:if ([:len [/ip firewall filter find comment="OnLiFi allow hotspot clients to internet"]] = 0) do={
+  /ip firewall filter add chain=forward in-interface=\$bridgeName out-interface=\$wanInterface action=accept comment="OnLiFi allow hotspot clients to internet"
 }
 
 # Add RADIUS server
