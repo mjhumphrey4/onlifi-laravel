@@ -283,6 +283,11 @@ class SystemSettingController extends Controller
             false,
         ];
 
-        return compact('type', 'group', 'description', 'isPublic');
+        return [
+            'type' => $type,
+            'group' => $group,
+            'description' => $description,
+            'is_public' => $isPublic,
+        ];
     }
 }
