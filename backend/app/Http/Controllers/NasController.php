@@ -91,7 +91,7 @@ class NasController extends Controller
                 'server' => $this->radiusServerIp(),
                 'auth_port' => $this->radiusAuthPort(),
                 'acct_port' => $this->radiusAcctPort(),
-                'secret' => $nas->secret,
+                'secret' => $this->radiusSharedSecret(),
                 'nas_identifier' => $nas->router_identifier,
             ],
             'mikrotik_script' => $mikrotikScript,
@@ -206,6 +206,9 @@ class NasController extends Controller
             if (empty($nas->provisioning_token)) {
                 $updates['provisioning_token'] = Str::random(64);
             }
+            if ($nas->secret !== $this->radiusSharedSecret()) {
+                $updates['secret'] = $this->radiusSharedSecret();
+            }
             $routerIdentifier = $this->generateRouterIdentifier($tenant, $site, $nas->id);
             if ($nas->router_identifier !== $routerIdentifier) {
                 $updates['router_identifier'] = $routerIdentifier;
@@ -229,7 +232,7 @@ class NasController extends Controller
             'provisioning_token' => Str::random(64),
             'shortname' => $site->name,
             'type' => 'other',
-            'secret' => $tenant->radius_secret ?? config('radius.shared_secret', 'onlifi_radius_secret'),
+            'secret' => $this->radiusSharedSecret(),
             'server' => null,
             'description' => $description ?: $site->description,
             'tenant_id' => $tenant->id,
@@ -423,6 +426,11 @@ class NasController extends Controller
     {
         return (int) SystemSetting::get('radius_acct_port', config('radius.acct_port', 1813));
     }
+
+    private function radiusSharedSecret(): string
+    {
+        return (string) SystemSetting::get('radius_shared_secret', config('radius.shared_secret', 'onlifi_radius_secret_change_me'));
+    }
     
     /**
      * Generate MikroTik RADIUS configuration script
@@ -430,7 +438,7 @@ class NasController extends Controller
     private function generateFullProvisioningScript($nas): string
     {
         $routerIdentifier = $nas->router_identifier;
-        $secret = $nas->secret;
+        $secret = $this->radiusSharedSecret();
         $tenant = DB::connection('central')->table('tenants')->where('id', $nas->tenant_id)->first();
         $tenantName = $tenant->name ?? 'Unknown Tenant';
         $site = $this->getOrCreateProvisioningSite($nas, $tenant);

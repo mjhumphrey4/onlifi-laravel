@@ -1,70 +1,25 @@
-# Onlifi FreeRADIUS Multi-Tenant Configuration
+# OnLiFi FreeRADIUS Configuration
 
-## Overview
+Current setup guide: [ONLIFI_RADIUS_RUNBOOK.md](ONLIFI_RADIUS_RUNBOOK.md).
 
-This configuration enables FreeRADIUS to authenticate hotspot users across multiple tenants, where each MikroTik router can have its own unique RADIUS secret and is identified by its MikroTik Identity (system name).
+## Current Architecture
 
-## Architecture
+- Dynamic/public MikroTik routers share one global RADIUS client secret.
+- The router identity is the site identifier, for example `main-router22-ONLIFI-1`.
+- MikroTik sends that identity as `NAS-Identifier`.
+- FreeRADIUS accepts packets using the shared secret in `clients.conf`.
+- `multi_tenant.pl` looks up `central.nas.router_identifier`.
+- The matching row selects the correct `tenant_id` and `site_id`.
+- Voucher authentication is performed against the selected tenant/site database.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     ONLIFI MULTI-TENANT RADIUS FLOW                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  MikroTik Router                                                            │
-│  ┌────────────────────────────────────────────────────────────────────┐    │
-│  │ Identity: "ACME-ROUTER-001"                                         │    │
-│  │ RADIUS Secret: "unique_secret_for_this_router"                      │    │
-│  │ Sends: NAS-Identifier = "ACME-ROUTER-001"                          │    │
-│  └────────────────────────────────────────────────────────────────────┘    │
-│                              │                                              │
-│                              ▼                                              │
-│  ┌────────────────────────────────────────────────────────────────────┐    │
-│  │                    FreeRADIUS Server                                │    │
-│  │  1. Receives request with NAS-Identifier                           │    │
-│  │  2. Looks up NAS-Identifier in central `nas` table                 │    │
-│  │  3. Validates RADIUS secret matches                                │    │
-│  │  4. Gets tenant_id from NAS record                                 │    │
-│  │  5. Connects to tenant's database                                  │    │
-│  │  6. Authenticates user against tenant's radcheck table             │    │
-│  │  7. Returns reply attributes from tenant's radreply table          │    │
-│  └────────────────────────────────────────────────────────────────────┘    │
-│                              │                                              │
-│              ┌───────────────┼───────────────┐                             │
-│              ▼               ▼               ▼                              │
-│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐           │
-│  │ Central Database │ │ Tenant: ACME     │ │ Tenant: BETA     │           │
-│  │ onlifi_central   │ │ tenant_acme      │ │ tenant_beta      │           │
-│  │                  │ │                  │ │                  │           │
-│  │ Tables:          │ │ Tables:          │ │ Tables:          │           │
-│  │ - nas            │ │ - radcheck       │ │ - radcheck       │           │
-│  │ - tenants        │ │ - radreply       │ │ - radreply       │           │
-│  │                  │ │ - radacct        │ │ - radacct        │           │
-│  │                  │ │ - vouchers       │ │ - vouchers       │           │
-│  └──────────────────┘ └──────────────────┘ └──────────────────┘           │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Key Concept: MikroTik Identity as NAS-Identifier
-
-Since MikroTik routers don't have public IPs:
-- Each router's **System Identity** is used as the unique identifier
-- The identity is sent in RADIUS requests as `NAS-Identifier`
-- FreeRADIUS looks up this identifier in the central `nas` table
-- Each router can have its own unique RADIUS secret
-
-## Files in this Directory
+## Files
 
 | File | Purpose |
-|------|---------|
-| `clients.conf` | Dynamic client loading from database |
-| `sql.conf` | SQL module configuration |
-| `queries.conf` | SQL queries for central database |
-| `queries_tenant.conf` | SQL queries for tenant databases |
-| `multi_tenant.pl` | Perl module for dynamic tenant routing |
-| `default` | Virtual server configuration |
+| --- | --- |
+| `clients.conf` | Defines the shared dynamic MikroTik client. |
+| `default` | FreeRADIUS virtual server using Perl for auth/accounting. |
+| `multi_tenant.pl` | Routes requests to the correct tenant/site database. |
+| `sql.conf` | SQL module config, retained for support use; client loading is disabled for dynamic routers. |
+| `ONLIFI_RADIUS_RUNBOOK.md` | Practical server setup and troubleshooting steps. |
 
-## Installation Steps
-
-See `FREERADIUS_SETUP.md` for complete installation instructions.
+Per-router RADIUS secrets should only be enabled later when routers have stable VPN private source IPs.

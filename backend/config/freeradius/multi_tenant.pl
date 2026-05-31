@@ -7,8 +7,8 @@
 #
 # KEY CONCEPT: MikroTik Identity as Router Identifier
 # - Each MikroTik router's System Identity is used as NAS-Identifier
-# - Each router has its own unique RADIUS secret stored in the `nas` table
-# - The module looks up the router by NAS-Identifier to find the tenant
+# - Dynamic/public routers share one RADIUS client secret in clients.conf
+# - The module looks up the router by NAS-Identifier to find the tenant/site
 # - Then queries the tenant's database for voucher authentication
 #
 # Installation:
@@ -19,7 +19,7 @@
 #
 # MikroTik Configuration:
 # /system identity set name="YOUR-UNIQUE-ROUTER-NAME"
-# /radius add address=RADIUS_SERVER secret="UNIQUE_SECRET_FOR_THIS_ROUTER" service=hotspot
+# /radius add address=RADIUS_SERVER secret="GLOBAL_ONLIFI_RADIUS_SECRET" service=hotspot
 #
 
 use strict;
