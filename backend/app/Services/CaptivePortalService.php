@@ -503,11 +503,65 @@ HTML;
         $html = $this->applyFeatureToggles($html, $features);
         $html = $this->applyThemeVariant($html, $theme, $design);
 
-        return str_replace(
+        $html = str_replace(
             ['STK WIFI POINT', 'STK WIFI'],
             [htmlspecialchars($displayName, ENT_QUOTES), htmlspecialchars($siteName, ENT_QUOTES)],
             $html
         );
+
+        return $this->injectVoucherPasswordSyncScript($html);
+    }
+
+    private function injectVoucherPasswordSyncScript(string $html): string
+    {
+        $script = <<<'HTML'
+
+    <script>
+        (function () {
+            function syncVoucherPassword(form) {
+                if (!form || !form.elements) {
+                    return true;
+                }
+
+                var usernameInput = form.elements['username'];
+                var passwordInput = form.elements['password'];
+
+                if (usernameInput && passwordInput) {
+                    passwordInput.value = usernameInput.value || '';
+                }
+
+                return true;
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                var form = document.forms['login'];
+                if (!form) {
+                    return;
+                }
+
+                form.addEventListener('submit', function () {
+                    syncVoucherPassword(form);
+                }, true);
+
+                var usernameInput = form.elements['username'];
+                if (usernameInput) {
+                    usernameInput.addEventListener('input', function () {
+                        syncVoucherPassword(form);
+                    });
+                    syncVoucherPassword(form);
+                }
+            });
+
+            window.onlifiSyncVoucherPassword = syncVoucherPassword;
+        })();
+    </script>
+HTML;
+
+        if (str_contains($html, 'window.onlifiSyncVoucherPassword')) {
+            return $html;
+        }
+
+        return str_ireplace('</body>', $script . "\n</body>", $html);
     }
 
     private function safeCssColor(string $value, string $fallback): string

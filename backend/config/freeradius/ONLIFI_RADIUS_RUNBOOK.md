@@ -163,6 +163,20 @@ If logs show `User not found in radcheck`:
 
 - The voucher is not synced into the selected tenant/site database.
 - The voucher belongs to a different site.
+- Repair a known router/site with:
+
+```bash
+cd /var/www/onlifi/backend
+php artisan onlifi:radius:sync-active --router=main-router22-ONLIFI-1
+```
+
+- Repair one voucher and assign it to the selected site if it was created before site IDs were enforced:
+
+```bash
+php artisan onlifi:radius:sync-active --router=main-router22-ONLIFI-1 --voucher=4RPYDL --backfill-site
+```
+
+If logs show `Empty User-Password received`, the MikroTik page submitted the voucher as username but did not populate the hidden password field. Re-download/provision `login.html` after deploying the latest backend so the PAP password sync script is included.
 
 ## MikroTik Verification Commands
 

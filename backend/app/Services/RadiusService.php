@@ -25,7 +25,7 @@ class RadiusService
             // Insert/update radcheck (password)
             DB::connection('tenant')->table('radcheck')->updateOrInsert(
                 ['username' => $voucher->voucher_code, 'attribute' => 'Cleartext-Password'],
-                ['op' => ':=', 'value' => $voucher->password]
+                ['op' => ':=', 'value' => $voucher->password ?: $voucher->voucher_code]
             );
             
             // Clear existing reply attributes for this voucher
@@ -74,6 +74,13 @@ class RadiusService
                     }
                 }
             }
+
+            DB::connection('tenant')->table('radreply')->insert([
+                'username' => $voucher->voucher_code,
+                'attribute' => 'Acct-Interim-Interval',
+                'op' => '=',
+                'value' => '300',
+            ]);
             
             DB::connection('tenant')->commit();
             

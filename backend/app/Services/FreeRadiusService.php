@@ -13,7 +13,7 @@ class FreeRadiusService
             DB::connection('tenant')->beginTransaction();
 
             $username = $voucherData['voucher_code'];
-            $password = $voucherData['password'];
+            $password = $voucherData['password'] ?: $voucherData['voucher_code'];
             $validityHours = $voucherData['validity_hours'];
             $validityMinutes = $voucherData['validity_minutes'] ?? null;
             $dataLimitMb = $voucherData['data_limit_mb'];
@@ -158,7 +158,7 @@ class FreeRadiusService
                     'username' => $voucher->voucher_code,
                     'attribute' => 'Cleartext-Password',
                     'op' => ':=',
-                    'value' => $voucher->password,
+                    'value' => $voucher->password ?: $voucher->voucher_code,
                 ];
 
                 $radreplyRows[] = [

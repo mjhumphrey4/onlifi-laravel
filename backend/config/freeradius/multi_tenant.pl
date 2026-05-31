@@ -103,6 +103,10 @@ sub authorize {
     my $username = $RAD_REQUEST{'User-Name'} // '';
     
     &radiusd::radlog(1, "PERL AUTHORIZE START: User=$username, NAS-ID=$router_identifier");
+
+    if (exists $RAD_REQUEST{'User-Password'} && ($RAD_REQUEST{'User-Password'} // '') eq '') {
+        &radiusd::radlog(1, "PERL WARNING: Empty User-Password received for $username. Check login.html PAP password sync.");
+    }
     
     # Get tenant database using router identifier
     my $tenant = get_tenant_db($router_identifier);
@@ -159,6 +163,24 @@ sub authorize {
     
     unless ($found) {
         &radiusd::radlog(1, "PERL ERROR: User not found in radcheck: $username");
+        eval {
+            my $voucher_diag = $dbh->prepare(q{
+                SELECT voucher_code, status, site_id, expires_at
+                FROM vouchers
+                WHERE voucher_code = ?
+                LIMIT 1
+            });
+            $voucher_diag->execute($username);
+            if (my $voucher = $voucher_diag->fetchrow_hashref()) {
+                my $voucher_site = defined $voucher->{site_id} ? $voucher->{site_id} : 'NULL';
+                my $expected_site = defined $tenant->{site_id} ? $tenant->{site_id} : 'NULL';
+                my $expires_at = defined $voucher->{expires_at} ? $voucher->{expires_at} : 'NULL';
+                &radiusd::radlog(1, "PERL DIAG: Voucher exists status=$voucher->{status}, voucher_site_id=$voucher_site, expected_site_id=$expected_site, expires_at=$expires_at; radcheck missing or site mismatch.");
+            } else {
+                &radiusd::radlog(1, "PERL DIAG: Voucher $username does not exist in the selected tenant/site database.");
+            }
+            $voucher_diag->finish();
+        };
         $dbh->disconnect();
         return RLM_MODULE_NOTFOUND;
     }
