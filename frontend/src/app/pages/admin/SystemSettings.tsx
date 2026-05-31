@@ -102,11 +102,17 @@ export default function SystemSettings() {
         fetchSettings();
         alert('Settings saved successfully');
       } else {
-        const data = await response.json();
+        const text = await response.text();
+        let data: any = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = { message: text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() };
+        }
         const validationMessage = data.errors
           ? Object.values(data.errors).flat().join('\n')
           : '';
-        alert(data.message || validationMessage || 'Failed to save settings');
+        alert(data.message || validationMessage || `Failed to save settings (${response.status})`);
       }
     } catch (error) {
       console.error('Error saving settings:', error);

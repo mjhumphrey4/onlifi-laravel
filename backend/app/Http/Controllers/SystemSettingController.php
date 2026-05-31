@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
@@ -163,6 +164,19 @@ class SystemSettingController extends Controller
             'settings' => 'required|array',
             'settings.*.key' => 'required|string',
             'settings.*.value' => 'present|nullable',
+            'settings.*' => function ($attribute, $value, $fail) {
+                if (($value['key'] ?? null) === 'radius_shared_secret') {
+                    $secret = (string) ($value['value'] ?? '');
+
+                    if ($secret === '') {
+                        $fail('RADIUS shared secret cannot be blank.');
+                    } elseif (strlen($secret) > 60) {
+                        $fail('RADIUS shared secret must be 60 characters or fewer.');
+                    } elseif (preg_match('/\s/', $secret)) {
+                        $fail('RADIUS shared secret cannot contain spaces.');
+                    }
+                }
+            },
         ]);
 
         if ($validator->fails()) {
@@ -173,38 +187,53 @@ class SystemSettingController extends Controller
             ], 422);
         }
 
-        DB::connection('central')->transaction(function () use ($request) {
-            foreach ($request->settings as $settingData) {
-                $key = $settingData['key'];
-                $setting = SystemSetting::where('key', $key)->first();
-                $defaults = $this->settingDefaults($key);
+        try {
+            DB::connection('central')->transaction(function () use ($request) {
+                foreach ($request->settings as $settingData) {
+                    $key = $settingData['key'];
+                    $setting = SystemSetting::where('key', $key)->first();
+                    $defaults = $this->settingDefaults($key);
 
-                $value = $settingData['value'];
-                $type = $setting?->type ?: $defaults['type'];
-                if (in_array($type, ['array', 'json']) && is_array($value)) {
-                    $value = json_encode($value);
+                    $value = $settingData['value'];
+                    $type = $setting?->type ?: $defaults['type'];
+                    if (in_array($type, ['array', 'json']) && is_array($value)) {
+                        $value = json_encode($value);
+                    }
+
+                    SystemSetting::updateOrCreate(
+                        ['key' => $key],
+                        [
+                            'value' => $value,
+                            'type' => $type,
+                            'group' => $setting?->group ?: $defaults['group'],
+                            'description' => $setting?->description ?: $defaults['description'],
+                            'is_public' => $setting?->is_public ?? $defaults['is_public'],
+                        ]
+                    );
                 }
 
-                SystemSetting::updateOrCreate(
-                    ['key' => $key],
-                    [
-                        'value' => $value,
-                        'type' => $type,
-                        'group' => $setting?->group ?: $defaults['group'],
-                        'description' => $setting?->description ?: $defaults['description'],
-                        'is_public' => $setting?->is_public ?? $defaults['is_public'],
-                    ]
-                );
-            }
+                $sharedSecret = collect($request->settings)->firstWhere('key', 'radius_shared_secret')['value'] ?? null;
+                if ($sharedSecret !== null && $sharedSecret !== '' && Schema::connection('central')->hasTable('nas')) {
+                    DB::connection('central')->table('nas')->update([
+                        'secret' => $sharedSecret,
+                        'updated_at' => now(),
+                    ]);
+                }
+            });
+        } catch (\Throwable $e) {
+            Log::error('System settings bulk update failed', [
+                'error' => $e->getMessage(),
+                'settings' => collect($request->settings)
+                    ->pluck('key')
+                    ->values()
+                    ->all(),
+            ]);
 
-            $sharedSecret = collect($request->settings)->firstWhere('key', 'radius_shared_secret')['value'] ?? null;
-            if ($sharedSecret !== null && $sharedSecret !== '' && Schema::connection('central')->hasTable('nas')) {
-                DB::connection('central')->table('nas')->update([
-                    'secret' => $sharedSecret,
-                    'updated_at' => now(),
-                ]);
-            }
-        });
+            return response()->json([
+                'error' => 'Settings update failed',
+                'message' => 'Unable to save settings: ' . $e->getMessage(),
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Settings updated successfully',
