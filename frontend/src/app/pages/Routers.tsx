@@ -8,15 +8,15 @@ export function Routers() {
           <Router className="w-7 h-7 text-primary" />
           Routers
         </h1>
-        <p className="text-muted-foreground mt-1">Router availability monitoring will be powered by Uptime Kuma.</p>
+        <p className="text-muted-foreground mt-1">Router availability monitoring will be powered by Onlifi API Ops.</p>
 
         <div className="mt-6 bg-card border border-border rounded-lg p-8">
           <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
             <Wrench className="w-6 h-6 text-primary" />
           </div>
-          <h2 className="text-lg font-semibold text-card-foreground">Uptime Kuma integration pending</h2>
+          <h2 className="text-lg font-semibold text-card-foreground">Admin integration pending</h2>
           <p className="text-sm text-muted-foreground mt-2">
-            This area is intentionally empty for now. It is reserved for router uptime checks, status pages, and alert data once the Uptime Kuma workflow is connected.
+            This area is intentionally empty for now. It is reserved for router uptime checks, status pages, and alert data once Devops for this area is done, deployed and workflow is connected.
           </p>
         </div>
       </div>
