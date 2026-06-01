@@ -35,7 +35,7 @@ my $central_db_name = $ENV{'RADIUS_DB_NAME'} // "onlifi_central";
 my $central_db_user = $ENV{'RADIUS_DB_USER'} // "onlifi";
 my $central_db_pass = $ENV{'RADIUS_DB_PASS'} // "password";
 
-# Cache for tenant database connections (keyed by router_identifier)
+# Cache for tenant/site database lookups (keyed by router_identifier)
 my %tenant_cache;
 
 # FreeRADIUS return codes
@@ -52,8 +52,8 @@ use constant {
 };
 
 #
-# Get tenant database info from router identifier (NAS-Identifier)
-# Router identifier format: ONLIFI-{site-name}-{date}-{random}
+# Get tenant/site database info from router identifier (NAS-Identifier)
+# Site-linked routers authenticate against the site's own database when present.
 #
 sub get_tenant_db {
     my ($router_identifier) = @_;
@@ -70,12 +70,23 @@ sub get_tenant_db {
     
     return undef unless $dbh;
     
-    # Look up by router_identifier (unique per router)
+    # Look up by router_identifier (unique per router). A site is an
+    # independent operational database, so prefer sites.* DB credentials when
+    # the NAS is linked to a site.
     my $sth = $dbh->prepare(q{
-        SELECT t.database_name, t.database_host, t.database_port, t.database_username, t.database_password,
-               n.site_id
+        SELECT
+            COALESCE(NULLIF(s.database_name, ''), t.database_name) AS database_name,
+            COALESCE(NULLIF(s.database_host, ''), t.database_host) AS database_host,
+            COALESCE(s.database_port, t.database_port) AS database_port,
+            COALESCE(NULLIF(s.database_username, ''), t.database_username) AS database_username,
+            COALESCE(NULLIF(s.database_password, ''), t.database_password) AS database_password,
+            n.site_id,
+            n.tenant_id,
+            t.database_name AS tenant_database_name,
+            s.database_name AS site_database_name
         FROM nas n
         JOIN tenants t ON n.tenant_id = t.id
+        LEFT JOIN sites s ON s.id = n.site_id AND s.tenant_id = n.tenant_id
         WHERE n.router_identifier = ?
         AND t.is_active = 1
         AND t.status = 'approved'
@@ -116,7 +127,8 @@ sub authorize {
         return RLM_MODULE_REJECT;
     }
     
-    &radiusd::radlog(1, "PERL: Found tenant DB: $tenant->{database_name} at $tenant->{database_host}");
+    my $site_db = defined $tenant->{site_database_name} ? $tenant->{site_database_name} : 'NULL';
+    &radiusd::radlog(1, "PERL: Found tenant/site DB: $tenant->{database_name} at $tenant->{database_host} (tenant_id=$tenant->{tenant_id}, site_id=" . ($tenant->{site_id} // 'NULL') . ", site_db=$site_db)");
     
     # Connect to tenant database
     my $dbh = DBI->connect(

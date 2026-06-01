@@ -12,7 +12,8 @@ Use this production path:
 - FreeRADIUS accepts the packet with the global secret.
 - `multi_tenant.pl` looks up `central.nas.router_identifier = NAS-Identifier`.
 - The matching `nas` row provides `tenant_id` and `site_id`.
-- The Perl module connects to the tenant/site database and checks `radcheck` / `radreply`.
+- The Perl module connects to the site database when `sites.database_*` is configured, otherwise it falls back to the tenant database.
+- The selected tenant/site database is checked for `radcheck` / `radreply`.
 
 Per-site RADIUS secrets are only practical after every router has a stable source IP, such as an SSTP VPN private IP. Then `nasname` can be the router VPN IP and FreeRADIUS can load unique clients safely.
 
@@ -163,6 +164,7 @@ If logs show `User not found in radcheck`:
 
 - The voucher is not synced into the selected tenant/site database.
 - The voucher belongs to a different site.
+- The NAS is linked to a site, but the deployed Perl script is still connecting to the tenant DB instead of `sites.database_name`.
 - Make sure the `User-Name` in `freeradius -X` is the same voucher you are syncing. If the log says `User-Name = "136485"`, syncing `4RPYDL` will not fix that login attempt.
 - Diagnose the exact router/voucher lookup with:
 
