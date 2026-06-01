@@ -142,6 +142,105 @@ Artisan::command('onlifi:radius:sync-active {--router= : NAS-Identifier/router i
     return $totalFailed > 0 ? Command::FAILURE : Command::SUCCESS;
 })->purpose('Repair/sync active vouchers into tenant radcheck/radreply tables');
 
+Artisan::command('onlifi:radius:diagnose {--router= : NAS-Identifier/router identity from FreeRADIUS logs} {--voucher= : Voucher code from FreeRADIUS User-Name}', function () {
+    $routerIdentifier = trim((string) $this->option('router'));
+    $voucherCode = trim((string) $this->option('voucher'));
+
+    if ($routerIdentifier === '' || $voucherCode === '') {
+        $this->error('Both --router and --voucher are required.');
+        $this->line('Example: php artisan onlifi:radius:diagnose --router=main-router22-ONLIFI-1 --voucher=136485');
+        return Command::FAILURE;
+    }
+
+    $nas = DB::connection('central')
+        ->table('nas')
+        ->where('router_identifier', $routerIdentifier)
+        ->first();
+
+    if (!$nas) {
+        $this->error("No NAS/router found for {$routerIdentifier}.");
+        return Command::FAILURE;
+    }
+
+    $tenant = \App\Models\Tenant::find((int) $nas->tenant_id);
+    if (!$tenant) {
+        $this->error("NAS {$routerIdentifier} points to missing tenant {$nas->tenant_id}.");
+        return Command::FAILURE;
+    }
+
+    $siteId = Schema::connection('central')->hasColumn('nas', 'site_id') && !empty($nas->site_id)
+        ? (int) $nas->site_id
+        : null;
+    $site = $siteId
+        ? \App\Models\Site::where('tenant_id', $tenant->id)->where('id', $siteId)->first()
+        : null;
+
+    if ($siteId && !$site) {
+        $this->error("NAS {$routerIdentifier} points to missing site {$siteId} for tenant {$tenant->id}.");
+        return Command::FAILURE;
+    }
+
+    if ($site) {
+        $site->configureTenantConnection($tenant);
+    } else {
+        $tenant->configure();
+    }
+
+    $this->table(['Router', 'Tenant', 'Tenant DB', 'Site', 'Site DB'], [[
+        $routerIdentifier,
+        "{$tenant->id} / {$tenant->name}",
+        $tenant->database_name,
+        $site ? "{$site->id} / {$site->name}" : '-',
+        $site?->database_name ?: $tenant->database_name,
+    ]]);
+
+    if (!Schema::connection('tenant')->hasTable('vouchers') || !Schema::connection('tenant')->hasTable('radcheck') || !Schema::connection('tenant')->hasTable('radreply')) {
+        $this->error('The selected tenant/site database is missing vouchers, radcheck, or radreply tables.');
+        return Command::FAILURE;
+    }
+
+    $voucher = DB::connection('tenant')
+        ->table('vouchers')
+        ->where('voucher_code', $voucherCode)
+        ->first();
+    $radcheck = DB::connection('tenant')
+        ->table('radcheck')
+        ->where('username', $voucherCode)
+        ->where('attribute', 'Cleartext-Password')
+        ->first();
+    $radreply = DB::connection('tenant')
+        ->table('radreply')
+        ->where('username', $voucherCode)
+        ->orderBy('attribute')
+        ->get(['attribute', 'op', 'value']);
+
+    $this->table(['Check', 'Result'], [
+        ['Voucher row', $voucher ? 'found' : 'missing'],
+        ['Voucher status', $voucher->status ?? '-'],
+        ['Voucher site_id', $voucher->site_id ?? 'NULL'],
+        ['Expected site_id', $site?->id ?? 'NULL'],
+        ['radcheck password', $radcheck ? ($radcheck->value === $voucherCode ? 'found; equals voucher code' : 'found; different from voucher code') : 'missing'],
+        ['radreply rows', (string) $radreply->count()],
+    ]);
+
+    if ($radreply->isNotEmpty()) {
+        $this->table(['Attribute', 'Op', 'Value'], $radreply->map(fn ($row) => [
+            $row->attribute,
+            $row->op,
+            $row->value,
+        ])->all());
+    }
+
+    if (!$voucher || !$radcheck) {
+        $this->warn('Repair with: php artisan onlifi:radius:sync-active --router=' . $routerIdentifier . ' --voucher=' . $voucherCode . ' --backfill-site');
+    }
+
+    $this->line("Direct test:");
+    $this->line("echo 'User-Name={$voucherCode},User-Password={$voucherCode},NAS-Identifier={$routerIdentifier}' | radclient -x 127.0.0.1 auth onlifi_radius_secret_change_me");
+
+    return (!$voucher || !$radcheck) ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Diagnose one router/voucher RADIUS lookup across tenant/site DB and radcheck');
+
 Schedule::command('onlifi:vouchers:cleanup')
     ->everyMinute()
     ->withoutOverlapping();

@@ -79,7 +79,7 @@ Edit `/etc/freeradius/3.0/mods-available/perl`:
 
 ```text
 perl {
-    module = /etc/freeradius/3.0/mods-config/perl/onlifi_multi_tenant.pl
+    filename = /etc/freeradius/3.0/mods-config/perl/onlifi_multi_tenant.pl
     func_authorize = authorize
     func_authenticate = authenticate
     func_accounting = accounting
@@ -163,6 +163,14 @@ If logs show `User not found in radcheck`:
 
 - The voucher is not synced into the selected tenant/site database.
 - The voucher belongs to a different site.
+- Make sure the `User-Name` in `freeradius -X` is the same voucher you are syncing. If the log says `User-Name = "136485"`, syncing `4RPYDL` will not fix that login attempt.
+- Diagnose the exact router/voucher lookup with:
+
+```bash
+cd /var/www/onlifi/backend
+php artisan onlifi:radius:diagnose --router=main-router22-ONLIFI-1 --voucher=136485
+```
+
 - Repair a known router/site with:
 
 ```bash

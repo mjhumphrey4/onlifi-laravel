@@ -10,7 +10,7 @@ perl {
     # Path to the Perl script that handles multi-tenant routing
     # FreeRADIUS 3.0+ uses 'filename' instead of deprecated 'module'
     #
-    filename = /etc/freeradius/3.0/mods-config/perl/multi_tenant.pl
+    filename = /etc/freeradius/3.0/mods-config/perl/onlifi_multi_tenant.pl
 
     #
     # Functions to call for different packet types
