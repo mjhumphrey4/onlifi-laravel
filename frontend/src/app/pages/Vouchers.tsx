@@ -58,8 +58,11 @@ export function Vouchers() {
   const [showSalesPointsDialog, setShowSalesPointsDialog] = useState(false);
   const [selectedSalesPointId, setSelectedSalesPointId] = useState<number | null>(null);
   const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
+  const [groupPage, setGroupPage] = useState(1);
+  const groupsPerPage = 9;
 
   useEffect(() => {
+    setGroupPage(1);
     loadData();
   }, [selectedSite?.id, selectedSalesPointId]);
 
@@ -159,6 +162,12 @@ export function Vouchers() {
   const filteredGroups = selectedSalesPointId
     ? groups.filter(g => g.sales_point_id === selectedSalesPointId)
     : groups;
+  const totalGroupPages = Math.max(1, Math.ceil(filteredGroups.length / groupsPerPage));
+  const currentGroupPage = Math.min(groupPage, totalGroupPages);
+  const paginatedGroups = filteredGroups.slice(
+    (currentGroupPage - 1) * groupsPerPage,
+    currentGroupPage * groupsPerPage
+  );
 
   if (loading) {
     return (
@@ -316,15 +325,54 @@ export function Vouchers() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {filteredGroups.map((group) => (
-              <VoucherGroupCard
-                key={group.id}
-                group={group}
-                onDelete={handleDeleteGroup}
-                isDeleting={deletingGroupId === group.id}
-              />
-            ))}
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {paginatedGroups.map((group) => (
+                <VoucherGroupCard
+                  key={group.id}
+                  group={group}
+                  onDelete={handleDeleteGroup}
+                  isDeleting={deletingGroupId === group.id}
+                />
+              ))}
+            </div>
+
+            {totalGroupPages > 1 && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Showing {(currentGroupPage - 1) * groupsPerPage + 1}-{Math.min(currentGroupPage * groupsPerPage, filteredGroups.length)} of {filteredGroups.length} groups
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setGroupPage((page) => Math.max(1, page - 1))}
+                    disabled={currentGroupPage === 1}
+                    className="px-3 py-1.5 rounded-lg border border-border text-sm disabled:opacity-50 hover:bg-muted"
+                  >
+                    Previous
+                  </button>
+                  {Array.from({ length: totalGroupPages }, (_, index) => index + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setGroupPage(page)}
+                      className={`w-9 h-9 rounded-lg text-sm ${
+                        currentGroupPage === page
+                          ? 'bg-primary text-primary-foreground'
+                          : 'border border-border hover:bg-muted'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setGroupPage((page) => Math.min(totalGroupPages, page + 1))}
+                    disabled={currentGroupPage === totalGroupPages}
+                    className="px-3 py-1.5 rounded-lg border border-border text-sm disabled:opacity-50 hover:bg-muted"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MikrotikRouter;
+use App\Models\SystemSetting;
+use App\Services\MikrotikService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -9,17 +12,30 @@ use Illuminate\Support\Facades\Schema;
 
 class ClientController extends Controller
 {
+    public function __construct(private MikrotikService $mikrotikService)
+    {
+    }
+
     public function index(Request $request)
     {
-        $tenant = app('tenant');
-        
-        // Get limit from request, default to 100
         $limit = $request->input('limit', 100);
-        
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if ($request->boolean('refresh')) {
+            $this->refreshFromRouter($request, true);
+        } else {
+            $this->refreshFromRouter($request, false);
+        }
+
         try {
-            // Query clients from tenant database
-            // This assumes you have a clients or hotspot_users table
-            $site = SiteScope::selectedSite($request);
+            if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
+                return response()->json([
+                    'clients' => [],
+                    'total' => 0,
+                    'message' => 'Run tenant migrations to enable client telemetry storage.',
+                ]);
+            }
+
             $query = DB::connection('tenant')
                 ->table('hotspot_users')
                 ->select([
@@ -40,7 +56,7 @@ class ClientController extends Controller
                     'expires_at',
                     DB::raw('CASE WHEN last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN "online" ELSE "offline" END as status'),
                     DB::raw('COALESCE((SELECT SUM(amount) FROM transactions WHERE transactions.msisdn = hotspot_users.username), 0) as total_spent'),
-                    DB::raw('(SELECT COUNT(*) FROM sessions WHERE sessions.mac_address = hotspot_users.mac_address) as total_sessions'),
+                    DB::raw('(SELECT COUNT(*) FROM radacct WHERE radacct.callingstationid = hotspot_users.mac_address) as total_sessions'),
                 ]);
 
             if ($site && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
@@ -57,9 +73,9 @@ class ClientController extends Controller
             return response()->json([
                 'clients' => $clients,
                 'total' => $clients->count(),
+                'refreshed_at' => $clients->max('last_seen'),
             ]);
         } catch (\Exception $e) {
-            // If table doesn't exist or query fails, return empty array
             return response()->json([
                 'clients' => [],
                 'total' => 0,
@@ -95,8 +111,119 @@ class ClientController extends Controller
 
     public function refresh(Request $request)
     {
-        // This would trigger a refresh from MikroTik routers
-        // For now, just return the current data
+        $this->refreshFromRouter($request, true);
         return $this->index($request);
+    }
+
+    private function refreshFromRouter(Request $request, bool $force): void
+    {
+        if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
+            return;
+        }
+
+        $site = SiteScope::selectedOrDefaultSite($request);
+        if (!$site) {
+            return;
+        }
+
+        if (!$force) {
+            $latestSeen = DB::connection('tenant')
+                ->table('hotspot_users')
+                ->where('site_id', $site->id)
+                ->max('last_seen');
+
+            if ($latestSeen && now()->diffInMinutes($latestSeen) < 5) {
+                return;
+            }
+        }
+
+        $router = $this->resolveSiteRouter($site);
+        if (!$router) {
+            return;
+        }
+
+        $users = $this->mikrotikService->getActiveUsers($router);
+        $now = now();
+        $routerName = $router->name ?: $site->name;
+
+        foreach ($users as $user) {
+            $mac = strtoupper((string) ($user['mac_address'] ?? ''));
+            if ($mac === '') {
+                continue;
+            }
+
+            $username = $user['username'] ?: null;
+            $voucher = $username
+                ? DB::connection('tenant')->table('vouchers')->where('voucher_code', $username)->first()
+                : null;
+
+            DB::connection('tenant')->table('hotspot_users')->updateOrInsert(
+                [
+                    'site_id' => $site->id,
+                    'mac_address' => $mac,
+                ],
+                [
+                    'ip_address' => $user['ip_address'] ?: null,
+                    'username' => $username,
+                    'device_type' => 'HotSpot Client',
+                    'uptime_seconds' => $this->parseMikrotikDuration((string) ($user['uptime'] ?? '0s')),
+                    'data_uploaded_mb' => round(((float) ($user['bytes_in'] ?? 0)) / 1048576, 2),
+                    'data_downloaded_mb' => round(((float) ($user['bytes_out'] ?? 0)) / 1048576, 2),
+                    'signal_strength' => null,
+                    'last_seen' => $now,
+                    'router_name' => $routerName,
+                    'router_identity' => $routerName,
+                    'voucher_code' => $voucher?->voucher_code,
+                    'profile_name' => $voucher?->profile_name,
+                    'expires_at' => $voucher?->expires_at,
+                    'updated_at' => $now,
+                    'created_at' => $now,
+                ]
+            );
+        }
+    }
+
+    private function resolveSiteRouter($site): ?MikrotikRouter
+    {
+        $query = MikrotikRouter::query();
+        if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+            $query->where('site_id', $site->id);
+        }
+
+        $existing = $query->where('is_active', true)->latest()->first();
+
+        if ($site->vpn_private_ip) {
+            return new MikrotikRouter([
+                'name' => $site->name,
+                'site_id' => $site->id,
+                'ip_address' => $site->vpn_private_ip,
+                'api_port' => $site->router_api_port ?: 8728,
+                'username' => SystemSetting::get('router_admin_username', 'onlifi'),
+                'password' => SystemSetting::get('router_admin_password', ''),
+                'is_active' => true,
+                'location' => $site->name,
+            ]);
+        }
+
+        return $existing;
+    }
+
+    private function parseMikrotikDuration(string $duration): int
+    {
+        preg_match_all('/(\d+)(w|d|h|m|s)/', $duration, $matches, PREG_SET_ORDER);
+        $seconds = 0;
+
+        foreach ($matches as $match) {
+            $value = (int) $match[1];
+            $seconds += match ($match[2]) {
+                'w' => $value * 604800,
+                'd' => $value * 86400,
+                'h' => $value * 3600,
+                'm' => $value * 60,
+                default => $value,
+            };
+        }
+
+        return $seconds;
     }
 }

@@ -295,6 +295,7 @@ Route::middleware(['tenant'])->group(function () {
     Route::prefix('transactions')->group(function () {
         Route::get('/', [TransactionController::class, 'index']);
         Route::get('/statistics', [TransactionController::class, 'statistics']);
+        Route::get('/performance', [TransactionController::class, 'performanceAnalytics']);
         Route::get('/daily-report', [TransactionController::class, 'dailyReport']);
         Route::get('/{id}', [TransactionController::class, 'show']);
     });

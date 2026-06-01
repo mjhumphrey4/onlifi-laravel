@@ -221,7 +221,42 @@ class VoucherController extends Controller
             });
         }
 
-        $types = $query->orderBy('type_name')->get();
+        $types = $query->orderBy('type_name')->get()->map(function ($type) use ($site) {
+            $groupQuery = VoucherGroup::query();
+            SiteScope::applyToTenantTable($groupQuery, 'voucher_groups', $site);
+            $groupQuery
+                ->where('validity_hours', $type->duration_hours)
+                ->where('price', $type->base_amount);
+
+            if (Schema::connection('tenant')->hasColumn('voucher_groups', 'validity_minutes') && Schema::connection('tenant')->hasColumn('voucher_types', 'validity_minutes')) {
+                $groupQuery->where(function ($query) use ($type) {
+                    if ($type->validity_minutes) {
+                        $query->where('validity_minutes', $type->validity_minutes)
+                            ->orWhereNull('validity_minutes');
+                    } else {
+                        $query->whereNull('validity_minutes');
+                    }
+                });
+            }
+
+            foreach (['data_limit_mb', 'speed_limit_kbps'] as $column) {
+                if ($type->{$column} === null) {
+                    $groupQuery->whereNull($column);
+                } else {
+                    $groupQuery->where($column, $type->{$column});
+                }
+            }
+
+            $groupIds = $groupQuery->pluck('id');
+            $voucherQuery = Voucher::query()->whereIn('group_id', $groupIds);
+            SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
+
+            $type->total_vouchers = (clone $voucherQuery)->count();
+            $type->unused_count = (clone $voucherQuery)->where('status', 'unused')->count();
+            $type->used_count = (clone $voucherQuery)->whereIn('status', ['in_use', 'used', 'expired'])->count();
+
+            return $type;
+        });
         return response()->json(['types' => $types]);
     }
 

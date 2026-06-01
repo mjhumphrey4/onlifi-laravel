@@ -281,6 +281,7 @@ export const getTransactionStatistics = (params?: { from_date?: string; to_date?
   if (searchParams.toString()) endpoint += `?${searchParams.toString()}`;
   return get(endpoint);
 };
+export const getPerformanceAnalytics = (period: string) => get(`/transactions/performance?period=${encodeURIComponent(period)}`);
 
 // ============ PAYMENTS (Tenant) ============
 export const initiatePayment = (data: Record<string, unknown>) => post('/payments/initiate', data);
@@ -302,10 +303,10 @@ export const apiTransactions = async (p: { page?: number; limit?: number; status
 };
 export const apiVoucherStock = () => getVoucherStatistics();
 
-// Performance analytics - placeholder until backend endpoint is implemented
 export const apiPerformance = async (site: string, days: number) => {
-  // TODO: Implement backend endpoint for performance analytics
-  return { data: [], site, days };
+  const period = days <= 1 ? 'today' : days <= 7 ? 'week' : days <= 30 ? 'month' : days <= 93 ? 'three_months' : 'six_months';
+  const analytics = await getPerformanceAnalytics(period);
+  return { ...analytics, site, days, data: analytics.breakdown ?? [] };
 };
 
 // Withdrawals - placeholder until backend endpoint is implemented

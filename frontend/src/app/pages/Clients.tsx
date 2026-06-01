@@ -43,13 +43,13 @@ export function Clients() {
     return headers;
   };
 
-  const loadClients = async (refresh = false) => {
+  const loadClients = async (refresh = false, forcePull = false) => {
     try {
       if (refresh) setRefreshing(true);
       else setLoading(true);
 
       const headers = getAuthHeaders();
-      const response = await fetch(`${API_BASE}/clients`, { headers });
+      const response = await fetch(`${API_BASE}/clients${forcePull ? '?refresh=1' : ''}`, { headers });
       
       if (response.ok) {
         const data = await response.json();
@@ -85,7 +85,7 @@ export function Clients() {
     try {
       await collectRouterTelemetry(router.id);
       setTelemetryMessage('Telemetry pulled from this site router.');
-      await loadClients(true);
+      await loadClients(true, true);
     } finally {
       setPullingTelemetry(false);
     }
@@ -94,7 +94,7 @@ export function Clients() {
   useEffect(() => {
     loadClients();
     loadRouters();
-    const interval = setInterval(() => loadClients(), 30000); // Auto-refresh every 30s
+    const interval = setInterval(() => loadClients(true), 300000);
     return () => clearInterval(interval);
   }, [selectedSite?.id]);
 
@@ -130,6 +130,9 @@ export function Clients() {
           <p className="text-sm text-muted-foreground">
             Real-time monitoring of connected devices on your MikroTik network
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Router data is cached locally and refreshed from the site VPN/API path every 5 minutes.
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -141,7 +144,7 @@ export function Clients() {
             {pullingTelemetry ? 'Pulling...' : 'Pull Router Telemetry'}
           </button>
           <button
-            onClick={() => loadClients(true)}
+            onClick={() => loadClients(true, true)}
             disabled={refreshing}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
