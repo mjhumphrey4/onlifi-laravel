@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
-import { API_BASE, apiStats, getTelemetryStats } from '../utils/api';
+import { API_BASE, apiStats, getTelemetryStats, getTransactionStatistics, getVoucherStatistics } from '../utils/api';
 
 interface SiteStat {
   total_amount: number;
@@ -49,6 +49,16 @@ interface Client {
   status: string;
 }
 
+interface TopSalesAgent {
+  id: number;
+  name: string;
+  total_vouchers: number;
+  used: number;
+  in_use?: number;
+  revenue: number;
+  revenue_30_days?: number;
+}
+
 type DateFilter = 'today' | 'yesterday' | 'week' | 'month' | 'all';
 
 const DATE_FILTERS: { id: DateFilter; label: string }[] = [
@@ -86,6 +96,12 @@ export function Dashboard() {
   const [sites, setSites] = useState<Record<string, SiteStat>>({});
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [topSalesAgents, setTopSalesAgents] = useState<TopSalesAgent[]>([]);
+  const [summary, setSummary] = useState({
+    totalEarnings: 0,
+    vouchersSold: 0,
+    successfulMobileMoneyTransactions: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -139,13 +155,24 @@ export function Dashboard() {
       const params = new URLSearchParams({ per_page: '20', ...range });
 
       // Fetch stats and filtered transactions
-      const [statsRes, txResponse] = await Promise.all([
+      const [statsRes, txResponse, transactionStats, voucherStats] = await Promise.all([
         apiStats(),
         fetch(`${API_BASE}/transactions?${params.toString()}`, { headers }),
+        getTransactionStatistics(),
+        getVoucherStatistics(),
       ]);
       const txRes = txResponse.ok ? await txResponse.json() : { data: [] };
       const transactions = txRes.transactions ?? txRes.data ?? [];
       setTxs(transactions);
+      const agents = [...(voucherStats.by_sales_point || [])]
+        .sort((a: TopSalesAgent, b: TopSalesAgent) => Number(b.revenue || 0) - Number(a.revenue || 0))
+        .slice(0, 5);
+      setTopSalesAgents(agents);
+      setSummary({
+        totalEarnings: Number(voucherStats.total_revenue ?? statsRes.voucher_revenue ?? statsRes.total_revenue ?? transactionStats.total_revenue ?? 0),
+        vouchersSold: Number(voucherStats.consumed_vouchers ?? statsRes.vouchers_sold ?? voucherStats.used_vouchers ?? 0),
+        successfulMobileMoneyTransactions: Number(transactionStats.successful_transactions ?? statsRes.total_successful_transactions ?? 0),
+      });
 
       const groupedSites = transactions.reduce((acc: Record<string, SiteStat>, tx: TxRow) => {
         const site = tx.origin_site || 'Default Site';
@@ -225,7 +252,6 @@ export function Dashboard() {
 
   const siteList = Object.entries(sites);
   const filteredEarnings = siteList.reduce((s, [, v]) => s + v.total_amount, 0);
-  const successfulPurchases = txs.filter((tx) => tx.status === 'success').length;
 
   if (loading) {
     return (
@@ -317,10 +343,39 @@ export function Dashboard() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <StatsCard title={`${DATE_FILTERS.find((f) => f.id === dateFilter)?.label} Earnings`} value={fmt(filteredEarnings)} icon={DollarSign} trend={{ value: 'Live', isPositive: true }} />
-        <StatsCard title="Successful Purchases" value={successfulPurchases.toLocaleString()} icon={Users} />
-        <StatsCard title="Transactions Loaded" value={txs.length.toLocaleString()} icon={TrendingUp} />
+        <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings || filteredEarnings)} icon={DollarSign} trend={{ value: 'All time', isPositive: true }} />
+        <StatsCard title="Vouchers Sold" value={summary.vouchersSold.toLocaleString()} icon={Users} />
+        <StatsCard title="Mobile Money Transactions" value={summary.successfulMobileMoneyTransactions.toLocaleString()} icon={TrendingUp} />
       </div>
+
+      {topSalesAgents.length > 0 && (
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-card-foreground">Top Sales Agents</h2>
+              <p className="text-sm text-muted-foreground">Physical voucher performance from the active site's voucher sales points.</p>
+            </div>
+            <Link to="/vouchers" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
+              Manage vouchers <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-3">
+            {topSalesAgents.map((agent, index) => (
+              <div key={agent.id || agent.name} className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <p className="font-semibold text-card-foreground truncate">{agent.name}</p>
+                  <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-1">#{index + 1}</span>
+                </div>
+                <p className="text-xl font-bold text-card-foreground">{fmt(Number(agent.revenue || 0))}</p>
+                <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                  <div className="flex justify-between"><span>Sold</span><span className="text-card-foreground">{Number((agent.used || 0) + (agent.in_use || 0)).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Stock</span><span className="text-card-foreground">{Number(agent.total_vouchers || 0).toLocaleString()}</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Per-site cards (admin sees all, user sees their own) */}
       {siteList.length > 0 && (

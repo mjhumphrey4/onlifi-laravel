@@ -273,7 +273,14 @@ export const getTransactions = (params?: { page?: number; per_page?: number; sta
   return get(endpoint);
 };
 export const getTransaction = (id: number) => get(`/transactions/${id}`);
-export const getTransactionStatistics = () => get('/transactions/statistics');
+export const getTransactionStatistics = (params?: { from_date?: string; to_date?: string }) => {
+  let endpoint = '/transactions/statistics';
+  const searchParams = new URLSearchParams();
+  if (params?.from_date) searchParams.set('from_date', params.from_date);
+  if (params?.to_date) searchParams.set('to_date', params.to_date);
+  if (searchParams.toString()) endpoint += `?${searchParams.toString()}`;
+  return get(endpoint);
+};
 
 // ============ PAYMENTS (Tenant) ============
 export const initiatePayment = (data: Record<string, unknown>) => post('/payments/initiate', data);

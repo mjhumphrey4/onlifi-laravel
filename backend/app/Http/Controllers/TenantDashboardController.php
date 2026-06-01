@@ -49,29 +49,32 @@ class TenantDashboardController extends Controller
             ];
         }
 
-        $transactionQuery = Transaction::whereDate('created_at', today());
+        $transactionQuery = Transaction::query();
         SiteScope::applyToTenantTable($transactionQuery, 'transactions', $site, 'origin_site');
-        $todayTransactions = (clone $transactionQuery)
-            ->where('status', 'success')
-            ->count();
-
-        $todayRevenue = (clone $transactionQuery)
-            ->where('status', 'success')
-            ->sum('amount');
+        $totalSuccessfulTransactions = (clone $transactionQuery)->where('status', 'success')->count();
+        $totalRevenue = (clone $transactionQuery)->where('status', 'success')->sum('amount');
+        $todayTransactions = (clone $transactionQuery)->whereDate('created_at', today())->where('status', 'success')->count();
+        $todayRevenue = (clone $transactionQuery)->whereDate('created_at', today())->where('status', 'success')->sum('amount');
 
         $voucherQuery = Voucher::query();
         SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
         $activeVouchers = (clone $voucherQuery)->whereIn('status', ['reserved', 'in_use'])->count();
         $unusedVouchers = (clone $voucherQuery)->where('status', 'unused')->count();
+        $vouchersSold = (clone $voucherQuery)->whereNotNull('first_used_at')->count();
+        $voucherRevenue = (clone $voucherQuery)->whereNotNull('first_used_at')->sum('price');
 
         return response()->json([
             'total_active_users' => $totalActiveUsers,
             'total_routers' => $routers->count(),
             'online_routers' => collect($routerStats)->where('is_online', true)->count(),
+            'total_successful_transactions' => $totalSuccessfulTransactions,
+            'total_revenue' => $totalRevenue,
             'today_transactions' => $todayTransactions,
             'today_revenue' => $todayRevenue,
             'active_vouchers' => $activeVouchers,
             'unused_vouchers' => $unusedVouchers,
+            'vouchers_sold' => $vouchersSold,
+            'voucher_revenue' => $voucherRevenue,
             'routers' => $routerStats,
             'timestamp' => now()->toIso8601String(),
         ]);
