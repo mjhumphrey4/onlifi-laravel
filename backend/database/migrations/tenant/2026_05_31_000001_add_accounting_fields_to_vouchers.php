@@ -12,8 +12,17 @@ return new class extends Migration
     {
         foreach (['voucher_types', 'voucher_groups', 'vouchers'] as $tableName) {
             if (Schema::connection('tenant')->hasTable($tableName) && !Schema::connection('tenant')->hasColumn($tableName, 'validity_minutes')) {
-                Schema::connection('tenant')->table($tableName, function (Blueprint $table) {
-                    $table->integer('validity_minutes')->nullable()->after('validity_hours');
+                $afterColumn = match (true) {
+                    Schema::connection('tenant')->hasColumn($tableName, 'validity_hours') => 'validity_hours',
+                    Schema::connection('tenant')->hasColumn($tableName, 'duration_hours') => 'duration_hours',
+                    default => null,
+                };
+
+                Schema::connection('tenant')->table($tableName, function (Blueprint $table) use ($afterColumn) {
+                    $column = $table->integer('validity_minutes')->nullable();
+                    if ($afterColumn) {
+                        $column->after($afterColumn);
+                    }
                 });
             }
         }
