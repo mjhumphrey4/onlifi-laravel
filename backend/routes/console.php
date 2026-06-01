@@ -126,6 +126,12 @@ Artisan::command('onlifi:radius:sync-active {--router= : NAS-Identifier/router i
             }
 
             $vouchers = $query->get();
+            if ($voucherCode !== '' && $vouchers->isEmpty()) {
+                $totalFailed++;
+                $rows[] = [$tenant->id, $site?->id ?: '-', 0, 0, "voucher {$voucherCode} not found for selected site/db"];
+                continue;
+            }
+
             $result = app(\App\Services\FreeRadiusService::class)->syncBatchToRadius($vouchers);
             $totalSynced += $result['synced'] ?? 0;
             $totalFailed += $result['failed'] ?? 0;
