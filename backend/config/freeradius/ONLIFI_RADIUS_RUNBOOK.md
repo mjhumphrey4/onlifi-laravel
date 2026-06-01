@@ -232,3 +232,43 @@ Received Access-Accept
 ```
 
 If this passes locally but MikroTik still shows no RADIUS logs, the problem is network/firewall between MikroTik and FreeRADIUS.
+
+## Accounting Test
+
+Voucher timers and used/expired states depend on accounting packets. Authentication can work while accounting fails if UDP `1813` is blocked or the accounting handler cannot write to the selected site database.
+
+First confirm FreeRADIUS is listening:
+
+```bash
+sudo ss -lunp | grep ':1813'
+sudo tcpdump -ni any udp port 1813
+```
+
+Then send a direct accounting Start packet from the FreeRADIUS server:
+
+```bash
+echo 'User-Name=136485,NAS-Identifier=main-router22-ONLIFI-1,Acct-Status-Type=Start,Acct-Session-Id=test-136485-1,NAS-IP-Address=127.0.0.1,Framed-IP-Address=10.10.0.253,Calling-Station-Id=BC:24:11:A6:70:A2,Called-Station-Id=onlifi-hotspot,NAS-Port-Type=Wireless-802.11,NAS-Port-Id=onlifi-lan' \
+  | radclient -x 127.0.0.1 acct testing123
+```
+
+Expected result:
+
+```text
+Received Accounting-Response
+```
+
+Expected `freeradius -X` lines:
+
+```text
+PERL ACCOUNTING: User=136485, Status=Start
+PERL ACCOUNTING: Voucher 136485 marked used and timer started
+```
+
+If the direct accounting test works but MikroTik logs `RADIUS accounting request not sent: no response`, open UDP `1813` between the router and the FreeRADIUS server, including host firewall and cloud firewall. Also confirm the router has the same accounting port:
+
+```routeros
+/radius print detail
+/ip hotspot profile print detail
+```
+
+Expected MikroTik profile values include `use-radius=yes`, `radius-accounting=yes`, and `radius-interim-update=1m`.
