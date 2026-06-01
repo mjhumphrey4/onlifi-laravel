@@ -203,6 +203,9 @@ class MikrotikController extends Controller
             'total_clients' => 'nullable|integer',
             'bandwidth_upload_kbps' => 'nullable|numeric',
             'bandwidth_download_kbps' => 'nullable|numeric',
+            'total_tx_bytes' => 'nullable|integer',
+            'total_rx_bytes' => 'nullable|integer',
+            'wan_interfaces' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -278,6 +281,10 @@ class MikrotikController extends Controller
                 'timestamp' => now(),
                 'created_at' => now(),
             ];
+
+            if (DB::connection('central')->getSchemaBuilder()->hasColumn('router_telemetry', 'wan_interfaces')) {
+                $telemetryData['wan_interfaces'] = $request->wan_interfaces;
+            }
             
             // Check if tenant_id column exists before including it
             $hasTenantIdColumn = DB::connection('central')
@@ -354,6 +361,105 @@ class MikrotikController extends Controller
             'total_active_users' => count($allUsers),
             'users' => $allUsers,
             'timestamp' => now()->toIso8601String(),
+        ]);
+    }
+
+    public function getIpBindings(Request $request)
+    {
+        $router = $this->resolveSiteRouter($request);
+
+        if (!$router) {
+            return response()->json([
+                'bindings' => [],
+                'message' => 'Router remote access details are not configured for this site.',
+            ]);
+        }
+
+        return response()->json([
+            'bindings' => $this->mikrotikService->getIpBindings($router),
+        ]);
+    }
+
+    public function addIpBinding(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'mac_address' => ['required', 'string', 'max:32'],
+            'address' => ['nullable', 'ip'],
+            'to_address' => ['nullable', 'ip'],
+            'server' => ['nullable', 'string', 'max:64'],
+            'type' => ['required', 'string', 'in:regular,bypassed,blocked'],
+            'comment' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $router = $this->resolveSiteRouter($request);
+
+        if (!$router) {
+            return response()->json([
+                'error' => 'Router unavailable',
+                'message' => 'Router remote access details are not configured for this site.',
+            ], 422);
+        }
+
+        $created = $this->mikrotikService->addIpBinding($router, [
+            'mac_address' => strtoupper($request->mac_address),
+            'address' => $request->address,
+            'to_address' => $request->to_address,
+            'server' => $request->server ?: 'all',
+            'type' => $request->type,
+            'comment' => $request->comment,
+        ]);
+
+        if (!$created) {
+            return response()->json([
+                'error' => 'Failed to add IP binding',
+                'message' => 'Could not connect to the router or RouterOS rejected the binding.',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'IP binding added successfully.',
+        ], 201);
+    }
+
+    private function resolveSiteRouter(Request $request): ?MikrotikRouter
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$site) {
+            return null;
+        }
+
+        $query = MikrotikRouter::query();
+        if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+            $query->where('site_id', $site->id);
+        } else {
+            $query->where('name', $site->name);
+        }
+
+        $router = $query->orderBy('id')->first();
+        if ($router) {
+            return $router;
+        }
+
+        if (!$site->vpn_private_ip) {
+            return null;
+        }
+
+        return new MikrotikRouter([
+            'name' => $site->name,
+            'site_id' => $site->id,
+            'ip_address' => $site->vpn_private_ip,
+            'api_port' => $site->router_api_port ?: 8728,
+            'username' => SystemSetting::get('router_admin_username', 'onlifi'),
+            'password' => SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me'),
+            'is_active' => true,
         ]);
     }
 }

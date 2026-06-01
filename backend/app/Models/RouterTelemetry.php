@@ -29,6 +29,7 @@ class RouterTelemetry extends Model
         'bandwidth_download_kbps',
         'total_tx_bytes',
         'total_rx_bytes',
+        'wan_interfaces',
         'timestamp',
     ];
 

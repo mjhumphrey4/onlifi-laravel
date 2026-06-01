@@ -76,7 +76,7 @@ export function Vouchers() {
         overall: {
           total_vouchers: statsData.total_vouchers || 0,
           unused: statsData.unused_vouchers || 0,
-          in_use: statsData.in_use_vouchers || 0,
+          in_use: statsData.consumed_vouchers || statsData.in_use_vouchers || 0,
           reserved: statsData.reserved_vouchers || 0,
           used: statsData.used_vouchers || 0,
           expired: statsData.expired_vouchers || 0,

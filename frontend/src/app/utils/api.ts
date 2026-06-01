@@ -204,6 +204,7 @@ export const tenantSignup = (data: Record<string, unknown>) => post('/tenant/sig
 export const getTenantDashboardStats = () => get('/dashboard/stats');
 export const getTenantRealtimeStats = () => get('/dashboard/realtime');
 export const getTelemetryStats = () => get('/telemetry/stats');
+export const getTelemetryUsage = (period: 'today' | 'week' | 'month' = 'today') => get(`/telemetry/usage?period=${period}`);
 
 // ============ VOUCHERS (Tenant) ============
 export const getVouchers = (params?: { page?: number; per_page?: number; status?: string; group_id?: number }) => {
@@ -246,6 +247,8 @@ export const updateRouter = (id: number, data: Record<string, unknown>) => put(`
 export const deleteRouter = (id: number) => del(`/routers/${id}`);
 export const testRouterConnection = (id: number) => post(`/routers/${id}/test-connection`);
 export const getRouterActiveUsers = (id: number) => get(`/routers/${id}/active-users`);
+export const getRouterIpBindings = () => get('/routers/ip-bindings');
+export const createRouterIpBinding = (data: Record<string, unknown>) => post('/routers/ip-bindings', data);
 
 // ============ PPPOE CLIENTS (Tenant) ============
 export const getPppoeClients = () => get('/pppoe/clients');

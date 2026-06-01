@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Activity, CheckCircle, Clock, Cpu, Database, Gauge, Globe, MapPin, RefreshCw, Server, Wifi, XCircle } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
-import { API_BASE } from '../utils/api';
+import { API_BASE, getTelemetryUsage } from '../utils/api';
 
 interface RouterRecord {
   id: number | null;
@@ -51,11 +51,22 @@ interface TrendSample {
   upload: number;
 }
 
+interface UsageStats {
+  period: 'today' | 'week' | 'month';
+  download_bytes: number;
+  upload_bytes: number;
+  total_bytes: number;
+  sample_count: number;
+  wan_interfaces: string[];
+}
+
 export function Devices() {
   const { selectedSite } = useSite();
   const [router, setRouter] = useState<RouterRecord | null>(null);
   const [stats, setStats] = useState<TelemetryStats | null>(null);
   const [trend, setTrend] = useState<TrendSample[]>([]);
+  const [usagePeriod, setUsagePeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -64,7 +75,7 @@ export function Devices() {
     loadData(true);
     const interval = setInterval(() => loadData(false), 15000);
     return () => clearInterval(interval);
-  }, [selectedSite?.id]);
+  }, [selectedSite?.id, usagePeriod]);
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token');
@@ -127,6 +138,13 @@ export function Devices() {
         }
       } else {
         setError(`Telemetry returned ${statsResponse.status}.`);
+      }
+
+      try {
+        const usageData = await getTelemetryUsage(usagePeriod);
+        setUsage(usageData);
+      } catch (usageError) {
+        console.error('Failed to load router usage:', usageError);
       }
     } catch (err: any) {
       console.error('Failed to load router monitor:', err);
@@ -218,6 +236,50 @@ export function Devices() {
             <MetricCard icon={Database} label="Memory usage" value={`${Math.round(memoryPercent)}%`} percent={memoryPercent} detail={liveRouter ? `${formatMb(liveRouter.memory_used_mb)} / ${formatMb(liveRouter.memory_total_mb)}` : undefined} />
             <MetricCard icon={Wifi} label="Active users" value={String(liveRouter?.active_users ?? stats?.total_active_users ?? 0)} detail={`${stats?.online_routers || 0}/${stats?.total_routers || 0} routers online`} />
             <MetricCard icon={Gauge} label="Uptime" value={formatUptime(liveRouter?.uptime_seconds || 0)} detail="Router reported uptime" />
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-5">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
+              <div>
+                <h2 className="font-semibold text-card-foreground">Total Data Usage</h2>
+                <p className="text-sm text-muted-foreground">WAN traffic only. Uses MikroTik WAN interface list, with ether1 as fallback.</p>
+              </div>
+              <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
+                {[
+                  ['today', 'Today'],
+                  ['week', 'This Week'],
+                  ['month', 'This Month'],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setUsagePeriod(value as UsageStats['period'])}
+                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      usagePeriod === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-sm text-muted-foreground">Total traffic</p>
+                <p className="text-2xl font-semibold mt-1">{formatBytes(usage?.total_bytes || 0)}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-sm text-muted-foreground">Download</p>
+                <p className="text-2xl font-semibold mt-1">{formatBytes(usage?.download_bytes || 0)}</p>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-4">
+                <p className="text-sm text-muted-foreground">Upload</p>
+                <p className="text-2xl font-semibold mt-1">{formatBytes(usage?.upload_bytes || 0)}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Counted interfaces: {usage?.wan_interfaces?.length ? usage.wan_interfaces.join(', ') : 'Waiting for WAN telemetry'}
+            </p>
           </div>
 
           <div className="grid xl:grid-cols-[1.1fr_0.9fr] gap-4">

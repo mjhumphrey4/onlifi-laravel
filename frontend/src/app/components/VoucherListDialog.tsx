@@ -232,8 +232,8 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       case 'unused': return 'bg-blue-500/10 text-blue-500';
       case 'reserved': return 'bg-amber-500/10 text-amber-500';
       case 'in_use': return 'bg-yellow-500/10 text-yellow-600';
-      case 'used': return 'bg-slate-500/10 text-slate-500';
-      case 'expired': return 'bg-red-500/10 text-red-500';
+      case 'used': return 'bg-yellow-500/10 text-yellow-600';
+      case 'expired': return 'bg-yellow-500/10 text-yellow-600';
       case 'disabled': return 'bg-gray-500/10 text-gray-500';
       default: return 'bg-muted text-muted-foreground';
     }
@@ -241,16 +241,17 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
 
   const formatStatus = (status: string) => {
     switch (status) {
+      case 'consumed': return 'Used';
       case 'in_use': return 'Used';
-      case 'used': return 'Completed';
+      case 'used': return 'Used';
+      case 'expired': return 'Used';
       default:
         return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
     }
   };
 
   const unusedCount = vouchers.filter(v => v.status === 'unused').length;
-  const completedCount = vouchers.filter(v => v.status === 'used').length;
-  const inUseCount = vouchers.filter(v => v.status === 'in_use').length;
+  const usedCount = vouchers.filter(v => ['in_use', 'used', 'expired'].includes(v.status)).length;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -283,9 +284,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
               <option value="all">All Status</option>
               <option value="unused">Unused ({unusedCount})</option>
               <option value="reserved">Reserved</option>
-              <option value="in_use">Used ({inUseCount})</option>
-              <option value="used">Completed ({completedCount})</option>
-              <option value="expired">Expired</option>
+              <option value="consumed">Used ({usedCount})</option>
             </select>
           </div>
 

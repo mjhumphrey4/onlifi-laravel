@@ -25,7 +25,7 @@ class MikrotikService
 
         $connected = $this->api->connect();
 
-        if ($connected) {
+        if ($connected && $router->exists) {
             $router->update(['last_seen' => now()]);
         }
 
@@ -249,6 +249,47 @@ class MikrotikService
             Log::error("Failed to remove active HotSpot user from MikroTik", [
                 'router' => $router->ip_address,
                 'username' => $username,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return false;
+        }
+    }
+
+    public function getIpBindings(MikrotikRouter $router): array
+    {
+        if (!$this->connect($router)) {
+            return [];
+        }
+
+        try {
+            $bindings = $this->api->getHotspotIpBindings();
+            $this->disconnect();
+            return $bindings;
+        } catch (\Exception $e) {
+            Log::error("Failed to get HotSpot IP bindings from MikroTik", [
+                'router' => $router->ip_address,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return [];
+        }
+    }
+
+    public function addIpBinding(MikrotikRouter $router, array $binding): bool
+    {
+        if (!$this->connect($router)) {
+            return false;
+        }
+
+        try {
+            $result = $this->api->addHotspotIpBinding($binding);
+            $this->disconnect();
+            return $result;
+        } catch (\Exception $e) {
+            Log::error("Failed to add HotSpot IP binding to MikroTik", [
+                'router' => $router->ip_address,
+                'binding' => $binding,
                 'error' => $e->getMessage(),
             ]);
             $this->disconnect();

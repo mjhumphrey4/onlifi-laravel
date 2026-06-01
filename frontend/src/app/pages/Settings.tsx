@@ -142,23 +142,31 @@ export function Settings() {
 :global getInterfaceStats do={
   :local totalTxBytes 0
   :local totalRxBytes 0
+  :local wanInterfaces ""
+  :local wanCount 0
   :do {
-    :foreach interface in=[/interface find] do={
-      :local running false
-      :do { :set running [/interface get \$interface running] } on-error={}
-      :if (\$running = true) do={
-        :local txBytes 0
-        :local rxBytes 0
-        :do {
-          :set txBytes [/interface get \$interface tx-byte]
-          :set rxBytes [/interface get \$interface rx-byte]
-        } on-error={}
-        :set totalTxBytes (\$totalTxBytes + \$txBytes)
-        :set totalRxBytes (\$totalRxBytes + \$rxBytes)
+    :foreach member in=[/interface list member find list="WAN"] do={
+      :local ifaceName [/interface list member get \$member interface]
+      :local ifaceId [/interface find name=\$ifaceName]
+      :if ([:len \$ifaceId] > 0) do={
+        :set totalTxBytes (\$totalTxBytes + [/interface get \$ifaceId tx-byte])
+        :set totalRxBytes (\$totalRxBytes + [/interface get \$ifaceId rx-byte])
+        :if ([:len \$wanInterfaces] = 0) do={ :set wanInterfaces \$ifaceName } else={ :set wanInterfaces (\$wanInterfaces . "," . \$ifaceName) }
+        :set wanCount (\$wanCount + 1)
       }
     }
   } on-error={}
-  :return {"total_tx_bytes"=\$totalTxBytes; "total_rx_bytes"=\$totalRxBytes;}
+  :if (\$wanCount = 0) do={
+    :do {
+      :local fallbackWan [/interface find name="ether1"]
+      :if ([:len \$fallbackWan] > 0) do={
+        :set totalTxBytes [/interface get \$fallbackWan tx-byte]
+        :set totalRxBytes [/interface get \$fallbackWan rx-byte]
+        :set wanInterfaces "ether1"
+      }
+    } on-error={}
+  }
+  :return {"total_tx_bytes"=\$totalTxBytes; "total_rx_bytes"=\$totalRxBytes; "wan_interfaces"=\$wanInterfaces;}
 }
 
 :global getHotspotStats do={
@@ -222,6 +230,7 @@ export function Settings() {
   :local uptimeSeconds [\$uptimeToSeconds \$rawUptime]
   :local totalTxBytes (\$interfaceData->"total_tx_bytes")
   :local totalRxBytes (\$interfaceData->"total_rx_bytes")
+  :local wanInterfaces (\$interfaceData->"wan_interfaces")
   
   :if ([:typeof \$cpuVal] != "num") do={ :set cpuVal 0 }
   :if ([:typeof \$memTotal] != "num") do={ :set memTotal 0 }
@@ -231,6 +240,7 @@ export function Settings() {
   :if ([:typeof \$hotspotUsers] != "num") do={ :set hotspotUsers 0 }
   :if ([:typeof \$totalTxBytes] != "num") do={ :set totalTxBytes 0 }
   :if ([:typeof \$totalRxBytes] != "num") do={ :set totalRxBytes 0 }
+  :if ([:typeof \$wanInterfaces] != "str") do={ :set wanInterfaces "" }
   
   # Dashboard calculates bandwidth rate from byte-counter deltas between samples
   :local bandwidthDownKbps 0
@@ -251,7 +261,8 @@ export function Settings() {
   :set reportJson (\$reportJson . "\\"bandwidth_download_kbps\\":" . \$bandwidthDownKbps . ",")
   :set reportJson (\$reportJson . "\\"bandwidth_upload_kbps\\":" . \$bandwidthUpKbps . ",")
   :set reportJson (\$reportJson . "\\"total_tx_bytes\\":" . \$totalTxBytes . ",")
-  :set reportJson (\$reportJson . "\\"total_rx_bytes\\":" . \$totalRxBytes)
+  :set reportJson (\$reportJson . "\\"total_rx_bytes\\":" . \$totalRxBytes . ",")
+  :set reportJson (\$reportJson . "\\"wan_interfaces\\":\\"" . \$wanInterfaces . "\\"")
   :set reportJson (\$reportJson . "}")
   
   :put ("Onlifi: Router: " . \$routerIdentity)

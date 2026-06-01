@@ -56,6 +56,7 @@ Route::get('/router/telemetry/{token}', [\App\Http\Controllers\NasController::cl
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/telemetry/latest', [TelemetryController::class, 'getLatest']);
     Route::get('/telemetry/stats', [TelemetryController::class, 'getStats']);
+    Route::get('/telemetry/usage', [TelemetryController::class, 'getUsage']);
 });
 
 Route::prefix('tenant/signup')->group(function () {
@@ -239,6 +240,8 @@ Route::middleware(['tenant'])->group(function () {
     Route::prefix('routers')->group(function () {
         Route::get('/', [MikrotikController::class, 'index']);
         Route::post('/', [MikrotikController::class, 'store']);
+        Route::get('/ip-bindings', [MikrotikController::class, 'getIpBindings']);
+        Route::post('/ip-bindings', [MikrotikController::class, 'addIpBinding']);
         Route::get('/{id}', [MikrotikController::class, 'show']);
         Route::put('/{id}', [MikrotikController::class, 'update']);
         Route::delete('/{id}', [MikrotikController::class, 'destroy']);

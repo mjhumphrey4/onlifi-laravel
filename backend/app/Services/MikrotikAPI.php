@@ -349,6 +349,60 @@ class MikrotikAPI {
     }
 
     /**
+     * Get HotSpot IP bindings.
+     */
+    public function getHotspotIpBindings() {
+        if (!$this->connect()) {
+            return [];
+        }
+
+        $response = $this->communicate(['/ip/hotspot/ip-binding/print']);
+        $bindings = $this->parseResponse($response);
+
+        return array_map(function ($binding) {
+            return [
+                'id' => $binding['.id'] ?? '',
+                'mac_address' => $binding['mac-address'] ?? '',
+                'address' => $binding['address'] ?? '',
+                'to_address' => $binding['to-address'] ?? '',
+                'server' => $binding['server'] ?? 'all',
+                'type' => $binding['type'] ?? 'regular',
+                'comment' => $binding['comment'] ?? '',
+                'disabled' => ($binding['disabled'] ?? 'false') === 'true',
+            ];
+        }, $bindings);
+    }
+
+    /**
+     * Add a HotSpot IP binding.
+     */
+    public function addHotspotIpBinding(array $binding) {
+        if (!$this->connect()) {
+            return false;
+        }
+
+        $command = [
+            '/ip/hotspot/ip-binding/add',
+            '=mac-address=' . ($binding['mac_address'] ?? ''),
+            '=type=' . ($binding['type'] ?? 'bypassed'),
+        ];
+
+        foreach ([
+            'address' => 'address',
+            'to_address' => 'to-address',
+            'server' => 'server',
+            'comment' => 'comment',
+        ] as $inputKey => $routerKey) {
+            if (!empty($binding[$inputKey])) {
+                $command[] = '=' . $routerKey . '=' . $binding[$inputKey];
+            }
+        }
+
+        $response = $this->communicate($command);
+        return isset($response[0]) && $response[0] === '!done';
+    }
+
+    /**
      * Detect device type from MAC address (OUI lookup)
      */
     private function detectDeviceType($mac) {

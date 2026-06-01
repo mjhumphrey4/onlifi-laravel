@@ -767,6 +767,8 @@ RSC;
   :local activeUsers 0
   :local totalTxBytes 0
   :local totalRxBytes 0
+  :local wanInterfaces ""
+  :local wanCount 0
   :local routerVersion ""
   :local routerBoard ""
   :local currentTime ""
@@ -782,10 +784,27 @@ RSC;
   :do { :set currentDate [/system clock get date] } on-error={}
   :set memUsed (\$memTotal - \$memFree)
 
-  :foreach interface in=[/interface find] do={
+  :do {
+    :foreach member in=[/interface list member find list="WAN"] do={
+      :local ifaceName [/interface list member get \$member interface]
+      :local ifaceId [/interface find name=\$ifaceName]
+      :if ([:len \$ifaceId] > 0) do={
+        :set totalTxBytes (\$totalTxBytes + [/interface get \$ifaceId tx-byte])
+        :set totalRxBytes (\$totalRxBytes + [/interface get \$ifaceId rx-byte])
+        :if ([:len \$wanInterfaces] = 0) do={ :set wanInterfaces \$ifaceName } else={ :set wanInterfaces (\$wanInterfaces . "," . \$ifaceName) }
+        :set wanCount (\$wanCount + 1)
+      }
+    }
+  } on-error={}
+
+  :if (\$wanCount = 0) do={
     :do {
-      :set totalTxBytes (\$totalTxBytes + [/interface get \$interface tx-byte])
-      :set totalRxBytes (\$totalRxBytes + [/interface get \$interface rx-byte])
+      :local fallbackWan [/interface find name="ether1"]
+      :if ([:len \$fallbackWan] > 0) do={
+        :set totalTxBytes [/interface get \$fallbackWan tx-byte]
+        :set totalRxBytes [/interface get \$fallbackWan rx-byte]
+        :set wanInterfaces "ether1"
+      }
     } on-error={}
   }
 
@@ -805,6 +824,7 @@ RSC;
   :set postData (\$postData . "&bandwidth_upload_kbps=0")
   :set postData (\$postData . "&total_tx_bytes=" . \$totalTxBytes)
   :set postData (\$postData . "&total_rx_bytes=" . \$totalRxBytes)
+  :set postData (\$postData . "&wan_interfaces=" . \$wanInterfaces)
 
   :do {
     /tool fetch url=\$dashboardUrl mode=\$fetchMode http-method=post http-data=\$postData http-header-field=("Authorization: Bearer " . \$apiToken . ",Content-Type: application/x-www-form-urlencoded") keep-result=no

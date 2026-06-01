@@ -199,6 +199,78 @@ class TelemetryController extends Controller
         }
     }
 
+    public function getUsage(Request $request)
+    {
+        try {
+            if (!DB::connection('central')->getSchemaBuilder()->hasTable('router_telemetry')) {
+                return response()->json($this->emptyUsageResponse($request->query('period', 'today')));
+            }
+
+            [$period, $start, $end] = $this->usageWindow((string) $request->query('period', 'today'));
+            $query = DB::connection('central')->table('router_telemetry')
+                ->whereBetween('created_at', [$start->copy()->subDay(), $end])
+                ->orderBy('site_id')
+                ->orderBy('router_identity')
+                ->orderBy('created_at');
+
+            $this->applyTelemetryScope($query, $request);
+
+            $rows = $query->get();
+            $previousByRouter = [];
+            $downloadBytes = 0;
+            $uploadBytes = 0;
+            $sampleCount = 0;
+            $wanInterfaces = [];
+
+            foreach ($rows as $row) {
+                $key = ($row->site_id ?? 'none') . '|' . ($row->router_identity ?? 'unknown');
+                $createdAt = \Carbon\Carbon::parse($row->created_at);
+                $previous = $previousByRouter[$key] ?? null;
+
+                if ($previous && $createdAt->greaterThanOrEqualTo($start) && $createdAt->lessThanOrEqualTo($end)) {
+                    $rxDelta = max(0, (int) ($row->total_rx_bytes ?? 0) - (int) ($previous->total_rx_bytes ?? 0));
+                    $txDelta = max(0, (int) ($row->total_tx_bytes ?? 0) - (int) ($previous->total_tx_bytes ?? 0));
+
+                    $downloadBytes += $rxDelta;
+                    $uploadBytes += $txDelta;
+                    $sampleCount++;
+                }
+
+                if (!empty($row->wan_interfaces)) {
+                    foreach (explode(',', $row->wan_interfaces) as $interface) {
+                        $interface = trim($interface);
+                        if ($interface !== '') {
+                            $wanInterfaces[$interface] = true;
+                        }
+                    }
+                }
+
+                $previousByRouter[$key] = $row;
+            }
+
+            return response()->json([
+                'period' => $period,
+                'start' => $start->toIso8601String(),
+                'end' => $end->toIso8601String(),
+                'download_bytes' => $downloadBytes,
+                'upload_bytes' => $uploadBytes,
+                'total_bytes' => $downloadBytes + $uploadBytes,
+                'sample_count' => $sampleCount,
+                'wan_interfaces' => array_keys($wanInterfaces),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to calculate telemetry usage', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to calculate telemetry usage',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     public function receive(Request $request)
     {
         // Log the incoming request for debugging
@@ -291,6 +363,10 @@ class TelemetryController extends Controller
                 'created_at' => now(),
             ];
 
+            if (DB::connection('central')->getSchemaBuilder()->hasColumn('router_telemetry', 'wan_interfaces')) {
+                $telemetryData['wan_interfaces'] = $request->input('wan_interfaces');
+            }
+
             DB::connection('central')->table('router_telemetry')->insert($telemetryData);
 
             Log::info('Telemetry stored successfully', [
@@ -336,6 +412,52 @@ class TelemetryController extends Controller
         }
 
         return $previousSamples;
+    }
+
+    private function applyTelemetryScope($query, Request $request): void
+    {
+        $user = $request->user();
+        $hasTenantIdColumn = DB::connection('central')
+            ->getSchemaBuilder()
+            ->hasColumn('router_telemetry', 'tenant_id');
+
+        if ($hasTenantIdColumn && $user && isset($user->tenant_id) && $user->tenant_id) {
+            $query->where('tenant_id', $user->tenant_id);
+        }
+
+        if ($request->header('X-Site-ID') && is_numeric($request->header('X-Site-ID'))) {
+            $query->where('site_id', (int) $request->header('X-Site-ID'));
+        }
+    }
+
+    private function usageWindow(string $period): array
+    {
+        $period = in_array($period, ['today', 'week', 'month'], true) ? $period : 'today';
+        $now = now();
+
+        $start = match ($period) {
+            'week' => $now->copy()->startOfWeek(),
+            'month' => $now->copy()->startOfMonth(),
+            default => $now->copy()->startOfDay(),
+        };
+
+        return [$period, $start, $now];
+    }
+
+    private function emptyUsageResponse(string $period): array
+    {
+        [$period, $start, $end] = $this->usageWindow($period);
+
+        return [
+            'period' => $period,
+            'start' => $start->toIso8601String(),
+            'end' => $end->toIso8601String(),
+            'download_bytes' => 0,
+            'upload_bytes' => 0,
+            'total_bytes' => 0,
+            'sample_count' => 0,
+            'wan_interfaces' => [],
+        ];
     }
 
     private function calculateBandwidthRates($current, $previous): array

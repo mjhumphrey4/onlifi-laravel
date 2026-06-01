@@ -51,7 +51,9 @@ class VoucherController extends Controller
         }
         SiteScope::applyToTenantTable($query, 'vouchers', $site);
 
-        if ($request->has('status')) {
+        if ($request->status === 'consumed') {
+            $query->whereIn('status', ['in_use', 'used', 'expired']);
+        } elseif ($request->has('status')) {
             $query->where('status', $request->status);
         }
 
@@ -373,7 +375,7 @@ class VoucherController extends Controller
                 },
                 'vouchers as in_use_count' => function ($query) use ($site) {
                     SiteScope::applyToTenantTable($query, 'vouchers', $site);
-                    $query->where('status', 'in_use');
+                    $query->whereIn('status', ['in_use', 'used', 'expired']);
                 }
             ])
             ->orderBy('created_at', 'desc')
@@ -395,6 +397,7 @@ class VoucherController extends Controller
                 'in_use_vouchers' => 0,
                 'reserved_vouchers' => 0,
                 'used_vouchers' => 0,
+                'consumed_vouchers' => 0,
                 'expired_vouchers' => 0,
                 'total_revenue' => 0,
                 'revenue_30_days' => 0,
@@ -432,6 +435,7 @@ class VoucherController extends Controller
             'reserved_vouchers' => (clone $voucherQuery)->where('status', 'reserved')->count(),
             'in_use_vouchers' => (clone $voucherQuery)->where('status', 'in_use')->count(),
             'used_vouchers' => (clone $voucherQuery)->used()->count(),
+            'consumed_vouchers' => (clone $voucherQuery)->whereIn('status', ['in_use', 'used', 'expired'])->count(),
             'expired_vouchers' => (clone $voucherQuery)->expired()->count(),
             'total_revenue' => (clone $voucherQuery)->whereNotNull('first_used_at')->sum('price'),
             'revenue_30_days' => (clone $voucherQuery)
