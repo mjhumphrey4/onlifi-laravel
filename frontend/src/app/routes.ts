@@ -30,6 +30,7 @@ import { Login } from './pages/Login';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import { Users } from './pages/Users';
+import { SubUsers } from './pages/SubUsers';
 
 // Admin pages
 import AdminLogin from './pages/admin/AdminLogin';
@@ -72,6 +73,7 @@ export const router = createBrowserRouter([
       { path: 'radius-setup', Component: RadiusSetup },
       { path: 'provisioning', Component: Provisioning },
       { path: 'users', Component: Users },
+      { path: 'sub-users', Component: SubUsers },
     ],
   },
   { path: '/login', Component: Login },

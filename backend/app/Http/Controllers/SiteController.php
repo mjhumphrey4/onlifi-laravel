@@ -31,9 +31,12 @@ class SiteController extends Controller
         $query = Site::query();
 
         $query->where('tenant_id', $tenantId);
+        if ($request->user()?->role === 'sub_user') {
+            $query->whereIn('id', $request->user()->allowed_site_ids ?: []);
+        }
 
         $sites = $query->orderBy('id')->get();
-        if ($sites->isEmpty()) {
+        if ($sites->isEmpty() && $request->user()?->role !== 'sub_user') {
             SiteScope::defaultSite($request);
             $sites = $query->orderBy('id')->get();
         }
@@ -71,6 +74,12 @@ class SiteController extends Controller
         }
 
         $tenantId = $this->tenantId($request);
+        if ($request->user()?->role === 'sub_user') {
+            return response()->json([
+                'error' => 'Permission denied',
+                'message' => 'Sub-users cannot create sites.',
+            ], 403);
+        }
         if (!$tenantId) {
             return response()->json([
                 'error' => 'Tenant context required',
@@ -249,7 +258,12 @@ class SiteController extends Controller
         $tenantId = $this->tenantId($request);
         abort_unless($tenantId, 403);
 
-        return Site::where('tenant_id', $tenantId)->findOrFail($id);
+        $query = Site::where('tenant_id', $tenantId);
+        if ($request->user()?->role === 'sub_user') {
+            $query->whereIn('id', $request->user()->allowed_site_ids ?: []);
+        }
+
+        return $query->findOrFail($id);
     }
 
     private function tenantId(Request $request): ?int

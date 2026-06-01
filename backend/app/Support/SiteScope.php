@@ -27,6 +27,11 @@ class SiteScope
             return null;
         }
 
+        $user = $request->user();
+        if ($user?->role === 'sub_user' && !in_array((int) $siteId, $user->allowed_site_ids ?: [], true)) {
+            return null;
+        }
+
         return Site::where('tenant_id', $tenantId)
             ->where('id', (int) $siteId)
             ->first();
@@ -42,13 +47,23 @@ class SiteScope
             return null;
         }
 
-        $site = Site::where('tenant_id', $tenantId)
+        $query = Site::where('tenant_id', $tenantId);
+        $user = $request->user();
+        if ($user?->role === 'sub_user') {
+            $query->whereIn('id', $user->allowed_site_ids ?: []);
+        }
+
+        $site = $query
             ->orderByDesc('is_active')
             ->orderBy('id')
             ->first();
 
         if ($site) {
             return $site;
+        }
+
+        if ($user?->role === 'sub_user') {
+            return null;
         }
 
         $tenant = Tenant::find($tenantId);

@@ -1,0 +1,226 @@
+import { FormEvent, useEffect, useState } from 'react';
+import { Edit2, Loader2, Plus, ShieldCheck, Trash2, UserCog } from 'lucide-react';
+import { createSubUser, deleteSubUser, getSites, getSubUsers, updateSubUser } from '../utils/api';
+
+interface SiteOption {
+  id: number;
+  name: string;
+}
+
+interface SubUser {
+  id: number;
+  name: string;
+  email: string;
+  is_active: boolean;
+  allowed_site_ids: number[];
+  permissions: string[];
+  allowed_sites?: SiteOption[];
+}
+
+const permissionOptions = [
+  { id: 'view_clients', label: 'Active clients' },
+  { id: 'view_routers', label: 'Routers and monitoring' },
+  { id: 'view_transactions', label: 'Transactions' },
+  { id: 'manage_vouchers', label: 'Vouchers' },
+];
+
+const emptyForm = {
+  name: '',
+  email: '',
+  password: '',
+  is_active: true,
+  allowed_site_ids: [] as number[],
+  permissions: ['view_clients', 'view_routers'] as string[],
+};
+
+export function SubUsers() {
+  const [subUsers, setSubUsers] = useState<SubUser[]>([]);
+  const [sites, setSites] = useState<SiteOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<SubUser | null>(null);
+  const [form, setForm] = useState({ ...emptyForm });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [usersData, sitesData] = await Promise.all([getSubUsers(), getSites()]);
+      setSubUsers(usersData.sub_users || []);
+      setSites(sitesData.sites || []);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const toggleNumber = (field: 'allowed_site_ids', value: number) => {
+    const next = form[field].includes(value)
+      ? form[field].filter((item) => item !== value)
+      : [...form[field], value];
+    setForm({ ...form, [field]: next });
+  };
+
+  const togglePermission = (value: string) => {
+    const next = form.permissions.includes(value)
+      ? form.permissions.filter((item) => item !== value)
+      : [...form.permissions, value];
+    setForm({ ...form, permissions: next });
+  };
+
+  const edit = (user: SubUser) => {
+    setEditing(user);
+    setForm({
+      name: user.name,
+      email: user.email,
+      password: '',
+      is_active: user.is_active,
+      allowed_site_ids: user.allowed_site_ids || [],
+      permissions: user.permissions || [],
+    });
+  };
+
+  const reset = () => {
+    setEditing(null);
+    setForm({ ...emptyForm });
+  };
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      if (editing) {
+        await updateSubUser(editing.id, form);
+      } else {
+        await createSubUser(form);
+      }
+      reset();
+      await load();
+    } catch (error: any) {
+      alert(error.message || 'Failed to save sub-user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (user: SubUser) => {
+    if (!confirm(`Delete sub-user ${user.name}?`)) return;
+    await deleteSubUser(user.id);
+    await load();
+  };
+
+  if (loading) {
+    return <div className="min-h-screen grid place-items-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-background p-6 lg:p-8 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
+          <UserCog className="w-7 h-7 text-primary" />
+          Sub-Users
+        </h1>
+        <p className="text-muted-foreground mt-1">Give staff limited access to specific sites and dashboard sections.</p>
+      </div>
+
+      <form onSubmit={submit} className="bg-card border border-border rounded-lg p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Plus className="w-5 h-5 text-primary" />
+          <h2 className="font-semibold text-card-foreground">{editing ? 'Edit Sub-User' : 'Add Sub-User'}</h2>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">Name</span>
+            <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">Email</span>
+            <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">{editing ? 'New password' : 'Password'}</span>
+            <input required={!editing} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
+          </label>
+          <label className="flex items-center gap-2 pt-6 text-sm text-card-foreground">
+            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+            Active
+          </label>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-medium text-card-foreground mb-2">Sites</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {sites.map((site) => (
+                <label key={site.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+                  <input type="checkbox" checked={form.allowed_site_ids.includes(site.id)} onChange={() => toggleNumber('allowed_site_ids', site.id)} />
+                  {site.name}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-card-foreground mb-2">Permissions</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {permissionOptions.map((permission) => (
+                <label key={permission.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+                  <input type="checkbox" checked={form.permissions.includes(permission.id)} onChange={() => togglePermission(permission.id)} />
+                  {permission.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          {editing && <button type="button" onClick={reset} className="px-4 py-2 rounded-lg border border-border hover:bg-muted">Cancel</button>}
+          <button disabled={saving || form.allowed_site_ids.length === 0 || form.permissions.length === 0} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+            {editing ? 'Update sub-user' : 'Create sub-user'}
+          </button>
+        </div>
+      </form>
+
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="p-5 border-b border-border">
+          <h2 className="font-semibold text-card-foreground">Existing Sub-Users</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-muted-foreground border-b border-border">
+              <tr>
+                <th className="px-5 py-3 font-medium">User</th>
+                <th className="px-5 py-3 font-medium">Sites</th>
+                <th className="px-5 py-3 font-medium">Permissions</th>
+                <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-5 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subUsers.length === 0 ? (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">No sub-users yet.</td></tr>
+              ) : subUsers.map((user) => (
+                <tr key={user.id} className="border-b border-border/70 last:border-0">
+                  <td className="px-5 py-3">
+                    <p className="font-medium text-card-foreground">{user.name}</p>
+                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">{user.allowed_sites?.map((site) => site.name).join(', ') || '-'}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{user.permissions.join(', ')}</td>
+                  <td className="px-5 py-3">{user.is_active ? 'Active' : 'Disabled'}</td>
+                  <td className="px-5 py-3 text-right">
+                    <button onClick={() => edit(user)} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => remove(user)} className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"><Trash2 className="w-4 h-4" /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

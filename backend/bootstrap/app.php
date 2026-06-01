@@ -20,8 +20,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'tenant' => \App\Http\Middleware\IdentifyTenant::class,
+            'tenant.admin' => \App\Http\Middleware\EnsureTenantAdmin::class,
             'super.admin' => \App\Http\Middleware\SuperAdminAuth::class,
             'tenant.billing' => \App\Http\Middleware\EnsureTenantBillingCurrent::class,
+            'tenant.permission' => \App\Http\Middleware\EnsureTenantPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

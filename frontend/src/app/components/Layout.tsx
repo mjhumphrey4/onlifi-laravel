@@ -32,7 +32,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
 import { API_BASE } from '../utils/api';
-import { BillingGate } from './BillingGate';
 
 interface Announcement {
   id: number | string;
@@ -49,19 +48,22 @@ interface MenuItem {
   label: string;
   icon: any;
   adminOnly: boolean;
+  tenantAdminOnly?: boolean;
+  permission?: string;
   children?: MenuItem[];
 }
 
 const menuItems: MenuItem[] = [
   { path: '/',               label: 'Dashboard',          icon: LayoutDashboard, adminOnly: false },
-  { path: '/clients',        label: 'Clients',            icon: Users, adminOnly: false },
-  { path: '/devices',        label: 'Monitor Router',     icon: Server, adminOnly: false },
-  { path: '/routers',        label: 'Routers',            icon: Router, adminOnly: false },
+  { path: '/clients',        label: 'Clients',            icon: Users, adminOnly: false, permission: 'view_clients' },
+  { path: '/devices',        label: 'Monitor Router',     icon: Server, adminOnly: false, permission: 'view_routers' },
+  { path: '/routers',        label: 'Routers',            icon: Router, adminOnly: false, permission: 'view_routers' },
   { 
     path: '/vouchers',       
     label: 'Manage Vouchers',           
     icon: Ticket, 
     adminOnly: false,
+    permission: 'manage_vouchers',
     children: [
       { path: '/vouchers',       label: 'Vouchers',           icon: Ticket, adminOnly: false },
       { path: '/voucher-types',  label: 'Voucher Types',      icon: Clock, adminOnly: false },
@@ -71,18 +73,20 @@ const menuItems: MenuItem[] = [
     ]
   },
   { path: '/users',          label: 'User Management',    icon: Users, adminOnly: true },
-  { path: '/transactions',   label: 'Transactions',       icon: ArrowLeftRight, adminOnly: false },
-  { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false },
-  { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false },
-  { path: '/reports',        label: 'Reports',            icon: BarChart3, adminOnly: false },
+  { path: '/sub-users',      label: 'Sub-Users',          icon: UserCog, adminOnly: false, tenantAdminOnly: true },
+  { path: '/transactions',   label: 'Transactions',       icon: ArrowLeftRight, adminOnly: false, permission: 'view_transactions' },
+  { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false, tenantAdminOnly: true },
+  { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false, permission: 'view_transactions' },
+  { path: '/reports',        label: 'Reports',            icon: BarChart3, adminOnly: false, permission: 'view_transactions' },
   { path: '/support-tickets', label: 'Support Tickets',    icon: MessageSquare, adminOnly: false },
-  { path: '/remote-access',  label: 'Remote Access',      icon: Network, adminOnly: false },
-  { path: '/sms-gateway',     label: 'SMS Gateway',        icon: MessageSquare, adminOnly: false },
+  { path: '/remote-access',  label: 'Remote Access',      icon: Network, adminOnly: false, permission: 'view_routers' },
+  { path: '/sms-gateway',     label: 'SMS Gateway',        icon: MessageSquare, adminOnly: false, tenantAdminOnly: true },
   {
     path: '/router-users',
     label: 'Manage Router',
     icon: Router,
     adminOnly: false,
+    permission: 'view_routers',
     children: [
       { path: '/router-users', label: 'Users', icon: UserCog, adminOnly: false },
       { path: '/dhcp', label: 'DHCP', icon: Network, adminOnly: false },
@@ -95,6 +99,7 @@ const menuItems: MenuItem[] = [
     label: 'Settings',
     icon: SettingsIcon,
     adminOnly: false,
+    tenantAdminOnly: true,
     children: [
       { path: '/settings', label: 'General Settings', icon: SettingsIcon, adminOnly: false },
       { path: '/captive-portal', label: 'Captive Page', icon: Paintbrush, adminOnly: false },
@@ -166,6 +171,12 @@ export function Layout() {
   };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+  const canSeeMenuItem = (item: MenuItem) => {
+    if (item.adminOnly && user?.role !== 'super_admin') return false;
+    if (item.tenantAdminOnly && user?.role !== 'tenant') return false;
+    if (item.permission && user?.role === 'sub_user' && !user.permissions?.includes(item.permission)) return false;
+    return true;
+  };
 
   // Fetch announcements and ticket notifications
   useEffect(() => {
@@ -336,13 +347,14 @@ export function Layout() {
         <nav className="flex-1 p-4 overflow-y-auto">
           <ul className="space-y-1">
             {menuItems
-              .filter(item => !item.adminOnly || user?.role === 'super_admin')
+              .filter(canSeeMenuItem)
               .map((item) => {
                 const Icon = item.icon;
-                const hasChildren = item.children && item.children.length > 0;
+                const visibleChildren = item.children?.filter(canSeeMenuItem) || [];
+                const hasChildren = visibleChildren.length > 0;
                 const isExpanded = expandedMenus[item.path] || false;
                 const isActive = hasChildren
-                  ? item.children!.some(child => location.pathname === child.path || location.pathname.startsWith(child.path + '/'))
+                  ? visibleChildren.some(child => location.pathname === child.path || location.pathname.startsWith(child.path + '/'))
                   : item.path === '/'
                     ? location.pathname === '/'
                     : location.pathname.startsWith(item.path);
@@ -369,7 +381,7 @@ export function Layout() {
                       </button>
                       {isExpanded && (
                         <ul className="mt-1 ml-4 pl-4 border-l border-sidebar-border space-y-1">
-                          {item.children!.map((child) => {
+                          {visibleChildren.map((child) => {
                             const ChildIcon = child.icon;
                             const isChildActive = location.pathname === child.path || location.pathname.startsWith(child.path + '/');
                             return (
@@ -549,9 +561,7 @@ export function Layout() {
           </>
         )}
 
-        <BillingGate>
-          <Outlet />
-        </BillingGate>
+        <Outlet />
       </main>
 
       {/* Add New Site Modal */}

@@ -94,27 +94,20 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     v.voucher_code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const downloadTemplateVouchers = (vouchersToDownload: Voucher[], filename: string, heading: string) => {
-    const html = buildTemplateHtml(vouchersToDownload, false, heading);
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(link.href);
+  const downloadTemplateVouchers = (vouchersToDownload: Voucher[], heading: string) => {
+    printTemplateVouchers(vouchersToDownload, heading);
   };
 
   const handleDownloadAll = () => {
     downloadTemplateVouchers(
       filteredVouchers,
-      `${group.group_name}_all_vouchers.html`,
       statusFilter === 'all' ? 'All Vouchers' : `${formatStatus(statusFilter)} Vouchers`
     );
   };
 
   const handleDownloadUnused = () => {
     const unusedVouchers = vouchers.filter(v => v.status === 'unused');
-    downloadTemplateVouchers(unusedVouchers, `${group.group_name}_unused_vouchers.html`, 'Unused Vouchers');
+    downloadTemplateVouchers(unusedVouchers, 'Unused Vouchers');
   };
 
   const handlePrintUnused = () => {
@@ -308,7 +301,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
               className="flex items-center gap-2 px-3 py-1.5 text-sm bg-emerald-500 hover:bg-emerald-600 disabled:bg-muted disabled:text-muted-foreground text-white rounded-lg transition-colors"
             >
               <Download className="w-4 h-4" />
-              Download Unused
+              Unused PDF
             </button>
             <button
               onClick={handleDownloadAll}
@@ -316,7 +309,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
               className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground rounded-lg transition-colors"
             >
               <Download className="w-4 h-4" />
-              Download All
+              Current PDF
             </button>
             <button
               onClick={handlePrintUnused}

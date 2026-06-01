@@ -26,6 +26,7 @@ use App\Http\Controllers\SmsCreditController;
 use App\Http\Controllers\RemoteAccessController;
 use App\Http\Controllers\PppoeClientController;
 use App\Http\Controllers\SupportTicketController;
+use App\Http\Controllers\SubUserController;
 
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
@@ -54,9 +55,11 @@ Route::get('/router/telemetry/{token}', [\App\Http\Controllers\NasController::cl
 
 // Telemetry data endpoints (authenticated)
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/telemetry/latest', [TelemetryController::class, 'getLatest']);
-    Route::get('/telemetry/stats', [TelemetryController::class, 'getStats']);
-    Route::get('/telemetry/usage', [TelemetryController::class, 'getUsage']);
+    Route::middleware('tenant.permission:view_routers')->group(function () {
+        Route::get('/telemetry/latest', [TelemetryController::class, 'getLatest']);
+        Route::get('/telemetry/stats', [TelemetryController::class, 'getStats']);
+        Route::get('/telemetry/usage', [TelemetryController::class, 'getUsage']);
+    });
 });
 
 Route::prefix('tenant/signup')->group(function () {
@@ -142,20 +145,29 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/2fa/setup', [TwoFactorController::class, 'setup']);
     Route::post('/2fa/confirm', [TwoFactorController::class, 'confirm']);
     Route::post('/2fa/disable', [TwoFactorController::class, 'disable']);
-    Route::get('/billing/status', [SubscriptionBillingController::class, 'status']);
-    Route::post('/billing/subscribe', [SubscriptionBillingController::class, 'subscribe']);
-    Route::get('/billing/payment-status', [SubscriptionBillingController::class, 'paymentStatus']);
-    Route::get('/captive-portal/templates', [CaptivePortalController::class, 'templates']);
-    Route::post('/captive-portal/templates', [CaptivePortalController::class, 'saveTemplate']);
-    Route::post('/captive-portal/preview', [CaptivePortalController::class, 'preview']);
-    Route::post('/captive-portal/download', [CaptivePortalController::class, 'download']);
-    Route::post('/captive-portal/logo', [CaptivePortalController::class, 'uploadLogo']);
-    Route::post('/captive-portal/templates/{template}/activate', [CaptivePortalController::class, 'activateTemplate']);
-    Route::get('/sms-credits', [SmsCreditController::class, 'summary']);
-    Route::put('/sms-credits/plan', [SmsCreditController::class, 'updatePlan']);
-    Route::post('/sms-credits/top-up', [SmsCreditController::class, 'topUp']);
-    Route::get('/sms-credits/payment-status', [SmsCreditController::class, 'paymentStatus']);
-    Route::get('/remote-access', [RemoteAccessController::class, 'tenantIndex']);
+    Route::middleware('tenant.admin')->group(function () {
+        Route::get('/billing/status', [SubscriptionBillingController::class, 'status']);
+        Route::post('/billing/subscribe', [SubscriptionBillingController::class, 'subscribe']);
+        Route::get('/billing/payment-status', [SubscriptionBillingController::class, 'paymentStatus']);
+        Route::get('/captive-portal/templates', [CaptivePortalController::class, 'templates']);
+        Route::post('/captive-portal/templates', [CaptivePortalController::class, 'saveTemplate']);
+        Route::post('/captive-portal/preview', [CaptivePortalController::class, 'preview']);
+        Route::post('/captive-portal/download', [CaptivePortalController::class, 'download']);
+        Route::post('/captive-portal/logo', [CaptivePortalController::class, 'uploadLogo']);
+        Route::post('/captive-portal/templates/{template}/activate', [CaptivePortalController::class, 'activateTemplate']);
+        Route::get('/sms-credits', [SmsCreditController::class, 'summary']);
+        Route::put('/sms-credits/plan', [SmsCreditController::class, 'updatePlan']);
+        Route::post('/sms-credits/top-up', [SmsCreditController::class, 'topUp']);
+        Route::get('/sms-credits/payment-status', [SmsCreditController::class, 'paymentStatus']);
+    });
+    Route::middleware('tenant.permission:view_routers')->get('/remote-access', [RemoteAccessController::class, 'tenantIndex']);
+
+    Route::middleware('tenant.admin')->prefix('sub-users')->group(function () {
+        Route::get('/', [SubUserController::class, 'index']);
+        Route::post('/', [SubUserController::class, 'store']);
+        Route::put('/{subUser}', [SubUserController::class, 'update']);
+        Route::delete('/{subUser}', [SubUserController::class, 'destroy']);
+    });
 
     Route::prefix('support-tickets')->group(function () {
         Route::get('/', [SupportTicketController::class, 'tenantIndex']);
@@ -186,7 +198,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 Route::middleware(['tenant'])->group(function () {
     // Clients
-    Route::prefix('clients')->group(function () {
+    Route::middleware('tenant.permission:view_clients')->prefix('clients')->group(function () {
         Route::get('/', [\App\Http\Controllers\ClientController::class, 'index']);
         Route::get('/refresh', [\App\Http\Controllers\ClientController::class, 'refresh']);
         Route::get('/{id}', [\App\Http\Controllers\ClientController::class, 'show']);
@@ -201,7 +213,7 @@ Route::middleware(['tenant'])->group(function () {
     });
 
     // RADIUS Accounting endpoints - active users from radacct table
-    Route::prefix('radius')->group(function () {
+    Route::middleware('tenant.permission:view_clients')->prefix('radius')->group(function () {
         Route::get('/active-users', [RadiusAccountingController::class, 'getActiveUsers']);
         Route::get('/users/{username}/history', [RadiusAccountingController::class, 'getUserHistory']);
         Route::get('/accounting/stats', [RadiusAccountingController::class, 'getStats']);
@@ -214,7 +226,7 @@ Route::middleware(['tenant'])->group(function () {
         Route::post('/failure', [PaymentController::class, 'failure']);
     });
 
-    Route::prefix('vouchers')->group(function () {
+    Route::middleware('tenant.permission:manage_vouchers')->prefix('vouchers')->group(function () {
         Route::get('/', [VoucherController::class, 'index']);
         Route::get('/statistics', [VoucherController::class, 'statistics']);
         Route::get('/types', [VoucherController::class, 'getTypes']);
@@ -228,7 +240,7 @@ Route::middleware(['tenant'])->group(function () {
     });
 
     // Voucher Templates
-    Route::prefix('voucher-templates')->group(function () {
+    Route::middleware('tenant.permission:manage_vouchers')->prefix('voucher-templates')->group(function () {
         Route::get('/', [\App\Http\Controllers\VoucherTemplateController::class, 'index']);
         Route::post('/', [\App\Http\Controllers\VoucherTemplateController::class, 'store']);
         Route::get('/default', [\App\Http\Controllers\VoucherTemplateController::class, 'getDefault']);
@@ -238,7 +250,7 @@ Route::middleware(['tenant'])->group(function () {
         Route::post('/{id}/set-default', [\App\Http\Controllers\VoucherTemplateController::class, 'setDefault']);
     });
 
-    Route::prefix('routers')->group(function () {
+    Route::middleware('tenant.permission:view_routers')->prefix('routers')->group(function () {
         Route::get('/', [MikrotikController::class, 'index']);
         Route::post('/', [MikrotikController::class, 'store']);
         Route::get('/ip-bindings', [MikrotikController::class, 'getIpBindings']);
@@ -256,7 +268,7 @@ Route::middleware(['tenant'])->group(function () {
         Route::post('/telemetry/ingest', [MikrotikController::class, 'ingestTelemetry']);
     });
 
-    Route::prefix('pppoe')->group(function () {
+    Route::middleware('tenant.permission:view_routers')->prefix('pppoe')->group(function () {
         Route::get('/clients', [PppoeClientController::class, 'index']);
         Route::post('/clients', [PppoeClientController::class, 'store']);
         Route::put('/clients/{id}', [PppoeClientController::class, 'update']);
@@ -266,14 +278,14 @@ Route::middleware(['tenant'])->group(function () {
     });
 
     // RADIUS sync endpoints
-    Route::prefix('radius')->group(function () {
+    Route::middleware('tenant.permission:manage_vouchers')->prefix('radius')->group(function () {
         Route::post('/sync-vouchers', [\App\Http\Controllers\RadiusController::class, 'syncAllVouchers']);
         Route::post('/sync-voucher/{id}', [\App\Http\Controllers\RadiusController::class, 'syncVoucher']);
         Route::post('/cleanup-expired', [\App\Http\Controllers\RadiusController::class, 'cleanupExpired']);
         Route::get('/sessions/{voucher_code}', [\App\Http\Controllers\RadiusController::class, 'getSessions']);
     });
 
-    Route::prefix('sales-points')->group(function () {
+    Route::middleware('tenant.permission:manage_vouchers')->prefix('sales-points')->group(function () {
         Route::get('/', [SalesPointController::class, 'index']);
         Route::post('/', [SalesPointController::class, 'store']);
         Route::get('/{id}', [SalesPointController::class, 'show']);
@@ -292,7 +304,7 @@ Route::middleware(['tenant'])->group(function () {
         Route::get('/{id}/token', [SiteController::class, 'getToken']);
     });
 
-    Route::prefix('transactions')->group(function () {
+    Route::middleware('tenant.permission:view_transactions')->prefix('transactions')->group(function () {
         Route::get('/', [TransactionController::class, 'index']);
         Route::get('/statistics', [TransactionController::class, 'statistics']);
         Route::get('/performance', [TransactionController::class, 'performanceAnalytics']);

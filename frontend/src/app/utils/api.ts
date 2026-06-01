@@ -199,6 +199,11 @@ export const tenantChangePassword = (current_password: string, new_password: str
   post('/tenant/change-password', { current_password, new_password, new_password_confirmation });
 
 export const tenantSignup = (data: Record<string, unknown>) => post('/tenant/signup', data);
+export const getSubUsers = () => get('/tenant/sub-users');
+export const createSubUser = (data: Record<string, unknown>) => post('/tenant/sub-users', data);
+export const updateSubUser = (id: number, data: Record<string, unknown>) => put(`/tenant/sub-users/${id}`, data);
+export const deleteSubUser = (id: number) => del(`/tenant/sub-users/${id}`);
+export const getSites = () => get('/sites');
 
 // ============ TENANT DASHBOARD (requires tenant middleware) ============
 export const getTenantDashboardStats = () => get('/dashboard/stats');

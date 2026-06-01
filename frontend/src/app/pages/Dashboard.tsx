@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
-import { API_BASE, apiStats, getTelemetryStats, getTransactionStatistics, getVoucherStatistics } from '../utils/api';
+import { API_BASE, apiStats, getPerformanceAnalytics, getTelemetryStats, getVoucherStatistics } from '../utils/api';
 
 interface SiteStat {
   total_amount: number;
@@ -99,8 +99,8 @@ export function Dashboard() {
   const [topSalesAgents, setTopSalesAgents] = useState<TopSalesAgent[]>([]);
   const [summary, setSummary] = useState({
     totalEarnings: 0,
-    vouchersSold: 0,
-    successfulMobileMoneyTransactions: 0,
+    voucherAmount: 0,
+    mobileMoneyAmount: 0,
   });
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
@@ -117,6 +117,8 @@ export function Dashboard() {
     if (selectedSite?.id) headers['X-Site-ID'] = String(selectedSite.id);
     return headers;
   };
+
+  const canUse = (permission: string) => user?.role !== 'sub_user' || Boolean(user.permissions?.includes(permission));
 
   const toDateInput = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -152,16 +154,28 @@ export function Dashboard() {
       const headers = getAuthHeaders();
       
       const range = getDateRange(dateFilter);
-      const params = new URLSearchParams({ per_page: '20', ...range });
+      const params = new URLSearchParams({ per_page: '15', ...range });
+      const performancePeriod = dateFilter === 'all'
+        ? 'six_months'
+        : dateFilter === 'week'
+          ? 'week'
+          : dateFilter === 'month'
+            ? 'month'
+            : dateFilter;
+      const canViewClients = canUse('view_clients');
+      const canViewRouters = canUse('view_routers');
+      const canViewTransactions = canUse('view_transactions');
+      const canManageVouchers = canUse('manage_vouchers');
+      const canViewFinancials = canViewTransactions || canManageVouchers;
 
       // Fetch stats and filtered transactions
-      const [statsRes, txResponse, transactionStats, voucherStats] = await Promise.all([
+      const [statsRes, txResponse, performanceStats, voucherStats] = await Promise.all([
         apiStats(),
-        fetch(`${API_BASE}/transactions?${params.toString()}`, { headers }),
-        getTransactionStatistics(),
-        getVoucherStatistics(),
+        canViewTransactions ? fetch(`${API_BASE}/transactions?${params.toString()}`, { headers }) : Promise.resolve(null),
+        canViewFinancials ? getPerformanceAnalytics(performancePeriod) : Promise.resolve({ summary: {} }),
+        canManageVouchers ? getVoucherStatistics() : Promise.resolve({ by_sales_point: [] }),
       ]);
-      const txRes = txResponse.ok ? await txResponse.json() : { data: [] };
+      const txRes = txResponse?.ok ? await txResponse.json() : { data: [] };
       const transactions = txRes.transactions ?? txRes.data ?? [];
       setTxs(transactions);
       const agents = [...(voucherStats.by_sales_point || [])]
@@ -169,9 +183,9 @@ export function Dashboard() {
         .slice(0, 5);
       setTopSalesAgents(agents);
       setSummary({
-        totalEarnings: Number(voucherStats.total_revenue ?? statsRes.voucher_revenue ?? statsRes.total_revenue ?? transactionStats.total_revenue ?? 0),
-        vouchersSold: Number(voucherStats.consumed_vouchers ?? statsRes.vouchers_sold ?? voucherStats.used_vouchers ?? 0),
-        successfulMobileMoneyTransactions: Number(transactionStats.successful_transactions ?? statsRes.total_successful_transactions ?? 0),
+        totalEarnings: canViewFinancials ? Number(voucherStats.total_revenue ?? statsRes.voucher_revenue ?? statsRes.total_revenue ?? 0) : 0,
+        voucherAmount: canManageVouchers ? Number(performanceStats.summary?.voucher_total ?? 0) : 0,
+        mobileMoneyAmount: canViewTransactions ? Number(performanceStats.summary?.mobile_money_total ?? 0) : 0,
       });
 
       const groupedSites = transactions.reduce((acc: Record<string, SiteStat>, tx: TxRow) => {
@@ -191,27 +205,31 @@ export function Dashboard() {
       // Fetch active clients from radacct (active hotspot users)
       let activeClientCount = 0;
       try {
-        const clientsRes = await fetch(`${API_BASE}/radius/active-users`, { headers });
-        
-        if (clientsRes.ok) {
-          const clientsData = await clientsRes.json();
-          
-          // Map radacct data to client format
-          const activeClients = (clientsData.active_users || []).map((user: any) => ({
-            id: user.session_id,
-            mac_address: user.mac_address,
-            username: user.username,
-            ip_address: user.ip_address,
-            total_sessions: 1,
-            total_spent: 0,
-            last_seen: user.connected_at,
-            status: 'active'
-          }));
-          
-          activeClientCount = activeClients.length;
-          setClients(activeClients);
-        } else {
+        if (!canViewClients) {
           setClients([]);
+        } else {
+          const clientsRes = await fetch(`${API_BASE}/radius/active-users`, { headers });
+        
+          if (clientsRes.ok) {
+            const clientsData = await clientsRes.json();
+          
+            // Map radacct data to client format
+            const activeClients = (clientsData.active_users || []).map((user: any) => ({
+              id: user.session_id,
+              mac_address: user.mac_address,
+              username: user.username,
+              ip_address: user.ip_address,
+              total_sessions: 1,
+              total_spent: 0,
+              last_seen: user.connected_at,
+              status: 'active'
+            }));
+          
+            activeClientCount = activeClients.length;
+            setClients(activeClients);
+          } else {
+            setClients([]);
+          }
         }
       } catch (err) {
         console.error('Active clients fetch error:', err);
@@ -220,18 +238,22 @@ export function Dashboard() {
 
       // Fetch device stats from telemetry endpoint
       try {
-        const telemetryData = await getTelemetryStats();
+        if (!canViewRouters) {
+          setDeviceStats({ total_routers: 0, online_routers: 0, total_clients: activeClientCount, active_connections: 0, avg_cpu: 0, avg_memory: 0, bandwidth_up: 0, bandwidth_down: 0 });
+        } else {
+          const telemetryData = await getTelemetryStats();
 
-        setDeviceStats({
-          total_routers: telemetryData.total_routers || 0,
-          online_routers: telemetryData.online_routers || 0,
-          total_clients: activeClientCount,
-          active_connections: telemetryData.total_active_users || 0,
-          avg_cpu: Math.round(telemetryData.avg_cpu || 0),
-          avg_memory: Math.round(telemetryData.avg_memory || 0),
-          bandwidth_up: Math.round(telemetryData.bandwidth_upload_kbps || 0),
-          bandwidth_down: Math.round(telemetryData.bandwidth_download_kbps || 0),
-        });
+          setDeviceStats({
+            total_routers: telemetryData.total_routers || 0,
+            online_routers: telemetryData.online_routers || 0,
+            total_clients: activeClientCount,
+            active_connections: telemetryData.total_active_users || 0,
+            avg_cpu: Math.round(telemetryData.avg_cpu || 0),
+            avg_memory: Math.round(telemetryData.avg_memory || 0),
+            bandwidth_up: Math.round(telemetryData.bandwidth_upload_kbps || 0),
+            bandwidth_down: Math.round(telemetryData.bandwidth_download_kbps || 0),
+          });
+        }
       } catch (err) {
         console.error('Telemetry fetch error:', err);
       }
@@ -242,7 +264,7 @@ export function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [dateFilter, selectedSite?.id]);
+  }, [dateFilter, selectedSite?.id, user?.role, user?.permissions]);
 
   useEffect(() => {
     load();
@@ -272,7 +294,7 @@ export function Dashboard() {
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RefreshCw className="w-3 h-3" />
-          {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading…'}
+          {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading...'}
         </div>
       </div>
 
@@ -344,38 +366,9 @@ export function Dashboard() {
       {/* Summary stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings || filteredEarnings)} icon={DollarSign} trend={{ value: 'All time', isPositive: true }} />
-        <StatsCard title="Vouchers Sold" value={summary.vouchersSold.toLocaleString()} icon={Users} />
-        <StatsCard title="Mobile Money Transactions" value={summary.successfulMobileMoneyTransactions.toLocaleString()} icon={TrendingUp} />
+        <StatsCard title="Vouchers" value={fmt(summary.voucherAmount)} icon={Users} trend={{ value: DATE_FILTERS.find((f) => f.id === dateFilter)?.label || 'Period', isPositive: true }} />
+        <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: DATE_FILTERS.find((f) => f.id === dateFilter)?.label || 'Period', isPositive: true }} />
       </div>
-
-      {topSalesAgents.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6 sm:mb-8">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-card-foreground">Top Sales Agents</h2>
-              <p className="text-sm text-muted-foreground">Physical voucher performance from the active site's voucher sales points.</p>
-            </div>
-            <Link to="/vouchers" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
-              Manage vouchers <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-          <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-3">
-            {topSalesAgents.map((agent, index) => (
-              <div key={agent.id || agent.name} className="rounded-lg border border-border bg-muted/20 p-4">
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <p className="font-semibold text-card-foreground truncate">{agent.name}</p>
-                  <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-1">#{index + 1}</span>
-                </div>
-                <p className="text-xl font-bold text-card-foreground">{fmt(Number(agent.revenue || 0))}</p>
-                <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                  <div className="flex justify-between"><span>Sold</span><span className="text-card-foreground">{Number((agent.used || 0) + (agent.in_use || 0)).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Stock</span><span className="text-card-foreground">{Number(agent.total_vouchers || 0).toLocaleString()}</span></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Per-site cards (admin sees all, user sees their own) */}
       {siteList.length > 0 && (
@@ -426,7 +419,7 @@ export function Dashboard() {
                 <p className="text-sm text-muted-foreground">No clients yet</p>
               </div>
             ) : (
-              clients.slice(0, 20).map((client, i) => (
+              clients.slice(0, 15).map((client, i) => (
                 <div
                   key={client.id || i}
                   className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
@@ -442,7 +435,7 @@ export function Dashboard() {
                         {client.username || client.mac_address || 'Unknown'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {client.ip_address || 'No IP'} • {client.total_sessions || 0} sessions
+                        {client.ip_address || 'No IP'} - {client.total_sessions || 0} sessions
                       </p>
                     </div>
                   </div>
@@ -481,7 +474,7 @@ export function Dashboard() {
                 <p className="text-sm text-muted-foreground">No transactions found</p>
               </div>
             ) : (
-              txs.slice(0, 20).map((tx, i) => (
+              txs.slice(0, 15).map((tx, i) => (
                 <div
                   key={`${tx.id}-${i}`}
                   className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
@@ -499,7 +492,7 @@ export function Dashboard() {
                     <div>
                       <p className="text-sm font-medium text-card-foreground">{tx.msisdn}</p>
                       <p className="text-xs text-muted-foreground">
-                        {tx.voucher_code || 'No voucher'} • {tx.origin_site || 'Unknown'}
+                        {tx.voucher_code || 'No voucher'} - {tx.origin_site || 'Unknown'}
                       </p>
                     </div>
                   </div>
@@ -517,6 +510,35 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {topSalesAgents.length > 0 && (
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mt-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-card-foreground">Sales Points</h2>
+              <p className="text-sm text-muted-foreground">Physical voucher performance from the active site's sales agents.</p>
+            </div>
+            <Link to="/vouchers" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
+              Manage vouchers <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-3">
+            {topSalesAgents.map((agent, index) => (
+              <div key={agent.id || agent.name} className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <p className="font-semibold text-card-foreground truncate">{agent.name}</p>
+                  <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-1">#{index + 1}</span>
+                </div>
+                <p className="text-xl font-bold text-card-foreground">{fmt(Number(agent.revenue || 0))}</p>
+                <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                  <div className="flex justify-between"><span>Sold</span><span className="text-card-foreground">{Number((agent.used || 0) + (agent.in_use || 0)).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span>Stock</span><span className="text-card-foreground">{Number(agent.total_vouchers || 0).toLocaleString()}</span></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -183,40 +183,16 @@ class Tenant extends Model
 
     public function billingStatus(): array
     {
-        $now = now();
         $trialEndsAt = $this->trial_ends_at;
         $subscriptionEndsAt = $this->subscription_ends_at;
 
-        $trialActive = $trialEndsAt && $trialEndsAt->greaterThan($now);
-        $subscriptionActive = $subscriptionEndsAt && $subscriptionEndsAt->greaterThan($now);
-        $requiresSubscription = (bool) SystemSetting::get('require_subscription', true);
-        $dashboardLockEnabled = (bool) SystemSetting::get('dashboard_lock_on_expired_subscription', true);
-
-        $state = 'expired';
-        $currentPeriodEndsAt = $subscriptionEndsAt ?: $trialEndsAt;
-
-        if (!$requiresSubscription) {
-            $state = 'active';
-            $currentPeriodEndsAt = null;
-        } elseif ($subscriptionActive) {
-            $state = 'subscribed';
-        } elseif ($trialActive) {
-            $state = 'trial';
-            $currentPeriodEndsAt = $trialEndsAt;
-        }
-
-        $requiresPayment = $requiresSubscription
-            && $dashboardLockEnabled
-            && $this->canAccess()
-            && $state === 'expired';
-
         return [
-            'state' => $state,
-            'requires_payment' => $requiresPayment,
+            'state' => 'active',
+            'requires_payment' => false,
             'services_active' => $this->canAccess(),
             'trial_ends_at' => $trialEndsAt?->toIso8601String(),
             'subscription_ends_at' => $subscriptionEndsAt?->toIso8601String(),
-            'current_period_ends_at' => $currentPeriodEndsAt?->toIso8601String(),
+            'current_period_ends_at' => null,
             'monthly_amount' => (float) SystemSetting::get('tenant_monthly_subscription_amount', 50000),
             'currency' => (string) SystemSetting::get('tenant_subscription_currency', 'UGX'),
             'renewal_months' => (int) SystemSetting::get('subscription_renewal_months', 1),

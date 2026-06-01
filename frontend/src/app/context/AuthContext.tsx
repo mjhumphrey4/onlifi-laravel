@@ -6,9 +6,11 @@ export interface AuthUser {
   username: string;
   name: string;
   email: string;
-  role: 'super_admin' | 'tenant' | 'user';
+  role: 'super_admin' | 'tenant' | 'sub_user' | 'user';
   tenant_id?: number;
   tenant_name?: string;
+  permissions?: string[];
+  allowed_site_ids?: number[];
 }
 
 interface AuthContextType {
@@ -51,9 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           username: data.user.email,
           name: data.user.name,
           email: data.user.email,
-          role: 'tenant',
+          role: data.user.role === 'sub_user' ? 'sub_user' : 'tenant',
           tenant_id: data.user.tenant_id,
           tenant_name: data.user.tenant_name,
+          permissions: data.user.permissions || [],
+          allowed_site_ids: data.user.allowed_site_ids || [],
         });
       } else if (adminToken) {
         const data = await adminMe();
@@ -93,8 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: data.user.name,
         email: data.user.email,
         role: 'tenant',
+        ...(data.user.role === 'sub_user' ? { role: 'sub_user' as const } : {}),
         tenant_id: data.user.tenant_id,
         tenant_name: data.user.tenant_name,
+        permissions: data.user.permissions || [],
+        allowed_site_ids: data.user.allowed_site_ids || [],
       });
     } catch (tenantError) {
       // If tenant login fails, try admin login
@@ -136,8 +143,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: data.user.name,
       email: data.user.email,
       role: 'tenant',
+      ...(data.user.role === 'sub_user' ? { role: 'sub_user' as const } : {}),
       tenant_id: data.user.tenant_id,
       tenant_name: data.user.tenant_name,
+      permissions: data.user.permissions || [],
+      allowed_site_ids: data.user.allowed_site_ids || [],
     });
   };
 
@@ -160,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = () => user?.role === 'super_admin';
-  const isTenant = () => user?.role === 'tenant';
+  const isTenant = () => user?.role === 'tenant' || user?.role === 'sub_user';
   const userSites = (): string[] => {
     // For super_admin, return all sites or a default list
     // For tenant users, return their assigned sites

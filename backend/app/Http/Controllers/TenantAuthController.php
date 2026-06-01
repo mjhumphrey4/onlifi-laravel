@@ -100,6 +100,8 @@ class TenantAuthController extends Controller
                 'tenant_id' => $tenant->id,
                 'tenant_name' => $tenant->name,
                 'tenant_slug' => $tenant->slug,
+                'permissions' => $user->permissions ?: [],
+                'allowed_site_ids' => $user->allowed_site_ids ?: [],
             ],
             'tenant' => [
                 'id' => $tenant->id,
@@ -210,6 +212,8 @@ class TenantAuthController extends Controller
                 'role' => $user->role,
                 'tenant_id' => $tenant->id,
                 'tenant_name' => $tenant->name,
+                'permissions' => $user->permissions ?: [],
+                'allowed_site_ids' => $user->allowed_site_ids ?: [],
             ],
             'tenant' => [
                 'id' => $tenant->id,
