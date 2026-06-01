@@ -397,13 +397,33 @@ class VoucherController extends Controller
                 'used_vouchers' => 0,
                 'expired_vouchers' => 0,
                 'total_revenue' => 0,
+                'revenue_30_days' => 0,
                 'vouchers_by_status' => [],
                 'daily' => [],
                 'by_sales_point' => [],
             ]);
         }
+        $salesPointId = $request->integer('sales_point_id') ?: null;
+
+        if ($salesPointId && Schema::connection('tenant')->hasColumn('voucher_sales_points', 'site_id')) {
+            $belongsToSite = DB::connection('tenant')->table('voucher_sales_points')
+                ->where('id', $salesPointId)
+                ->where('site_id', $site->id)
+                ->exists();
+
+            if (!$belongsToSite) {
+                return response()->json([
+                    'error' => 'Invalid sales point',
+                    'message' => 'The selected sales point does not belong to the active site.',
+                ], 422);
+            }
+        }
+
         $voucherQuery = Voucher::query();
         SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
+        if ($salesPointId) {
+            $voucherQuery->where('sales_point_id', $salesPointId);
+        }
 
         // Overall statistics
         $stats = [
@@ -413,7 +433,11 @@ class VoucherController extends Controller
             'in_use_vouchers' => (clone $voucherQuery)->where('status', 'in_use')->count(),
             'used_vouchers' => (clone $voucherQuery)->used()->count(),
             'expired_vouchers' => (clone $voucherQuery)->expired()->count(),
-            'total_revenue' => (clone $voucherQuery)->used()->sum('price'),
+            'total_revenue' => (clone $voucherQuery)->whereNotNull('first_used_at')->sum('price'),
+            'revenue_30_days' => (clone $voucherQuery)
+                ->whereNotNull('first_used_at')
+                ->where('first_used_at', '>=', now()->subDays(30))
+                ->sum('price'),
             'vouchers_by_status' => (clone $voucherQuery)->selectRaw('status, COUNT(*) as count')
                 ->groupBy('status')
                 ->get(),
@@ -422,6 +446,9 @@ class VoucherController extends Controller
         // Daily statistics (last 30 days)
         $dailyQuery = Voucher::selectRaw('DATE(first_used_at) as date, COUNT(*) as vouchers_used, SUM(price) as revenue, COUNT(DISTINCT used_by_mac) as unique_devices');
         SiteScope::applyToTenantTable($dailyQuery, 'vouchers', $site);
+        if ($salesPointId) {
+            $dailyQuery->where('sales_point_id', $salesPointId);
+        }
         $stats['daily'] = $dailyQuery
             ->whereNotNull('first_used_at')
             ->where('first_used_at', '>=', now()->subDays(30))
@@ -441,17 +468,38 @@ class VoucherController extends Controller
         try {
             $salesQuery = VoucherGroup::join('vouchers', 'voucher_groups.id', '=', 'vouchers.group_id')
                 ->join('voucher_sales_points', 'voucher_groups.sales_point_id', '=', 'voucher_sales_points.id')
-                ->selectRaw('voucher_sales_points.id, voucher_sales_points.name, COUNT(vouchers.id) as total_vouchers, SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used, SUM(CASE WHEN vouchers.status = "used" THEN vouchers.price ELSE 0 END) as revenue');
+                ->selectRaw('
+                    voucher_sales_points.id,
+                    voucher_sales_points.name,
+                    COUNT(vouchers.id) as total_vouchers,
+                    SUM(CASE WHEN vouchers.status = "unused" THEN 1 ELSE 0 END) as unused,
+                    SUM(CASE WHEN vouchers.status = "reserved" THEN 1 ELSE 0 END) as reserved,
+                    SUM(CASE WHEN vouchers.status = "in_use" THEN 1 ELSE 0 END) as in_use,
+                    SUM(CASE WHEN vouchers.status = "used" THEN 1 ELSE 0 END) as used,
+                    SUM(CASE WHEN vouchers.first_used_at IS NOT NULL THEN vouchers.price ELSE 0 END) as revenue,
+                    SUM(CASE WHEN vouchers.first_used_at IS NOT NULL AND vouchers.first_used_at >= ? THEN vouchers.price ELSE 0 END) as revenue_30_days
+                ', [now()->subDays(30)]);
             SiteScope::applyToTenantTable($salesQuery, 'voucher_groups', $site);
+            if (Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
+                $salesQuery->where('vouchers.site_id', $site->id);
+            }
+            if ($salesPointId) {
+                $salesQuery->where('voucher_sales_points.id', $salesPointId);
+            }
             $stats['by_sales_point'] = $salesQuery
                 ->groupBy('voucher_sales_points.id', 'voucher_sales_points.name')
                 ->get()
                 ->map(function ($point) {
                     return [
+                        'id' => (int) $point->id,
                         'name' => $point->name,
                         'total_vouchers' => (int) $point->total_vouchers,
+                        'unused' => (int) $point->unused,
+                        'reserved' => (int) $point->reserved,
+                        'in_use' => (int) $point->in_use,
                         'used' => (int) $point->used,
                         'revenue' => (float) $point->revenue,
+                        'revenue_30_days' => (float) $point->revenue_30_days,
                     ];
                 });
         } catch (\Exception $e) {

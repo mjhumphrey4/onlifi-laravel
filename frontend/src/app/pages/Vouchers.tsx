@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Ticket, Plus, Users, TrendingUp, Package, Filter, Search, Download, Printer, Trash2, ChevronRight, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Ticket, Plus, Users, TrendingUp, Package } from 'lucide-react';
 import { CreateVoucherDialog } from '../components/CreateVoucherDialog';
 import { VoucherGroupCard } from '../components/VoucherGroupCard';
 import { SalesPointsDialog } from '../components/SalesPointsDialog';
@@ -34,18 +34,18 @@ interface VoucherStats {
     used: number;
     expired: number;
     total_revenue: number;
+    revenue_30_days: number;
   };
-  daily: Array<{
-    date: string;
-    vouchers_used: number;
-    revenue: number;
-    unique_devices: number;
-  }>;
   by_sales_point: Array<{
+    id: number;
     name: string;
     total_vouchers: number;
+    unused: number;
+    reserved: number;
+    in_use: number;
     used: number;
     revenue: number;
+    revenue_30_days: number;
   }>;
 }
 
@@ -56,20 +56,19 @@ export function Vouchers() {
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showSalesPointsDialog, setShowSalesPointsDialog] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState<VoucherGroup | null>(null);
-  const [selectedSalesPoint, setSelectedSalesPoint] = useState<string | null>(null);
+  const [selectedSalesPointId, setSelectedSalesPointId] = useState<number | null>(null);
   const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
-  }, [selectedSite?.id]);
+  }, [selectedSite?.id, selectedSalesPointId]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       const [groupsData, statsData] = await Promise.all([
         getVoucherGroups(),
-        getVoucherStatistics(),
+        getVoucherStatistics(selectedSalesPointId ? { sales_point_id: selectedSalesPointId } : undefined),
       ]);
 
       setGroups(Array.isArray(groupsData) ? groupsData : groupsData.groups || []);
@@ -82,12 +81,15 @@ export function Vouchers() {
           used: statsData.used_vouchers || 0,
           expired: statsData.expired_vouchers || 0,
           total_revenue: statsData.total_revenue || 0,
+          revenue_30_days: statsData.revenue_30_days || 0,
         },
-        daily: statsData.daily || [],
         by_sales_point: statsData.by_sales_point || [],
       });
     } catch (error) {
       console.error('Failed to load vouchers:', error);
+      if (selectedSalesPointId) {
+        setSelectedSalesPointId(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -136,9 +138,26 @@ export function Vouchers() {
     }
   };
 
-  // Filter groups by selected sales point
-  const filteredGroups = selectedSalesPoint
-    ? groups.filter(g => g.sales_point_name === selectedSalesPoint)
+  const salesPointTabs = useMemo(() => {
+    const points = new Map<number, { id: number; name: string; groupCount: number }>();
+    groups.forEach((group) => {
+      if (!group.sales_point_id || !group.sales_point_name) return;
+      const existing = points.get(group.sales_point_id);
+      points.set(group.sales_point_id, {
+        id: group.sales_point_id,
+        name: group.sales_point_name,
+        groupCount: (existing?.groupCount || 0) + 1,
+      });
+    });
+    return Array.from(points.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [groups]);
+
+  const selectedSalesPoint = selectedSalesPointId
+    ? salesPointTabs.find((point) => point.id === selectedSalesPointId) || null
+    : null;
+
+  const filteredGroups = selectedSalesPointId
+    ? groups.filter(g => g.sales_point_id === selectedSalesPointId)
     : groups;
 
   if (loading) {
@@ -181,39 +200,39 @@ export function Vouchers() {
       </div>
 
       {/* Sales Point Tabs - Quick Filter */}
-      {stats?.by_sales_point && stats.by_sales_point.length > 0 && (
+      {salesPointTabs.length > 0 && (
         <div className="mb-6 bg-card border border-border rounded-lg p-2">
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             <button
-              onClick={() => setSelectedSalesPoint(null)}
+              onClick={() => setSelectedSalesPointId(null)}
               className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                selectedSalesPoint === null
+                selectedSalesPointId === null
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
               }`}
             >
               All Sales Points
               <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
-                selectedSalesPoint === null ? 'bg-primary-foreground/20' : 'bg-muted-foreground/20'
+                selectedSalesPointId === null ? 'bg-primary-foreground/20' : 'bg-muted-foreground/20'
               }`}>
                 {groups.length}
               </span>
             </button>
-            {stats.by_sales_point.map((point) => (
+            {salesPointTabs.map((point) => (
               <button
-                key={point.name}
-                onClick={() => setSelectedSalesPoint(selectedSalesPoint === point.name ? null : point.name)}
+                key={point.id}
+                onClick={() => setSelectedSalesPointId(selectedSalesPointId === point.id ? null : point.id)}
                 className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  selectedSalesPoint === point.name
+                  selectedSalesPointId === point.id
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {point.name}
                 <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
-                  selectedSalesPoint === point.name ? 'bg-primary-foreground/20' : 'bg-muted-foreground/20'
+                  selectedSalesPointId === point.id ? 'bg-primary-foreground/20' : 'bg-muted-foreground/20'
                 }`}>
-                  {groups.filter(g => g.sales_point_name === point.name).length}
+                  {point.groupCount}
                 </span>
               </button>
             ))}
@@ -233,15 +252,15 @@ export function Vouchers() {
             <p className="text-xs opacity-70 mt-1">All time</p>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg p-5 text-white">
+          <div className="bg-gradient-to-br from-yellow-500 to-amber-600 rounded-lg p-5 text-white">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm opacity-80">In Use</p>
+              <p className="text-sm opacity-80">Used</p>
               <TrendingUp className="w-5 h-5 opacity-80" />
             </div>
             <p className="text-3xl font-bold">{stats.overall.in_use || 0}</p>
             <p className="text-xs opacity-70 mt-1">
               {stats.overall.total_vouchers > 0
-                ? `${((stats.overall.in_use / stats.overall.total_vouchers) * 100).toFixed(1)}% currently active`
+                ? `${((stats.overall.in_use / stats.overall.total_vouchers) * 100).toFixed(1)}% active now`
                 : 'No data'}
             </p>
           </div>
@@ -257,84 +276,13 @@ export function Vouchers() {
 
           <div className="bg-gradient-to-br from-orange-600 to-orange-700 rounded-lg p-5 text-white">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm opacity-80">Total Revenue</p>
+              <p className="text-sm opacity-80">30-Day Revenue</p>
               <TrendingUp className="w-5 h-5 opacity-80" />
             </div>
-            <p className="text-2xl font-bold">{formatCurrency(stats.overall.total_revenue || 0)}</p>
-            <p className="text-xs opacity-70 mt-1">From used vouchers</p>
-          </div>
-        </div>
-      )}
-
-      {/* Daily Usage Chart */}
-      {stats?.daily && stats.daily.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-card-foreground mb-4">Daily Usage (Last 30 Days)</h2>
-          <div className="space-y-3">
-            {stats.daily.slice(0, 7).map((day) => (
-              <div key={day.date} className="flex items-center gap-4">
-                <div className="w-24 text-sm text-muted-foreground">
-                  {new Date(day.date).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-card-foreground">{day.vouchers_used} vouchers</span>
-                    <span className="text-sm font-semibold text-primary">{formatCurrency(day.revenue)}</span>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-all"
-                      style={{ width: `${Math.min((day.vouchers_used / Math.max(...stats.daily.map(d => d.vouchers_used))) * 100, 100)}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground w-20 text-right">
-                  {day.unique_devices} devices
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Sales Points - Clickable to filter voucher groups */}
-      {stats?.by_sales_point && stats.by_sales_point.length > 0 && (
-        <div className="bg-card border border-border rounded-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-card-foreground">Sales Points</h2>
-            {selectedSalesPoint && (
-              <button
-                onClick={() => setSelectedSalesPoint(null)}
-                className="flex items-center gap-1 px-3 py-1 text-sm bg-primary/10 text-primary rounded-full hover:bg-primary/20 transition-colors"
-              >
-                <X className="w-3 h-3" />
-                Clear filter
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {stats.by_sales_point.map((point) => (
-              <button
-                key={point.name}
-                onClick={() => setSelectedSalesPoint(selectedSalesPoint === point.name ? null : point.name)}
-                className={`text-left rounded-lg p-4 transition-all ${
-                  selectedSalesPoint === point.name
-                    ? 'bg-primary text-primary-foreground ring-2 ring-primary'
-                    : 'bg-muted/50 hover:bg-muted hover:ring-1 hover:ring-primary/50'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <Users className={`w-4 h-4 ${selectedSalesPoint === point.name ? 'text-primary-foreground' : 'text-primary'}`} />
-                  <ChevronRight className={`w-4 h-4 ${selectedSalesPoint === point.name ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
-                </div>
-                <h3 className={`font-semibold text-sm mb-1 ${selectedSalesPoint === point.name ? '' : 'text-card-foreground'}`}>
-                  {point.name}
-                </h3>
-                <p className={`text-xs ${selectedSalesPoint === point.name ? 'opacity-80' : 'text-muted-foreground'}`}>
-                  {point.total_vouchers} vouchers • {formatCurrency(point.revenue)}
-                </p>
-              </button>
-            ))}
+            <p className="text-2xl font-bold">{formatCurrency(stats.overall.revenue_30_days || 0)}</p>
+            <p className="text-xs opacity-70 mt-1">
+              {selectedSalesPoint ? selectedSalesPoint.name : 'All sales points'}
+            </p>
           </div>
         </div>
       )}
@@ -346,7 +294,7 @@ export function Vouchers() {
             <h2 className="text-lg font-semibold text-card-foreground">Voucher Groups</h2>
             {selectedSalesPoint && (
               <span className="px-2 py-1 text-xs bg-primary/10 text-primary rounded-full">
-                {selectedSalesPoint} ({filteredGroups.length})
+                {selectedSalesPoint.name} ({filteredGroups.length})
               </span>
             )}
           </div>
@@ -356,8 +304,8 @@ export function Vouchers() {
           <div className="text-center py-12">
             <Ticket className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground mb-4">
-              {selectedSalesPoint 
-                ? `No voucher groups for ${selectedSalesPoint}` 
+              {selectedSalesPoint
+                ? `No voucher groups for ${selectedSalesPoint.name}`
                 : 'No voucher groups created yet'}
             </p>
             <button
@@ -373,7 +321,6 @@ export function Vouchers() {
               <VoucherGroupCard
                 key={group.id}
                 group={group}
-                onSelect={() => setSelectedGroup(group)}
                 onDelete={handleDeleteGroup}
                 isDeleting={deletingGroupId === group.id}
               />

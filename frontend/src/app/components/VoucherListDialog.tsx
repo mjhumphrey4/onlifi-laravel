@@ -108,7 +108,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     downloadTemplateVouchers(
       filteredVouchers,
       `${group.group_name}_all_vouchers.html`,
-      statusFilter === 'all' ? 'All Vouchers' : `${statusFilter} Vouchers`
+      statusFilter === 'all' ? 'All Vouchers' : `${formatStatus(statusFilter)} Vouchers`
     );
   };
 
@@ -231,7 +231,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     switch (status) {
       case 'unused': return 'bg-blue-500/10 text-blue-500';
       case 'reserved': return 'bg-amber-500/10 text-amber-500';
-      case 'in_use': return 'bg-emerald-500/10 text-emerald-500';
+      case 'in_use': return 'bg-yellow-500/10 text-yellow-600';
       case 'used': return 'bg-slate-500/10 text-slate-500';
       case 'expired': return 'bg-red-500/10 text-red-500';
       case 'disabled': return 'bg-gray-500/10 text-gray-500';
@@ -239,8 +239,17 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     }
   };
 
+  const formatStatus = (status: string) => {
+    switch (status) {
+      case 'in_use': return 'Used';
+      case 'used': return 'Completed';
+      default:
+        return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+  };
+
   const unusedCount = vouchers.filter(v => v.status === 'unused').length;
-  const usedCount = vouchers.filter(v => v.status === 'used').length;
+  const completedCount = vouchers.filter(v => v.status === 'used').length;
   const inUseCount = vouchers.filter(v => v.status === 'in_use').length;
 
   return (
@@ -274,8 +283,8 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
               <option value="all">All Status</option>
               <option value="unused">Unused ({unusedCount})</option>
               <option value="reserved">Reserved</option>
-              <option value="in_use">In Use ({inUseCount})</option>
-              <option value="used">Used ({usedCount})</option>
+              <option value="in_use">Used ({inUseCount})</option>
+              <option value="used">Completed ({completedCount})</option>
               <option value="expired">Expired</option>
             </select>
           </div>
@@ -357,7 +366,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
                       </td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(voucher.status)}`}>
-                          {voucher.status}
+                          {formatStatus(voucher.status)}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-card-foreground">

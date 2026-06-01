@@ -338,7 +338,10 @@ export function Layout() {
                   return (
                     <li key={item.path}>
                       <button
-                        onClick={() => setExpandedMenus(prev => ({ ...prev, [item.path]: !prev[item.path] }))}
+                        onClick={() => {
+                          navigate(item.path);
+                          setExpandedMenus(prev => ({ ...prev, [item.path]: true }));
+                        }}
                         className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg transition-colors ${
                           isActive
                             ? 'bg-primary/10 text-primary'

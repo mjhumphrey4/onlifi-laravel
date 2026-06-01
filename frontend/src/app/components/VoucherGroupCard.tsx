@@ -63,8 +63,8 @@ export function VoucherGroupCard({ group, onDelete, isDeleting }: VoucherGroupCa
           <p className="text-xs text-muted-foreground">Total</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-emerald-500">{group.in_use_count || 0}</p>
-          <p className="text-xs text-muted-foreground">In Use</p>
+          <p className="text-2xl font-bold text-yellow-500">{group.in_use_count || 0}</p>
+          <p className="text-xs text-muted-foreground">Used</p>
         </div>
         <div className="text-center">
           <p className="text-2xl font-bold text-blue-500">{group.unused_count}</p>

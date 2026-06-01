@@ -220,7 +220,13 @@ export const getVoucher = (id: number) => get(`/vouchers/${id}`);
 export const generateVouchers = (data: Record<string, unknown>) => post('/vouchers/generate-batch', data);
 export const getVoucherTypes = () => get('/vouchers/types');
 export const getVoucherGroups = () => get('/vouchers/groups');
-export const getVoucherStatistics = () => get('/vouchers/statistics');
+export const getVoucherStatistics = (params?: { sales_point_id?: number }) => {
+  let endpoint = '/vouchers/statistics';
+  const searchParams = new URLSearchParams();
+  if (params?.sales_point_id) searchParams.set('sales_point_id', String(params.sales_point_id));
+  if (searchParams.toString()) endpoint += `?${searchParams.toString()}`;
+  return get(endpoint);
+};
 export const getDefaultVoucherTemplate = () => get('/voucher-templates/default');
 
 // ============ SALES POINTS (Tenant) ============
