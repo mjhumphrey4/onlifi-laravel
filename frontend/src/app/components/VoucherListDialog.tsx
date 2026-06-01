@@ -5,12 +5,12 @@ import { getDefaultVoucherTemplate, getVouchers } from '../utils/api';
 interface Voucher {
   id: number;
   voucher_code: string;
-  password: string;
-  status: 'unused' | 'used' | 'expired' | 'disabled';
+  status: 'unused' | 'reserved' | 'in_use' | 'used' | 'expired' | 'disabled';
   price: number;
   validity_hours: number;
   first_used_at: string | null;
   expires_at: string | null;
+  used_by_mac: string | null;
   created_at: string;
   voucher_type?: string;
   sales_point?: { name: string } | null;
@@ -230,7 +230,9 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'unused': return 'bg-blue-500/10 text-blue-500';
-      case 'used': return 'bg-emerald-500/10 text-emerald-500';
+      case 'reserved': return 'bg-amber-500/10 text-amber-500';
+      case 'in_use': return 'bg-emerald-500/10 text-emerald-500';
+      case 'used': return 'bg-slate-500/10 text-slate-500';
       case 'expired': return 'bg-red-500/10 text-red-500';
       case 'disabled': return 'bg-gray-500/10 text-gray-500';
       default: return 'bg-muted text-muted-foreground';
@@ -239,6 +241,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
 
   const unusedCount = vouchers.filter(v => v.status === 'unused').length;
   const usedCount = vouchers.filter(v => v.status === 'used').length;
+  const inUseCount = vouchers.filter(v => v.status === 'in_use').length;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -270,6 +273,8 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
             >
               <option value="all">All Status</option>
               <option value="unused">Unused ({unusedCount})</option>
+              <option value="reserved">Reserved</option>
+              <option value="in_use">In Use ({inUseCount})</option>
               <option value="used">Used ({usedCount})</option>
               <option value="expired">Expired</option>
             </select>
@@ -334,7 +339,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left py-3 px-4 font-semibold text-card-foreground">Code</th>
-                    <th className="text-left py-3 px-4 font-semibold text-card-foreground">Password</th>
+                    <th className="text-left py-3 px-4 font-semibold text-card-foreground">MAC Address</th>
                     <th className="text-left py-3 px-4 font-semibold text-card-foreground">Status</th>
                     <th className="text-left py-3 px-4 font-semibold text-card-foreground">Price</th>
                     <th className="text-left py-3 px-4 font-semibold text-card-foreground">Validity</th>
@@ -348,7 +353,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
                         {voucher.voucher_code}
                       </td>
                       <td className="py-3 px-4 font-mono text-muted-foreground">
-                        {voucher.password}
+                        {voucher.used_by_mac || '-'}
                       </td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(voucher.status)}`}>

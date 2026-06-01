@@ -11,6 +11,10 @@ class Voucher extends Model
 
     protected $connection = 'tenant';
 
+    protected $hidden = [
+        'password',
+    ];
+
     protected $fillable = [
         'voucher_code',
         'password',
@@ -28,6 +32,8 @@ class Voucher extends Model
         'first_used_at',
         'last_used_at',
         'expires_at',
+        'used_by_mac',
+        'used_by_ip',
         'total_data_used_mb',
         'total_session_time_minutes',
         'last_accounting_at',
@@ -76,6 +82,11 @@ class Voucher extends Model
         return $query->where('status', 'used');
     }
 
+    public function scopeInUse($query)
+    {
+        return $query->where('status', 'in_use');
+    }
+
     public function scopeExpired($query)
     {
         return $query->where('status', 'expired');
@@ -83,7 +94,7 @@ class Voucher extends Model
 
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['unused', 'used'])
+        return $query->whereIn('status', ['unused', 'reserved', 'in_use'])
                      ->where(function($q) {
                          $q->whereNull('expires_at')
                            ->orWhere('expires_at', '>', now());

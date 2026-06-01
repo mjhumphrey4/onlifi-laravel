@@ -61,7 +61,7 @@ class TenantDashboardController extends Controller
 
         $voucherQuery = Voucher::query();
         SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
-        $activeVouchers = (clone $voucherQuery)->where('status', 'active')->count();
+        $activeVouchers = (clone $voucherQuery)->whereIn('status', ['reserved', 'in_use'])->count();
         $unusedVouchers = (clone $voucherQuery)->where('status', 'unused')->count();
 
         return response()->json([

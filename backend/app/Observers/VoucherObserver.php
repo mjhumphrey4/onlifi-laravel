@@ -43,8 +43,8 @@ class VoucherObserver
     public function updated(Voucher $voucher): void
     {
         try {
-            // If voucher is expired or disabled, remove from RADIUS
-            if (in_array($voucher->status, ['expired', 'disabled'])) {
+            // Finished/disabled vouchers must not remain in RADIUS.
+            if (in_array($voucher->status, ['used', 'expired', 'disabled'])) {
                 $this->radiusService->disableVoucher($voucher);
                 Log::info('Voucher disabled in RADIUS', ['voucher_code' => $voucher->voucher_code]);
             } else {

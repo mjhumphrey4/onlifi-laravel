@@ -109,7 +109,7 @@ class RadiusController extends Controller
 
         $voucher = Voucher::where('voucher_code', $request->username)
             ->where('password', $request->password)
-            ->whereIn('status', ['unused', 'used'])
+            ->whereIn('status', ['unused', 'reserved', 'in_use'])
             ->first();
 
         if ($voucher) {

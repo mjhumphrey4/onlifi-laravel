@@ -132,7 +132,7 @@ sub start_voucher_timer {
 
     my $sth = $dbh->prepare(q{
         UPDATE vouchers SET
-            status = CASE WHEN status = 'unused' THEN 'used' ELSE status END,
+            status = CASE WHEN status IN ('unused', 'reserved') THEN 'in_use' ELSE status END,
             first_used_at = COALESCE(first_used_at, NOW()),
             last_used_at = NOW(),
             expires_at = COALESCE(expires_at, DATE_ADD(NOW(), INTERVAL COALESCE(validity_minutes, validity_hours * 60) MINUTE)),
@@ -140,7 +140,7 @@ sub start_voucher_timer {
             used_by_ip = COALESCE(NULLIF(used_by_ip, ''), ?),
             last_accounting_at = NOW()
         WHERE voucher_code = ?
-        AND status IN ('unused', 'used')
+        AND status IN ('unused', 'reserved', 'in_use')
     });
 
     unless ($sth) {
@@ -170,8 +170,8 @@ sub expire_voucher {
 
     my $voucher_update = $dbh->prepare(q{
         UPDATE vouchers SET
-            status = 'expired',
-            expired_reason = ?,
+            status = 'used',
+            expired_reason = COALESCE(expired_reason, ?),
             last_accounting_at = NOW()
         WHERE voucher_code = ?
     });
@@ -231,7 +231,8 @@ sub authorize {
     my $calling_mac = $RAD_REQUEST{'Calling-Station-Id'} // '';
     my $voucher_sth = $dbh->prepare(q{
         SELECT voucher_code, status, site_id, expires_at, used_by_mac,
-               (expires_at IS NOT NULL AND expires_at <= NOW()) AS is_expired
+               (expires_at IS NOT NULL AND expires_at <= NOW()) AS is_expired,
+               TIMESTAMPDIFF(SECOND, NOW(), expires_at) AS remaining_seconds
         FROM vouchers
         WHERE voucher_code = ?
         LIMIT 1
@@ -259,9 +260,9 @@ sub authorize {
         return RLM_MODULE_REJECT;
     }
 
-    if (($voucher->{status} // '') eq 'expired' || ($voucher->{status} // '') eq 'disabled' || ($voucher->{is_expired} // 0)) {
+    if (($voucher->{status} // '') eq 'used' || ($voucher->{status} // '') eq 'expired' || ($voucher->{status} // '') eq 'disabled' || ($voucher->{is_expired} // 0)) {
         expire_voucher($dbh, $username, 'time_limit') if ($voucher->{is_expired} // 0);
-        &radiusd::radlog(1, "PERL REJECT: Voucher $username is expired or disabled");
+        &radiusd::radlog(1, "PERL REJECT: Voucher $username is finished, expired, or disabled");
         $dbh->disconnect();
         return RLM_MODULE_REJECT;
     }
@@ -338,6 +339,14 @@ sub authorize {
         $RAD_REPLY{$row->{attribute}} = $row->{value};
     }
     $sth->finish();
+
+    if (defined $voucher->{expires_at} && defined $voucher->{remaining_seconds}) {
+        my $remaining_seconds = int($voucher->{remaining_seconds});
+        if ($remaining_seconds > 0) {
+            $RAD_REPLY{'Session-Timeout'} = $remaining_seconds;
+            &radiusd::radlog(1, "PERL: Overriding Session-Timeout for $username to remaining lease seconds: $remaining_seconds");
+        }
+    }
     $dbh->disconnect();
     
     return RLM_MODULE_OK;
@@ -473,9 +482,9 @@ sub accounting {
         my $voucher_update = $dbh->prepare(q{
             UPDATE vouchers SET
                 status = CASE
-                    WHEN expires_at IS NOT NULL AND expires_at <= NOW() THEN 'expired'
-                    WHEN data_limit_mb IS NOT NULL AND ROUND(? / 1048576, 2) >= data_limit_mb THEN 'expired'
-                    ELSE 'used'
+                    WHEN expires_at IS NOT NULL AND expires_at <= NOW() THEN 'used'
+                    WHEN data_limit_mb IS NOT NULL AND ROUND(? / 1048576, 2) >= data_limit_mb THEN 'used'
+                    ELSE 'in_use'
                 END,
                 last_used_at = NOW(),
                 total_session_time_minutes = CEIL(? / 60),
@@ -487,7 +496,7 @@ sub accounting {
                     ELSE NULL
                 END
             WHERE voucher_code = ?
-            AND status IN ('unused', 'used')
+            AND status IN ('unused', 'reserved', 'in_use')
         });
         if ($voucher_update) {
             $voucher_update->execute($total_octets, $session_time, $total_octets, $total_octets, $username);
@@ -506,9 +515,9 @@ sub accounting {
             $voucher_status_sth->finish();
         }
         
-        if (($voucher_status // '') eq 'expired') {
+        if (($voucher_status // '') eq 'used' || ($voucher_status // '') eq 'expired') {
             expire_voucher($dbh, $username, 'time_limit');
-            &radiusd::radlog(1, "PERL ACCOUNTING: Voucher $username expired and was removed from RADIUS");
+            &radiusd::radlog(1, "PERL ACCOUNTING: Voucher $username finished and was removed from RADIUS");
         } else {
             &radiusd::radlog(1, "PERL ACCOUNTING: Voucher $username usage updated; still active until expiry");
         }
@@ -553,7 +562,7 @@ sub accounting {
                 total_data_used_mb = ROUND(? / 1048576, 2),
                 last_accounting_at = NOW()
             WHERE voucher_code = ?
-            AND status = 'used'
+            AND status = 'in_use'
         });
         if ($voucher_interim) {
             $voucher_interim->execute($session_time, $total_octets, $username);

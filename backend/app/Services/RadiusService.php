@@ -19,6 +19,10 @@ class RadiusService
      */
     public function syncVoucher(Voucher $voucher): bool
     {
+        if (in_array($voucher->status, ['used', 'expired', 'disabled'], true)) {
+            return $this->disableVoucher($voucher);
+        }
+
         try {
             DB::connection('tenant')->beginTransaction();
             
@@ -193,7 +197,7 @@ class RadiusService
      */
     public function syncAllActiveVouchers(): array
     {
-        $vouchers = Voucher::whereIn('status', ['unused', 'used'])
+        $vouchers = Voucher::whereIn('status', ['unused', 'reserved', 'in_use'])
             ->where(function ($query) {
                 $query->whereNull('expires_at')
                     ->orWhere('expires_at', '>', now());
@@ -223,7 +227,7 @@ class RadiusService
      */
     public function cleanupExpiredVouchers(): int
     {
-        $expiredVouchers = Voucher::where('status', 'expired')
+        $expiredVouchers = Voucher::whereIn('status', ['used', 'expired'])
             ->orWhere('status', 'disabled')
             ->orWhere(function ($query) {
                 $query->whereNotNull('expires_at')

@@ -22,12 +22,15 @@ interface VoucherGroup {
   total_vouchers: number;
   unused_count: number;
   used_count: number;
+  in_use_count: number;
 }
 
 interface VoucherStats {
   overall: {
     total_vouchers: number;
     unused: number;
+    in_use: number;
+    reserved: number;
     used: number;
     expired: number;
     total_revenue: number;
@@ -74,6 +77,8 @@ export function Vouchers() {
         overall: {
           total_vouchers: statsData.total_vouchers || 0,
           unused: statsData.unused_vouchers || 0,
+          in_use: statsData.in_use_vouchers || 0,
+          reserved: statsData.reserved_vouchers || 0,
           used: statsData.used_vouchers || 0,
           expired: statsData.expired_vouchers || 0,
           total_revenue: statsData.total_revenue || 0,
@@ -230,13 +235,13 @@ export function Vouchers() {
 
           <div className="bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-lg p-5 text-white">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm opacity-80">Used Vouchers</p>
+              <p className="text-sm opacity-80">In Use</p>
               <TrendingUp className="w-5 h-5 opacity-80" />
             </div>
-            <p className="text-3xl font-bold">{stats.overall.used || 0}</p>
+            <p className="text-3xl font-bold">{stats.overall.in_use || 0}</p>
             <p className="text-xs opacity-70 mt-1">
               {stats.overall.total_vouchers > 0
-                ? `${((stats.overall.used / stats.overall.total_vouchers) * 100).toFixed(1)}% usage rate`
+                ? `${((stats.overall.in_use / stats.overall.total_vouchers) * 100).toFixed(1)}% currently active`
                 : 'No data'}
             </p>
           </div>

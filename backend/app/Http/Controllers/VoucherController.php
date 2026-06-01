@@ -184,7 +184,7 @@ class VoucherController extends Controller
             ]);
         }
 
-        if ($voucher->status === 'expired' || ($voucher->expires_at && $voucher->expires_at->isPast())) {
+        if (in_array($voucher->status, ['used', 'expired']) || ($voucher->expires_at && $voucher->expires_at->isPast())) {
             return response()->json([
                 'valid' => false,
                 'message' => 'Voucher has expired',
@@ -370,6 +370,10 @@ class VoucherController extends Controller
                 'vouchers as used_count' => function ($query) use ($site) {
                     SiteScope::applyToTenantTable($query, 'vouchers', $site);
                     $query->where('status', 'used');
+                },
+                'vouchers as in_use_count' => function ($query) use ($site) {
+                    SiteScope::applyToTenantTable($query, 'vouchers', $site);
+                    $query->where('status', 'in_use');
                 }
             ])
             ->orderBy('created_at', 'desc')
@@ -388,6 +392,8 @@ class VoucherController extends Controller
             return response()->json([
                 'total_vouchers' => 0,
                 'unused_vouchers' => 0,
+                'in_use_vouchers' => 0,
+                'reserved_vouchers' => 0,
                 'used_vouchers' => 0,
                 'expired_vouchers' => 0,
                 'total_revenue' => 0,
@@ -403,6 +409,8 @@ class VoucherController extends Controller
         $stats = [
             'total_vouchers' => (clone $voucherQuery)->count(),
             'unused_vouchers' => (clone $voucherQuery)->unused()->count(),
+            'reserved_vouchers' => (clone $voucherQuery)->where('status', 'reserved')->count(),
+            'in_use_vouchers' => (clone $voucherQuery)->where('status', 'in_use')->count(),
             'used_vouchers' => (clone $voucherQuery)->used()->count(),
             'expired_vouchers' => (clone $voucherQuery)->expired()->count(),
             'total_revenue' => (clone $voucherQuery)->used()->sum('price'),

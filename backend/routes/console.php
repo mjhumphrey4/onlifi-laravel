@@ -112,7 +112,7 @@ Artisan::command('onlifi:radius:sync-active {--router= : NAS-Identifier/router i
                 $backfillQuery->update(['site_id' => $site->id]);
             }
 
-            $query = \App\Models\Voucher::whereIn('status', ['unused', 'used'])
+            $query = \App\Models\Voucher::whereIn('status', ['unused', 'reserved', 'in_use'])
                 ->where(function ($query) {
                     $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
                 });

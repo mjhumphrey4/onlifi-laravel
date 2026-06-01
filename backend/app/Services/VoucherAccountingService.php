@@ -76,7 +76,7 @@ class VoucherAccountingService
             return $summary;
         }
 
-        Voucher::whereIn('status', ['unused', 'used'])
+        Voucher::whereIn('status', ['unused', 'reserved', 'in_use'])
             ->orderBy('id')
             ->chunkById(250, function ($vouchers) use (&$summary, $kick, $site) {
                 foreach ($vouchers as $voucher) {
@@ -107,7 +107,7 @@ class VoucherAccountingService
 
         if ($voucher->expires_at && now()->greaterThanOrEqualTo($voucher->expires_at)) {
             $voucher->fill($this->filterVoucherColumns([
-                'status' => 'expired',
+                'status' => 'used',
                 'last_accounting_at' => now(),
                 'expired_reason' => $voucher->expired_reason ?: 'time_limit',
             ]));
@@ -171,7 +171,7 @@ class VoucherAccountingService
         $expiredByData = $voucher->data_limit_mb && $dataUsedMb >= (float) $voucher->data_limit_mb;
 
         $updates = [
-            'status' => $expiredByTime || $expiredByData ? 'expired' : 'used',
+            'status' => $expiredByTime || $expiredByData ? 'used' : 'in_use',
             'first_used_at' => $voucher->first_used_at ?: $firstStart,
             'last_used_at' => $lastAccountingAt ?: now(),
             'expires_at' => $expiresAt,

@@ -54,10 +54,10 @@ class VoucherService
         }
 
         $voucher->update([
-            'status' => 'used',
+            'status' => 'reserved',
             'last_used_at' => null,
             'expires_at' => null,
-            'used_by_mac' => $transaction->client_mac,
+            'used_by_mac' => null,
         ]);
 
         $transaction->update([

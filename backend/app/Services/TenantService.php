@@ -176,7 +176,7 @@ class TenantService
             'total_transactions' => DB::connection('tenant')->table('transactions')->count(),
             'successful_transactions' => DB::connection('tenant')->table('transactions')->where('status', 'success')->count(),
             'total_vouchers' => DB::connection('tenant')->table('vouchers')->count(),
-            'active_vouchers' => DB::connection('tenant')->table('vouchers')->where('status', 'active')->count(),
+            'active_vouchers' => DB::connection('tenant')->table('vouchers')->whereIn('status', ['reserved', 'in_use'])->count(),
             'total_routers' => DB::connection('tenant')->table('mikrotik_routers')->count(),
             'active_routers' => DB::connection('tenant')->table('mikrotik_routers')->where('is_active', true)->count(),
         ];
