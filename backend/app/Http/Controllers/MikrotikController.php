@@ -428,6 +428,103 @@ class MikrotikController extends Controller
         ], 201);
     }
 
+    public function getSystemUsers(Request $request)
+    {
+        $router = $this->resolveSiteRouter($request);
+
+        if (!$router) {
+            return response()->json([
+                'users' => [],
+                'message' => 'Router remote access details are not configured for this site.',
+            ]);
+        }
+
+        return response()->json([
+            'users' => $this->mikrotikService->getSystemUsers($router),
+        ]);
+    }
+
+    public function addSystemUser(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => ['required', 'string', 'max:64'],
+            'password' => ['required', 'string', 'max:255'],
+            'group' => ['required', 'string', 'max:64'],
+            'comment' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $router = $this->resolveSiteRouter($request);
+
+        if (!$router) {
+            return response()->json([
+                'error' => 'Router unavailable',
+                'message' => 'Router remote access details are not configured for this site.',
+            ], 422);
+        }
+
+        $created = $this->mikrotikService->addSystemUser($router, [
+            'name' => $request->name,
+            'password' => $request->password,
+            'group' => $request->group,
+            'comment' => $request->comment,
+        ]);
+
+        if (!$created) {
+            return response()->json([
+                'error' => 'Failed to add router user',
+                'message' => 'Could not connect to the router or RouterOS rejected the user.',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Router user added successfully.',
+        ], 201);
+    }
+
+    public function updateSystemUserStatus(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'id' => ['required', 'string', 'max:64'],
+            'disabled' => ['required', 'boolean'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $router = $this->resolveSiteRouter($request);
+
+        if (!$router) {
+            return response()->json([
+                'error' => 'Router unavailable',
+                'message' => 'Router remote access details are not configured for this site.',
+            ], 422);
+        }
+
+        $updated = $this->mikrotikService->setSystemUserDisabled($router, $request->id, $request->boolean('disabled'));
+
+        if (!$updated) {
+            return response()->json([
+                'error' => 'Failed to update router user',
+                'message' => 'Could not connect to the router or RouterOS rejected the update.',
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Router user updated successfully.',
+        ]);
+    }
+
     private function resolveSiteRouter(Request $request): ?MikrotikRouter
     {
         $site = SiteScope::selectedOrDefaultSite($request);

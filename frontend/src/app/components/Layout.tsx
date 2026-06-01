@@ -27,6 +27,7 @@ import {
   BarChart3,
   Network,
   ShieldCheck,
+  UserCog,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
@@ -53,6 +54,9 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { path: '/',               label: 'Dashboard',          icon: LayoutDashboard, adminOnly: false },
+  { path: '/clients',        label: 'Clients',            icon: Users, adminOnly: false },
+  { path: '/devices',        label: 'Monitor Router',     icon: Server, adminOnly: false },
+  { path: '/routers',        label: 'Routers',            icon: Router, adminOnly: false },
   { 
     path: '/vouchers',       
     label: 'Manage Vouchers',           
@@ -75,17 +79,15 @@ const menuItems: MenuItem[] = [
   { path: '/remote-access',  label: 'Remote Access',      icon: Network, adminOnly: false },
   { path: '/sms-gateway',     label: 'SMS Gateway',        icon: MessageSquare, adminOnly: false },
   {
-    path: '/devices',
+    path: '/router-users',
     label: 'Manage Router',
     icon: Router,
     adminOnly: false,
     children: [
-      { path: '/devices', label: 'Monitor Router', icon: Server, adminOnly: false },
-      { path: '/clients', label: 'Users', icon: Users, adminOnly: false },
+      { path: '/router-users', label: 'Users', icon: UserCog, adminOnly: false },
       { path: '/dhcp', label: 'DHCP', icon: Network, adminOnly: false },
       { path: '/pppoe', label: 'PPPoE', icon: Network, adminOnly: false },
       { path: '/ip-bindings', label: 'IP Bindings', icon: ShieldCheck, adminOnly: false },
-      { path: '/routers', label: 'Routers', icon: Router, adminOnly: false },
     ],
   },
   {

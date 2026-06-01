@@ -25,6 +25,7 @@ class CaptivePortalService
                     'pricing_title' => "Don't have a voucher? Buy with Mobile Money",
                     'marquee_text' => '',
                     'support_contact' => '0788770102 or 0704169987',
+                    'logo_url' => '',
                     'primary_color' => '#2a5298',
                     'secondary_color' => '#1e3c72',
                     'accent_color' => '#ff6b35',
@@ -43,6 +44,7 @@ class CaptivePortalService
                     'pricing_title' => "Don't have a voucher? Buy with Mobile Money",
                     'marquee_text' => '',
                     'support_contact' => '0788770102 or 0704169987',
+                    'logo_url' => '',
                     'primary_color' => '#67e8f9',
                     'secondary_color' => '#172554',
                     'accent_color' => '#c4b5fd',
@@ -61,6 +63,7 @@ class CaptivePortalService
                     'pricing_title' => "Don't have a voucher? Buy with Mobile Money",
                     'marquee_text' => '',
                     'support_contact' => '0788770102 or 0704169987',
+                    'logo_url' => '',
                     'primary_color' => '#0f766e',
                     'secondary_color' => '#042f2e',
                     'accent_color' => '#f59e0b',
@@ -500,6 +503,7 @@ HTML;
         }
 
         $html = $this->replacePricingSection($html, $packages, (string) ($design['package_layout'] ?? 'table'), (string) ($design['pricing_title'] ?? "Don't have a voucher? Buy with Mobile Money"));
+        $html = $this->applyUploadedLogo($html, (string) ($design['logo_url'] ?? ''), !empty($features['show_logo']));
         $html = $this->applyFeatureToggles($html, $features);
         $html = $this->applyThemeVariant($html, $theme, $design);
 
@@ -510,6 +514,43 @@ HTML;
         );
 
         return $this->injectVoucherPasswordSyncScript($html);
+    }
+
+    private function applyUploadedLogo(string $html, string $logoUrl, bool $showLogo): string
+    {
+        $logoUrl = trim($logoUrl);
+        if (!$showLogo || $logoUrl === '') {
+            return $html;
+        }
+
+        $safeLogoUrl = htmlspecialchars($logoUrl, ENT_QUOTES);
+        $logoHtml = <<<HTML
+<div class="wifi-icon custom-logo-wrap">
+    <img src="{$safeLogoUrl}" alt="WiFi logo" class="custom-logo">
+</div>
+<style>
+    .custom-logo-wrap {
+        width: 86px;
+        height: 86px;
+        margin: 0 auto 18px;
+        border-radius: 18px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.18);
+        border: 1px solid rgba(255,255,255,0.3);
+    }
+    .custom-logo {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        padding: 8px;
+    }
+</style>
+HTML;
+
+        return preg_replace('/<div class="wifi-icon">.*?<\/div>/s', $logoHtml, $html, 1) ?? $html;
     }
 
     private function injectVoucherPasswordSyncScript(string $html): string

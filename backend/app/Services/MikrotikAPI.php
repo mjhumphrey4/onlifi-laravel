@@ -403,6 +403,69 @@ class MikrotikAPI {
     }
 
     /**
+     * Get RouterOS system users.
+     */
+    public function getSystemUsers() {
+        if (!$this->connect()) {
+            return [];
+        }
+
+        $response = $this->communicate(['/user/print']);
+        $users = $this->parseResponse($response);
+
+        return array_map(function ($user) {
+            return [
+                'id' => $user['.id'] ?? '',
+                'name' => $user['name'] ?? '',
+                'group' => $user['group'] ?? '',
+                'last_logged_in' => $user['last-logged-in'] ?? '',
+                'comment' => $user['comment'] ?? '',
+                'disabled' => ($user['disabled'] ?? 'false') === 'true',
+            ];
+        }, $users);
+    }
+
+    /**
+     * Add a RouterOS system user.
+     */
+    public function addSystemUser(array $user) {
+        if (!$this->connect()) {
+            return false;
+        }
+
+        $command = [
+            '/user/add',
+            '=name=' . ($user['name'] ?? ''),
+            '=password=' . ($user['password'] ?? ''),
+            '=group=' . ($user['group'] ?? 'read'),
+        ];
+
+        if (!empty($user['comment'])) {
+            $command[] = '=comment=' . $user['comment'];
+        }
+
+        $response = $this->communicate($command);
+        return isset($response[0]) && $response[0] === '!done';
+    }
+
+    /**
+     * Enable or disable a RouterOS system user.
+     */
+    public function setSystemUserDisabled(string $id, bool $disabled) {
+        if (!$this->connect()) {
+            return false;
+        }
+
+        $response = $this->communicate([
+            '/user/set',
+            '=.id=' . $id,
+            '=disabled=' . ($disabled ? 'yes' : 'no'),
+        ]);
+
+        return isset($response[0]) && $response[0] === '!done';
+    }
+
+    /**
      * Detect device type from MAC address (OUI lookup)
      */
     private function detectDeviceType($mac) {

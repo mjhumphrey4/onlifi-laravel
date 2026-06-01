@@ -249,6 +249,9 @@ export const testRouterConnection = (id: number) => post(`/routers/${id}/test-co
 export const getRouterActiveUsers = (id: number) => get(`/routers/${id}/active-users`);
 export const getRouterIpBindings = () => get('/routers/ip-bindings');
 export const createRouterIpBinding = (data: Record<string, unknown>) => post('/routers/ip-bindings', data);
+export const getRouterSystemUsers = () => get('/routers/system-users');
+export const createRouterSystemUser = (data: Record<string, unknown>) => post('/routers/system-users', data);
+export const updateRouterSystemUserStatus = (data: Record<string, unknown>) => post('/routers/system-users/status', data);
 
 // ============ PPPOE CLIENTS (Tenant) ============
 export const getPppoeClients = () => get('/pppoe/clients');

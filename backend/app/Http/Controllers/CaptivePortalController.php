@@ -9,7 +9,9 @@ use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class CaptivePortalController extends Controller
 {
@@ -117,6 +119,32 @@ class CaptivePortalController extends Controller
         return response($portal->downloadLoginHtml($tenant, $site, $template))
             ->header('Content-Type', 'text/html')
             ->header('Content-Disposition', 'attachment; filename="' . ($siteSlug ?: 'site') . '-login.html"');
+    }
+
+    public function uploadLogo(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'logo' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif,svg', 'max:2048'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => 'Validation failed', 'errors' => $validator->errors()], 422);
+        }
+
+        $tenant = $request->user()->tenant;
+        $site = SiteScope::selectedOrDefaultSite($request);
+        $directory = 'captive-logos/tenant-' . $tenant->id . ($site ? '/site-' . $site->id : '');
+        $path = $request->file('logo')->store($directory, 'public');
+        $logoUrl = Storage::disk('public')->url($path);
+        if (!Str::startsWith($logoUrl, ['http://', 'https://'])) {
+            $logoUrl = rtrim(config('app.url'), '/') . '/' . ltrim($logoUrl, '/');
+        }
+
+        return response()->json([
+            'message' => 'Logo uploaded',
+            'logo_url' => $logoUrl,
+            'path' => $path,
+        ]);
     }
 
     public function activateTemplate(Request $request, CaptivePortalTemplate $template)

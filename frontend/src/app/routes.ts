@@ -23,6 +23,7 @@ import { PppoeClients } from './pages/PppoeClients';
 import { Routers } from './pages/Routers';
 import { IpBindings } from './pages/IpBindings';
 import { Dhcp } from './pages/Dhcp';
+import { RouterUsers } from './pages/RouterUsers';
 import { SupportTickets } from './pages/SupportTickets';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
       { path: 'remote-access', Component: RemoteAccess },
       { path: 'pppoe', Component: PppoeClients },
       { path: 'routers', Component: Routers },
+      { path: 'router-users', Component: RouterUsers },
       { path: 'ip-bindings', Component: IpBindings },
       { path: 'dhcp', Component: Dhcp },
       { path: 'captive-portal', Component: CaptivePortal },

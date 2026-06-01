@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle, Download, Loader2, Paintbrush, Plus, Save, Trash2 } from 'lucide-react';
+import { CheckCircle, Download, Image, Loader2, Paintbrush, Plus, Save, Trash2, Upload } from 'lucide-react';
 import { API_BASE, activateCaptivePortalTemplate, getCaptivePortalTemplates, saveCaptivePortalTemplate } from '../utils/api';
 import { useSite } from '../context/SiteContext';
 
@@ -29,6 +29,7 @@ export function CaptivePortal() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'design' | 'packages' | 'features'>('design');
@@ -137,6 +138,43 @@ export function CaptivePortal() {
 
   const updateFeature = (field: keyof typeof features, value: boolean) => {
     setDesign({ ...design, features: { ...features, [field]: value } });
+  };
+
+  const uploadLogo = async (file?: File) => {
+    if (!file) return;
+
+    setUploadingLogo(true);
+    try {
+      const token = localStorage.getItem('tenant_token');
+      const siteId = localStorage.getItem('selected_site_id');
+      const formData = new FormData();
+      formData.append('logo', file);
+
+      const response = await fetch(`${API_BASE}/tenant/captive-portal/logo`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+          ...(siteId ? { 'X-Site-ID': siteId } : {}),
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to upload logo');
+      }
+
+      setDesign({
+        ...design,
+        logo_url: data.logo_url,
+        features: { ...features, show_logo: true },
+      });
+    } catch (error: any) {
+      alert(error.message || 'Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const downloadGenerated = async () => {
@@ -275,6 +313,43 @@ export function CaptivePortal() {
                   <span className="text-muted-foreground">Marquee text</span>
                   <textarea value={design.marquee_text || ''} onChange={(e) => setDesign({ ...design, marquee_text: e.target.value })} rows={3} className="mt-1 w-full px-3 py-2 rounded-lg bg-background border border-input" />
                 </label>
+                <div className="rounded-lg border border-border p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-card-foreground">
+                    <Image className="w-4 h-4 text-primary" />
+                    Logo
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="w-20 h-20 rounded-lg border border-border bg-background grid place-items-center overflow-hidden">
+                      {design.logo_url ? (
+                        <img src={design.logo_url} alt="Uploaded logo" className="max-w-full max-h-full object-contain" />
+                      ) : (
+                        <Image className="w-8 h-8 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-muted cursor-pointer text-sm">
+                        {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        Upload logo
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                          className="hidden"
+                          disabled={uploadingLogo}
+                          onChange={(event) => {
+                            uploadLogo(event.target.files?.[0]);
+                            event.currentTarget.value = '';
+                          }}
+                        />
+                      </label>
+                      {design.logo_url && (
+                        <button onClick={() => setDesign({ ...design, logo_url: '' })} className="ml-2 text-sm text-destructive hover:underline">
+                          Remove
+                        </button>
+                      )}
+                      <p className="text-xs text-muted-foreground">PNG, JPG, WebP, GIF, or SVG up to 2MB.</p>
+                    </div>
+                  </div>
+                </div>
                 {[
                   ['primary_color', 'Primary color'],
                   ['secondary_color', 'Secondary color'],

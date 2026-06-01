@@ -296,4 +296,67 @@ class MikrotikService
             return false;
         }
     }
+
+    public function getSystemUsers(MikrotikRouter $router): array
+    {
+        if (!$this->connect($router)) {
+            return [];
+        }
+
+        try {
+            $users = $this->api->getSystemUsers();
+            $this->disconnect();
+            return $users;
+        } catch (\Exception $e) {
+            Log::error("Failed to get RouterOS system users", [
+                'router' => $router->ip_address,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return [];
+        }
+    }
+
+    public function addSystemUser(MikrotikRouter $router, array $user): bool
+    {
+        if (!$this->connect($router)) {
+            return false;
+        }
+
+        try {
+            $result = $this->api->addSystemUser($user);
+            $this->disconnect();
+            return $result;
+        } catch (\Exception $e) {
+            Log::error("Failed to add RouterOS system user", [
+                'router' => $router->ip_address,
+                'user' => $user['name'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return false;
+        }
+    }
+
+    public function setSystemUserDisabled(MikrotikRouter $router, string $id, bool $disabled): bool
+    {
+        if (!$this->connect($router)) {
+            return false;
+        }
+
+        try {
+            $result = $this->api->setSystemUserDisabled($id, $disabled);
+            $this->disconnect();
+            return $result;
+        } catch (\Exception $e) {
+            Log::error("Failed to update RouterOS system user status", [
+                'router' => $router->ip_address,
+                'id' => $id,
+                'disabled' => $disabled,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return false;
+        }
+    }
 }

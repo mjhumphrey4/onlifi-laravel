@@ -149,6 +149,7 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/captive-portal/templates', [CaptivePortalController::class, 'saveTemplate']);
     Route::post('/captive-portal/preview', [CaptivePortalController::class, 'preview']);
     Route::post('/captive-portal/download', [CaptivePortalController::class, 'download']);
+    Route::post('/captive-portal/logo', [CaptivePortalController::class, 'uploadLogo']);
     Route::post('/captive-portal/templates/{template}/activate', [CaptivePortalController::class, 'activateTemplate']);
     Route::get('/sms-credits', [SmsCreditController::class, 'summary']);
     Route::put('/sms-credits/plan', [SmsCreditController::class, 'updatePlan']);
@@ -242,6 +243,9 @@ Route::middleware(['tenant'])->group(function () {
         Route::post('/', [MikrotikController::class, 'store']);
         Route::get('/ip-bindings', [MikrotikController::class, 'getIpBindings']);
         Route::post('/ip-bindings', [MikrotikController::class, 'addIpBinding']);
+        Route::get('/system-users', [MikrotikController::class, 'getSystemUsers']);
+        Route::post('/system-users', [MikrotikController::class, 'addSystemUser']);
+        Route::post('/system-users/status', [MikrotikController::class, 'updateSystemUserStatus']);
         Route::get('/{id}', [MikrotikController::class, 'show']);
         Route::put('/{id}', [MikrotikController::class, 'update']);
         Route::delete('/{id}', [MikrotikController::class, 'destroy']);
