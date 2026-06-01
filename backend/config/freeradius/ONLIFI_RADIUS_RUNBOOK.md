@@ -86,6 +86,8 @@ perl {
     func_authorize = authorize
     func_authenticate = authenticate
     func_accounting = accounting
+    func_start_accounting = accounting
+    func_stop_accounting = accounting
     func_post_auth = post_auth
 }
 ```
@@ -294,3 +296,5 @@ sudo freeradius -X
 ```
 
 While `freeradius -X` is open, repeat the accounting `radclient` command. If no request appears in debug output, FreeRADIUS is not listening on UDP `1813` with the OnLiFi virtual server. If a request appears but no response is sent, the Perl accounting handler or database write is failing; check for `PERL ACCOUNTING ERROR` lines and run tenant/site migrations.
+
+If debug output shows `func =  exit status= Undefined subroutine &main:: called`, the Perl module is configured with blank accounting function overrides. Copy the bundled `backend/config/freeradius/perl` to `/etc/freeradius/3.0/mods-available/perl` so `func_start_accounting` and `func_stop_accounting` both point to `accounting`.

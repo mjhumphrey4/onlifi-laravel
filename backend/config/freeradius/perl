@@ -27,7 +27,8 @@ perl {
     # Set to yes to enable Perl warnings
     perl_flags = "-w"
 
-    # Set to yes to reload the Perl script on HUP signal
-    func_start_accounting = ""
-    func_stop_accounting = ""
+    # Route accounting Start/Stop packets to the same accounting function.
+    # Leaving these blank makes rlm_perl try to call an empty subroutine name.
+    func_start_accounting = accounting
+    func_stop_accounting = accounting
 }
