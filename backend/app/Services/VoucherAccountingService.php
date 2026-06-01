@@ -105,6 +105,26 @@ class VoucherAccountingService
             'failed' => 0,
         ];
 
+        if ($voucher->expires_at && now()->greaterThanOrEqualTo($voucher->expires_at)) {
+            $voucher->fill($this->filterVoucherColumns([
+                'status' => 'expired',
+                'last_accounting_at' => now(),
+                'expired_reason' => $voucher->expired_reason ?: 'time_limit',
+            ]));
+            $voucher->save();
+
+            $this->radiusService->disableVoucher($voucher);
+            $this->closeActiveAccountingRows($voucher, 'Session-Timeout');
+            $summary['reconciled']++;
+            $summary['expired']++;
+
+            if ($kick) {
+                $summary['kicked'] += $this->kickVoucherSessions($voucher->voucher_code, $site);
+            }
+
+            return $summary;
+        }
+
         $sessions = DB::connection('tenant')->table('radacct')
             ->where('username', $voucher->voucher_code)
             ->orderBy('acctstarttime')

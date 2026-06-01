@@ -14,6 +14,8 @@ Use this production path:
 - The matching `nas` row provides `tenant_id` and `site_id`.
 - The Perl module connects to the site database when `sites.database_*` is configured, otherwise it falls back to the tenant database.
 - The selected tenant/site database is checked for `radcheck` / `radreply`.
+- On successful auth, the voucher is bound to the first device MAC and the expiry timer starts.
+- Accounting updates usage/reporting data. Expiry cleanup still works from `expires_at` even if accounting is temporarily unavailable.
 
 Per-site RADIUS secrets are only practical after every router has a stable source IP, such as an SSTP VPN private IP. Then `nasname` can be the router VPN IP and FreeRADIUS can load unique clients safely.
 
@@ -110,6 +112,13 @@ FLUSH PRIVILEGES;
 ```
 
 Adjust the tenant DB pattern if your tenant/site databases use a different prefix.
+
+After deploying schema changes, migrate every tenant and site database:
+
+```bash
+cd /var/www/onlifi/backend
+php artisan onlifi:tenants:migrate
+```
 
 ## Firewall
 
@@ -233,6 +242,8 @@ Received Access-Accept
 
 If this passes locally but MikroTik still shows no RADIUS logs, the problem is network/firewall between MikroTik and FreeRADIUS.
 
+If the same voucher works on one device but rejects another, that is expected. One voucher is bound to the first `Calling-Station-Id` that successfully authenticates.
+
 ## Accounting Test
 
 Voucher timers and used/expired states depend on accounting packets. Authentication can work while accounting fails if UDP `1813` is blocked or the accounting handler cannot write to the selected site database.
@@ -272,3 +283,14 @@ If the direct accounting test works but MikroTik logs `RADIUS accounting request
 ```
 
 Expected MikroTik profile values include `use-radius=yes`, `radius-accounting=yes`, and `radius-interim-update=1m`.
+
+If the direct accounting test gets `No reply from server` on `127.0.0.1`, check the local FreeRADIUS accounting listener and loaded site config before debugging MikroTik:
+
+```bash
+sudo ss -lunp | grep ':1813'
+sudo ls -l /etc/freeradius/3.0/sites-enabled/default
+sudo grep -n "type = acct\\|port = 1813\\|accounting" /etc/freeradius/3.0/sites-enabled/default
+sudo freeradius -X
+```
+
+While `freeradius -X` is open, repeat the accounting `radclient` command. If no request appears in debug output, FreeRADIUS is not listening on UDP `1813` with the OnLiFi virtual server. If a request appears but no response is sent, the Perl accounting handler or database write is failing; check for `PERL ACCOUNTING ERROR` lines and run tenant/site migrations.

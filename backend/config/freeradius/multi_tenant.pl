@@ -120,6 +120,73 @@ sub acct_unique_id {
     ));
 }
 
+sub normalize_mac {
+    my ($mac) = @_;
+    $mac //= '';
+    $mac =~ s/[^A-Fa-f0-9]//g;
+    return lc($mac);
+}
+
+sub start_voucher_timer {
+    my ($dbh, $username) = @_;
+
+    my $sth = $dbh->prepare(q{
+        UPDATE vouchers SET
+            status = CASE WHEN status = 'unused' THEN 'used' ELSE status END,
+            first_used_at = COALESCE(first_used_at, NOW()),
+            last_used_at = NOW(),
+            expires_at = COALESCE(expires_at, DATE_ADD(NOW(), INTERVAL COALESCE(validity_minutes, validity_hours * 60) MINUTE)),
+            used_by_mac = COALESCE(NULLIF(used_by_mac, ''), ?),
+            used_by_ip = COALESCE(NULLIF(used_by_ip, ''), ?),
+            last_accounting_at = NOW()
+        WHERE voucher_code = ?
+        AND status IN ('unused', 'used')
+    });
+
+    unless ($sth) {
+        &radiusd::radlog(1, "PERL VOUCHER ERROR: Could not prepare timer update for $username: " . ($dbh->errstr // 'unknown error'));
+        return 0;
+    }
+
+    my $rows = $sth->execute(
+        $RAD_REQUEST{'Calling-Station-Id'} // '',
+        $RAD_REQUEST{'Framed-IP-Address'} // '',
+        $username
+    );
+    my $err = $dbh->errstr;
+    $sth->finish();
+
+    unless ($rows) {
+        &radiusd::radlog(1, "PERL VOUCHER WARNING: Timer update affected no rows for $username: " . ($err // 'not found or expired'));
+        return 0;
+    }
+
+    return 1;
+}
+
+sub expire_voucher {
+    my ($dbh, $username, $reason) = @_;
+    $reason //= 'time_limit';
+
+    my $voucher_update = $dbh->prepare(q{
+        UPDATE vouchers SET
+            status = 'expired',
+            expired_reason = ?,
+            last_accounting_at = NOW()
+        WHERE voucher_code = ?
+    });
+    $voucher_update->execute($reason, $username) if $voucher_update;
+    $voucher_update->finish() if $voucher_update;
+
+    my $radcheck_delete = $dbh->prepare(q{ DELETE FROM radcheck WHERE username = ? });
+    $radcheck_delete->execute($username) if $radcheck_delete;
+    $radcheck_delete->finish() if $radcheck_delete;
+
+    my $radreply_delete = $dbh->prepare(q{ DELETE FROM radreply WHERE username = ? });
+    $radreply_delete->execute($username) if $radreply_delete;
+    $radreply_delete->finish() if $radreply_delete;
+}
+
 #
 # Authorize - Check if user exists and get password
 #
@@ -160,6 +227,50 @@ sub authorize {
     }
     
     &radiusd::radlog(1, "PERL: Connected to tenant database successfully");
+
+    my $calling_mac = $RAD_REQUEST{'Calling-Station-Id'} // '';
+    my $voucher_sth = $dbh->prepare(q{
+        SELECT voucher_code, status, site_id, expires_at, used_by_mac,
+               (expires_at IS NOT NULL AND expires_at <= NOW()) AS is_expired
+        FROM vouchers
+        WHERE voucher_code = ?
+        LIMIT 1
+    });
+
+    unless ($voucher_sth) {
+        &radiusd::radlog(1, "PERL ERROR: Could not prepare voucher lookup for $username: " . ($dbh->errstr // 'unknown error'));
+        $dbh->disconnect();
+        return RLM_MODULE_FAIL;
+    }
+
+    $voucher_sth->execute($username);
+    my $voucher = $voucher_sth->fetchrow_hashref();
+    $voucher_sth->finish();
+
+    unless ($voucher) {
+        &radiusd::radlog(1, "PERL ERROR: Voucher $username does not exist in selected tenant/site database");
+        $dbh->disconnect();
+        return RLM_MODULE_NOTFOUND;
+    }
+
+    if (defined $tenant->{site_id} && defined $voucher->{site_id} && $voucher->{site_id} ne $tenant->{site_id}) {
+        &radiusd::radlog(1, "PERL REJECT: Voucher $username belongs to site_id=$voucher->{site_id}, expected site_id=$tenant->{site_id}");
+        $dbh->disconnect();
+        return RLM_MODULE_REJECT;
+    }
+
+    if (($voucher->{status} // '') eq 'expired' || ($voucher->{status} // '') eq 'disabled' || ($voucher->{is_expired} // 0)) {
+        expire_voucher($dbh, $username, 'time_limit') if ($voucher->{is_expired} // 0);
+        &radiusd::radlog(1, "PERL REJECT: Voucher $username is expired or disabled");
+        $dbh->disconnect();
+        return RLM_MODULE_REJECT;
+    }
+
+    if (($voucher->{used_by_mac} // '') ne '' && $calling_mac ne '' && normalize_mac($voucher->{used_by_mac}) ne normalize_mac($calling_mac)) {
+        &radiusd::radlog(1, "PERL REJECT: Voucher $username is bound to MAC $voucher->{used_by_mac}; request came from $calling_mac");
+        $dbh->disconnect();
+        return RLM_MODULE_REJECT;
+    }
     
     # Check radcheck for user. When a NAS is linked to a site, only vouchers
     # created for that same site are accepted by routers in that site.
@@ -284,53 +395,39 @@ sub accounting {
                 framedipaddress = VALUES(framedipaddress),
                 callingstationid = VALUES(callingstationid)
         });
-        
-        my $rows = $sth->execute(
-            $RAD_REQUEST{'Acct-Session-Id'} // '',
-            $unique_id,
-            $username,
-            $nas_ip,
-            $RAD_REQUEST{'NAS-Port-Id'} // ($RAD_REQUEST{'NAS-Port'} // ''),
-            $RAD_REQUEST{'NAS-Port-Type'} // 'Wireless-802.11',
-            $RAD_REQUEST{'Acct-Authentic'} // 'RADIUS',
-            $RAD_REQUEST{'Connect-Info'} // '',
-            $RAD_REQUEST{'Called-Station-Id'} // '',
-            $RAD_REQUEST{'Calling-Station-Id'} // '',
-            $RAD_REQUEST{'Service-Type'} // 'Login-User',
-            $RAD_REQUEST{'Framed-Protocol'} // 'PPP',
-            $RAD_REQUEST{'Framed-IP-Address'} // ''
-        );
-        
-        if ($rows) {
-            &radiusd::radlog(1, "PERL ACCOUNTING: Session started for $username (Session-ID: " . ($RAD_REQUEST{'Acct-Session-Id'} // 'N/A') . ")");
-        } else {
-            &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Failed to insert Start record for $username: " . $dbh->errstr);
-        }
-        $sth->finish();
 
-        my $voucher_start = $dbh->prepare(q{
-            UPDATE vouchers SET
-                status = CASE WHEN status = 'unused' THEN 'used' ELSE status END,
-                first_used_at = COALESCE(first_used_at, NOW()),
-                last_used_at = NOW(),
-                expires_at = COALESCE(expires_at, DATE_ADD(NOW(), INTERVAL COALESCE(validity_minutes, validity_hours * 60) MINUTE)),
-                used_by_mac = COALESCE(NULLIF(used_by_mac, ''), ?),
-                used_by_ip = COALESCE(NULLIF(used_by_ip, ''), ?),
-                last_accounting_at = NOW()
-            WHERE voucher_code = ?
-            AND status IN ('unused', 'used')
-        });
-        my $voucher_rows = $voucher_start->execute(
-            $RAD_REQUEST{'Calling-Station-Id'} // '',
-            $RAD_REQUEST{'Framed-IP-Address'} // '',
-            $username
-        );
-        if ($voucher_rows) {
+        if ($sth) {
+            my $rows = $sth->execute(
+                $RAD_REQUEST{'Acct-Session-Id'} // '',
+                $unique_id,
+                $username,
+                $nas_ip,
+                $RAD_REQUEST{'NAS-Port-Id'} // ($RAD_REQUEST{'NAS-Port'} // ''),
+                $RAD_REQUEST{'NAS-Port-Type'} // 'Wireless-802.11',
+                $RAD_REQUEST{'Acct-Authentic'} // 'RADIUS',
+                $RAD_REQUEST{'Connect-Info'} // '',
+                $RAD_REQUEST{'Called-Station-Id'} // '',
+                $RAD_REQUEST{'Calling-Station-Id'} // '',
+                $RAD_REQUEST{'Service-Type'} // 'Login-User',
+                $RAD_REQUEST{'Framed-Protocol'} // 'PPP',
+                $RAD_REQUEST{'Framed-IP-Address'} // ''
+            );
+
+            if ($rows) {
+                &radiusd::radlog(1, "PERL ACCOUNTING: Session started for $username (Session-ID: " . ($RAD_REQUEST{'Acct-Session-Id'} // 'N/A') . ")");
+            } else {
+                &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Failed to insert Start record for $username: " . $dbh->errstr);
+            }
+            $sth->finish();
+        } else {
+            &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Could not prepare Start record for $username: " . ($dbh->errstr // 'unknown error'));
+        }
+
+        if (start_voucher_timer($dbh, $username)) {
             &radiusd::radlog(1, "PERL ACCOUNTING: Voucher $username marked used and timer started");
         } else {
-            &radiusd::radlog(1, "PERL ACCOUNTING WARNING: Voucher $username was not updated on Start: " . ($dbh->errstr // 'not found or expired'));
+            &radiusd::radlog(1, "PERL ACCOUNTING WARNING: Voucher $username was not updated on Start");
         }
-        $voucher_start->finish();
     }
     elsif ($acct_status eq 'Stop') {
         my $session_time = $RAD_REQUEST{'Acct-Session-Time'} // 0;
@@ -349,22 +446,26 @@ sub accounting {
                 acctupdatetime = NOW()
             WHERE acctuniqueid = ?
         });
-        
-        my $rows = $sth->execute(
-            $session_time,
-            $input_octets,
-            $output_octets,
-            $terminate_cause,
-            $RAD_REQUEST{'Connect-Info'} // '',
-            $unique_id
-        );
-        
-        if ($rows) {
-            &radiusd::radlog(1, "PERL ACCOUNTING: Session stopped for $username - Duration: ${session_time}s, Download: ${input_octets} bytes, Upload: ${output_octets} bytes, Cause: $terminate_cause");
+
+        if ($sth) {
+            my $rows = $sth->execute(
+                $session_time,
+                $input_octets,
+                $output_octets,
+                $terminate_cause,
+                $RAD_REQUEST{'Connect-Info'} // '',
+                $unique_id
+            );
+
+            if ($rows) {
+                &radiusd::radlog(1, "PERL ACCOUNTING: Session stopped for $username - Duration: ${session_time}s, Download: ${input_octets} bytes, Upload: ${output_octets} bytes, Cause: $terminate_cause");
+            } else {
+                &radiusd::radlog(1, "PERL ACCOUNTING WARNING: No matching session found for Stop packet (Unique-ID: $unique_id)");
+            }
+            $sth->finish();
         } else {
-            &radiusd::radlog(1, "PERL ACCOUNTING WARNING: No matching session found for Stop packet (Unique-ID: $unique_id)");
+            &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Could not prepare Stop record for $username: " . ($dbh->errstr // 'unknown error'));
         }
-        $sth->finish();
         
         # Stop updates usage totals but does not invalidate an unexpired voucher.
         # The voucher remains reusable until the wall-clock expiry from first login.
@@ -388,25 +489,25 @@ sub accounting {
             WHERE voucher_code = ?
             AND status IN ('unused', 'used')
         });
-        $voucher_update->execute($total_octets, $session_time, $total_octets, $total_octets, $username);
-        $voucher_update->finish();
+        if ($voucher_update) {
+            $voucher_update->execute($total_octets, $session_time, $total_octets, $total_octets, $username);
+            $voucher_update->finish();
+        } else {
+            &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Could not prepare voucher Stop update for $username: " . ($dbh->errstr // 'unknown error'));
+        }
 
         my $voucher_status_sth = $dbh->prepare(q{
             SELECT status FROM vouchers WHERE voucher_code = ? LIMIT 1
         });
-        $voucher_status_sth->execute($username);
-        my ($voucher_status) = $voucher_status_sth->fetchrow_array();
-        $voucher_status_sth->finish();
+        my $voucher_status = '';
+        if ($voucher_status_sth) {
+            $voucher_status_sth->execute($username);
+            ($voucher_status) = $voucher_status_sth->fetchrow_array();
+            $voucher_status_sth->finish();
+        }
         
         if (($voucher_status // '') eq 'expired') {
-            my $radcheck_delete = $dbh->prepare(q{ DELETE FROM radcheck WHERE username = ? });
-            $radcheck_delete->execute($username);
-            $radcheck_delete->finish();
-
-            my $radreply_delete = $dbh->prepare(q{ DELETE FROM radreply WHERE username = ? });
-            $radreply_delete->execute($username);
-            $radreply_delete->finish();
-
+            expire_voucher($dbh, $username, 'time_limit');
             &radiusd::radlog(1, "PERL ACCOUNTING: Voucher $username expired and was removed from RADIUS");
         } else {
             &radiusd::radlog(1, "PERL ACCOUNTING: Voucher $username usage updated; still active until expiry");
@@ -425,20 +526,24 @@ sub accounting {
                 acctoutputoctets = ?
             WHERE acctuniqueid = ?
         });
-        
-        my $rows = $sth->execute(
-            $session_time,
-            $input_octets,
-            $output_octets,
-            $unique_id
-        );
-        
-        if ($rows) {
-            &radiusd::radlog(3, "PERL ACCOUNTING: Interim update for $username - Duration: ${session_time}s, Download: ${input_octets} bytes, Upload: ${output_octets} bytes");
+
+        if ($sth) {
+            my $rows = $sth->execute(
+                $session_time,
+                $input_octets,
+                $output_octets,
+                $unique_id
+            );
+
+            if ($rows) {
+                &radiusd::radlog(3, "PERL ACCOUNTING: Interim update for $username - Duration: ${session_time}s, Download: ${input_octets} bytes, Upload: ${output_octets} bytes");
+            } else {
+                &radiusd::radlog(1, "PERL ACCOUNTING WARNING: No matching session found for Interim-Update (Unique-ID: $unique_id)");
+            }
+            $sth->finish();
         } else {
-            &radiusd::radlog(1, "PERL ACCOUNTING WARNING: No matching session found for Interim-Update (Unique-ID: $unique_id)");
+            &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Could not prepare Interim update for $username: " . ($dbh->errstr // 'unknown error'));
         }
-        $sth->finish();
 
         my $total_octets = $input_octets + $output_octets;
         my $voucher_interim = $dbh->prepare(q{
@@ -450,8 +555,12 @@ sub accounting {
             WHERE voucher_code = ?
             AND status = 'used'
         });
-        $voucher_interim->execute($session_time, $total_octets, $username);
-        $voucher_interim->finish();
+        if ($voucher_interim) {
+            $voucher_interim->execute($session_time, $total_octets, $username);
+            $voucher_interim->finish();
+        } else {
+            &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Could not prepare voucher Interim update for $username: " . ($dbh->errstr // 'unknown error'));
+        }
     }
     else {
         &radiusd::radlog(1, "PERL ACCOUNTING: Unknown Acct-Status-Type: $acct_status");
@@ -469,6 +578,7 @@ sub accounting {
 sub post_auth {
     my $router_identifier = $RAD_REQUEST{'NAS-Identifier'} // '';
     my $username = $RAD_REQUEST{'User-Name'} // '';
+    my $is_reject = (($RAD_CHECK{'Post-Auth-Type'} // '') eq 'Reject') || exists $RAD_REQUEST{'Module-Failure-Message'};
     
     my $tenant = get_tenant_db($router_identifier);
     return RLM_MODULE_NOOP unless $tenant;
@@ -487,12 +597,21 @@ sub post_auth {
         VALUES (?, ?, ?, NOW())
     });
     
-    $sth->execute(
-        $username,
-        $RAD_REQUEST{'User-Password'} // '',
-        'Access-Accept'
-    );
-    $sth->finish();
+    if ($sth) {
+        $sth->execute(
+            $username,
+            $RAD_REQUEST{'User-Password'} // '',
+            $is_reject ? 'Access-Reject' : 'Access-Accept'
+        );
+        $sth->finish();
+    }
+
+    if (!$is_reject && $username ne '') {
+        if (start_voucher_timer($dbh, $username)) {
+            &radiusd::radlog(1, "PERL POST-AUTH: Voucher $username bound and timer started after Access-Accept");
+        }
+    }
+
     $dbh->disconnect();
     
     return RLM_MODULE_OK;

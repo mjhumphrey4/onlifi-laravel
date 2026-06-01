@@ -247,6 +247,48 @@ Artisan::command('onlifi:radius:diagnose {--router= : NAS-Identifier/router iden
     return (!$voucher || !$radcheck) ? Command::FAILURE : Command::SUCCESS;
 })->purpose('Diagnose one router/voucher RADIUS lookup across tenant/site DB and radcheck');
 
+Artisan::command('onlifi:tenants:migrate', function () {
+    $rows = [];
+    $failed = 0;
+
+    \App\Models\Tenant::whereNotNull('database_name')->orderBy('id')->chunkById(25, function ($tenants) use (&$rows, &$failed) {
+        foreach ($tenants as $tenant) {
+            try {
+                $tenant->configure();
+                Artisan::call('migrate', [
+                    '--database' => 'tenant',
+                    '--path' => 'database/migrations/tenant',
+                    '--force' => true,
+                ]);
+                $rows[] = [$tenant->id, '-', $tenant->database_name, 'ok'];
+            } catch (\Throwable $e) {
+                $failed++;
+                $rows[] = [$tenant->id, '-', $tenant->database_name, $e->getMessage()];
+            }
+
+            foreach (\App\Models\Site::where('tenant_id', $tenant->id)->whereNotNull('database_name')->orderBy('id')->get() as $site) {
+                try {
+                    $site->configureTenantConnection($tenant);
+                    Artisan::call('migrate', [
+                        '--database' => 'tenant',
+                        '--path' => 'database/migrations/tenant',
+                        '--force' => true,
+                    ]);
+                    $rows[] = [$tenant->id, $site->id, $site->database_name, 'ok'];
+                } catch (\Throwable $e) {
+                    $failed++;
+                    $rows[] = [$tenant->id, $site->id, $site->database_name, $e->getMessage()];
+                }
+            }
+        }
+    });
+
+    $this->table(['Tenant', 'Site', 'Database', 'Status'], $rows);
+    $this->info('Tenant/site migration pass completed.');
+
+    return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Run tenant migrations across all tenant and site databases');
+
 Schedule::command('onlifi:vouchers:cleanup')
     ->everyMinute()
     ->withoutOverlapping();
