@@ -533,13 +533,19 @@ HTML;
                 return true;
             }
 
-            document.addEventListener('DOMContentLoaded', function () {
+            function installVoucherPasswordSync() {
                 var form = document.forms['login'];
-                if (!form) {
+                if (!form || form.__onlifiPasswordSyncInstalled) {
                     return;
                 }
 
+                form.__onlifiPasswordSyncInstalled = true;
+
                 form.addEventListener('submit', function () {
+                    syncVoucherPassword(form);
+                }, true);
+
+                form.addEventListener('click', function () {
                     syncVoucherPassword(form);
                 }, true);
 
@@ -548,11 +554,29 @@ HTML;
                     usernameInput.addEventListener('input', function () {
                         syncVoucherPassword(form);
                     });
-                    syncVoucherPassword(form);
+                    usernameInput.addEventListener('change', function () {
+                        syncVoucherPassword(form);
+                    });
+                    usernameInput.addEventListener('blur', function () {
+                        syncVoucherPassword(form);
+                    });
                 }
-            });
 
-            window.onlifiSyncVoucherPassword = syncVoucherPassword;
+                var nativeSubmit = form.submit;
+                form.submit = function () {
+                    syncVoucherPassword(form);
+                    return nativeSubmit.call(form);
+                };
+
+                syncVoucherPassword(form);
+            }
+
+            document.addEventListener('DOMContentLoaded', installVoucherPasswordSync);
+            installVoucherPasswordSync();
+
+            window.onlifiSyncVoucherPassword = function (form) {
+                return syncVoucherPassword(form || document.forms['login']);
+            };
         })();
     </script>
 HTML;

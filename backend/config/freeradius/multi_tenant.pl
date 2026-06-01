@@ -323,6 +323,11 @@ sub authorize {
         $dbh->disconnect();
         return RLM_MODULE_NOTFOUND;
     }
+
+    if (($RAD_REQUEST{'User-Password'} // '') eq '' && ($RAD_CHECK{'Cleartext-Password'} // '') eq $username) {
+        $RAD_REQUEST{'User-Password'} = $username;
+        &radiusd::radlog(1, "PERL RECOVERY: Empty User-Password replaced with voucher code for one-field voucher login.");
+    }
     
     &radiusd::radlog(1, "PERL SUCCESS: User $username authorized from tenant DB: $tenant->{database_name}");
     
