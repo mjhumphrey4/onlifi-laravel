@@ -21,7 +21,6 @@ class TenantService
         try {
             $slug = Str::slug($data['name']);
             $autoApprove = SystemSetting::get('auto_approve_tenants', false);
-            $defaultTrialDays = (int) SystemSetting::get('default_trial_days', 15);
             $databasePassword = Str::random(32);
 
             $tenant = Tenant::create([
@@ -38,7 +37,8 @@ class TenantService
                 'status' => $autoApprove ? 'approved' : 'pending',
                 'is_active' => $autoApprove,
                 'approved_at' => $autoApprove ? now() : null,
-                'trial_ends_at' => $autoApprove ? now()->addDays($defaultTrialDays) : null,
+                'trial_ends_at' => null,
+                'subscription_ends_at' => null,
                 'sms_enabled' => true,
                 'settings' => $data['settings'] ?? null,
             ]);

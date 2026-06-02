@@ -183,19 +183,16 @@ class Tenant extends Model
 
     public function billingStatus(): array
     {
-        $trialEndsAt = $this->trial_ends_at;
-        $subscriptionEndsAt = $this->subscription_ends_at;
-
         return [
             'state' => 'active',
             'requires_payment' => false,
             'services_active' => $this->canAccess(),
-            'trial_ends_at' => $trialEndsAt?->toIso8601String(),
-            'subscription_ends_at' => $subscriptionEndsAt?->toIso8601String(),
+            'trial_ends_at' => null,
+            'subscription_ends_at' => null,
             'current_period_ends_at' => null,
-            'monthly_amount' => (float) SystemSetting::get('tenant_monthly_subscription_amount', 50000),
-            'currency' => (string) SystemSetting::get('tenant_subscription_currency', 'UGX'),
-            'renewal_months' => (int) SystemSetting::get('subscription_renewal_months', 1),
+            'monthly_amount' => 0,
+            'currency' => 'UGX',
+            'renewal_months' => 0,
         ];
     }
 }

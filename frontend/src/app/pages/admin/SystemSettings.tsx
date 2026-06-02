@@ -144,12 +144,6 @@ export default function SystemSettings() {
     payment: [
       { key: 'platform_collection_fee_percent', label: 'Collection Fee (%)', type: 'number', description: 'Percentage fee on incoming payments' },
       { key: 'platform_minimum_disbursement', label: 'Minimum Disbursement', type: 'number', description: 'Minimum tenant payout amount' },
-      { key: 'default_trial_days', label: 'Default Trial Days', type: 'number', description: 'Trial period granted when a tenant is approved' },
-      { key: 'tenant_monthly_subscription_amount', label: 'Monthly Subscription Amount', type: 'number', description: 'Default monthly platform charge for tenants' },
-      { key: 'tenant_subscription_currency', label: 'Subscription Currency', type: 'string', description: 'Currency displayed on subscription invoices and prompts' },
-      { key: 'subscription_renewal_months', label: 'Renewal Months', type: 'number', description: 'Default months purchased when a tenant renews' },
-      { key: 'require_subscription', label: 'Require Subscription', type: 'boolean', description: 'Require tenants to renew after trial expiry' },
-      { key: 'dashboard_lock_on_expired_subscription', label: 'Lock Expired Dashboard', type: 'boolean', description: 'Keep services active but block dashboard access when billing expires' },
       { key: 'payment_gateway', label: 'Payment Gateway', type: 'string', description: 'Active payment gateway' },
     ],
     radius: [

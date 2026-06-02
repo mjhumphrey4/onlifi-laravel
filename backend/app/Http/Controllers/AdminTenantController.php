@@ -41,8 +41,6 @@ class AdminTenantController extends Controller
 
         $admin = $request->user();
         $dbProvisioningWarning = null;
-        $defaultTrialDays = (int) \App\Models\SystemSetting::get('default_trial_days', 15);
-
         // Try to provision database first, before marking as approved
         try {
             $tenant->provisionDatabase();
@@ -61,7 +59,8 @@ class AdminTenantController extends Controller
             'is_active' => true,
             'approved_at' => now(),
             'approved_by' => $admin->id,
-            'trial_ends_at' => $tenant->trial_ends_at ?: now()->addDays($defaultTrialDays),
+            'trial_ends_at' => null,
+            'subscription_ends_at' => null,
         ]);
 
         try {
@@ -130,25 +129,6 @@ class AdminTenantController extends Controller
             'suspended_tenants' => Tenant::where('status', 'suspended')->count(),
             'active_tenants' => Tenant::where('is_active', true)->count(),
             'approved_active_tenants' => Tenant::where('status', 'approved')->where('is_active', true)->count(),
-            'trial_tenants' => Tenant::where('status', 'approved')
-                ->whereNotNull('trial_ends_at')
-                ->where('trial_ends_at', '>', now())
-                ->count(),
-            'subscribed_tenants' => Tenant::where('status', 'approved')
-                ->whereNotNull('subscription_ends_at')
-                ->where('subscription_ends_at', '>', now())
-                ->count(),
-            'expired_billing_tenants' => Tenant::where('status', 'approved')
-                ->where('is_active', true)
-                ->where(function ($query) {
-                    $query->whereNull('subscription_ends_at')
-                        ->orWhere('subscription_ends_at', '<=', now());
-                })
-                ->where(function ($query) {
-                    $query->whereNull('trial_ends_at')
-                        ->orWhere('trial_ends_at', '<=', now());
-                })
-                ->count(),
             'tenants_with_fee_overrides' => Tenant::whereNotNull('collection_fee_percent')
                 ->orWhereNotNull('disbursement_fee_percent')
                 ->orWhereNotNull('minimum_disbursement')
@@ -190,7 +170,8 @@ class AdminTenantController extends Controller
                 'is_active' => true,
                 'approved_at' => now(),
                 'approved_by' => $request->user()?->id,
-                'trial_ends_at' => $tenant->trial_ends_at ?: now()->addDays((int) \App\Models\SystemSetting::get('default_trial_days', 15)),
+                'trial_ends_at' => null,
+                'subscription_ends_at' => null,
             ]);
             $actions[] = 'tenant_activated';
         }
@@ -218,12 +199,7 @@ class AdminTenantController extends Controller
                 ->orderBy('approved_at', 'desc')
                 ->take(10)
                 ->get(),
-            'expiring_trials' => Tenant::where('status', 'approved')
-                ->whereNotNull('trial_ends_at')
-                ->whereBetween('trial_ends_at', [now(), now()->addDays((int) \App\Models\SystemSetting::get('trial_expiry_days', 3))])
-                ->orderBy('trial_ends_at')
-                ->take(10)
-                ->get(),
+            'expiring_trials' => collect(),
             'recent_repairs' => [],
         ];
 

@@ -167,8 +167,7 @@ class AnnouncementController extends Controller
                   });
             });
         } else {
-            // For non-tenant users (admins), show all active announcements
-            // Admins see all announcements regardless of target
+            $query->whereIn('target', ['all', 'active']);
         }
 
         $announcements = $query->orderBy('created_at', 'desc')

@@ -114,7 +114,6 @@ export const rejectTenant = (id: number, reason: string) => post(`/super-admin/t
 export const suspendTenant = (id: number) => post(`/super-admin/tenants/${id}/suspend`);
 export const activateTenant = (id: number) => post(`/super-admin/tenants/${id}/activate`);
 export const getTenantStats = (id: number) => get(`/super-admin/tenants/${id}/stats`);
-export const extendTenantTrial = (id: number, days: number) => post(`/super-admin/tenants/${id}/extend-trial`, { days });
 
 // ============ ANNOUNCEMENTS (Admin) ============
 export const getAnnouncements = () => get('/super-admin/announcements');
@@ -159,9 +158,6 @@ export const tenantLogout = () => post('/tenant/logout');
 
 export const tenantMe = () => get('/tenant/me');
 export const updateTenantProfile = (data: Record<string, unknown>) => put('/tenant/profile', data);
-export const getTenantBillingStatus = () => get('/tenant/billing/status');
-export const initiateSubscriptionPayment = (data: Record<string, unknown>) => post('/tenant/billing/subscribe', data);
-export const checkSubscriptionPaymentStatus = (ref: string) => get(`/tenant/billing/payment-status?ref=${encodeURIComponent(ref)}`);
 export const getCaptivePortalTemplates = () => get('/tenant/captive-portal/templates');
 export const saveCaptivePortalTemplate = (data: Record<string, unknown>) => post('/tenant/captive-portal/templates', data);
 export const activateCaptivePortalTemplate = (id: number) => post(`/tenant/captive-portal/templates/${id}/activate`);

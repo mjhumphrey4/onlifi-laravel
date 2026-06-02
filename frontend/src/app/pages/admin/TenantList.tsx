@@ -33,14 +33,7 @@ interface Tenant {
   status: 'pending' | 'approved' | 'rejected' | 'suspended';
   is_active: boolean;
   created_at: string;
-  trial_ends_at?: string | null;
-  subscription_ends_at?: string | null;
   sms_credits?: number;
-  billing?: {
-    state: 'active' | 'trial' | 'subscribed' | 'expired';
-    requires_payment: boolean;
-    current_period_ends_at?: string | null;
-  };
   support_notes?: string | null;
   users?: { id: number; name: string; email: string }[];
   primary_email?: string;
@@ -204,42 +197,6 @@ export default function TenantList() {
     setActionMenuOpen(null);
   };
 
-  const handleExtendTrial = async (tenant: Tenant) => {
-    const value = prompt(`Extend trial for "${tenant.name}" by how many days?`, '15');
-    if (!value) return;
-
-    const days = Number(value);
-    if (!Number.isInteger(days) || days < 1) {
-      alert('Enter a whole number of days');
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('admin_token');
-      const response = await fetch(`${API_BASE}/super-admin/tenants/${tenant.id}/extend-trial`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ days }),
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        alert(data.message || 'Trial extended');
-        fetchTenants();
-      } else {
-        alert(data.message || 'Failed to extend trial');
-      }
-    } catch (error) {
-      console.error('Error extending trial:', error);
-      alert('Failed to extend trial');
-    }
-
-    setActionMenuOpen(null);
-  };
-
   const handleAdjustSmsCredits = async (tenant: Tenant) => {
     const value = prompt(`Add or remove SMS credits for "${tenant.name}". Use a negative number to deduct.`, '100');
     if (!value) return;
@@ -345,36 +302,6 @@ export default function TenantList() {
     );
   };
 
-  const getBillingBadge = (tenant: Tenant) => {
-    const billing = tenant.billing;
-    const state = billing?.state || 'expired';
-    const labels: Record<string, string> = {
-      trial: 'Trial',
-      subscribed: 'Subscribed',
-      expired: 'Expired',
-      active: 'Active',
-    };
-    const styles: Record<string, string> = {
-      trial: 'bg-blue-500/20 text-blue-300',
-      subscribed: 'bg-emerald-500/20 text-emerald-300',
-      expired: 'bg-red-500/20 text-red-300',
-      active: 'bg-slate-500/20 text-slate-300',
-    };
-
-    return (
-      <div className="space-y-1">
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles[state] || styles.active}`}>
-          <Clock className="w-3 h-3" /> {labels[state] || state}
-        </span>
-        {billing?.current_period_ends_at && (
-          <p className="text-xs text-slate-500">
-            Ends {new Date(billing.current_period_ends_at).toLocaleDateString()}
-          </p>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -428,7 +355,6 @@ export default function TenantList() {
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Email</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Database</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Status</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Billing</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">SMS</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Created</th>
                 <th className="text-right px-6 py-4 text-sm font-medium text-slate-400">Actions</th>
@@ -437,14 +363,14 @@ export default function TenantList() {
             <tbody className="divide-y divide-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
+                  <td colSpan={7} className="px-6 py-12 text-center">
                     <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin mx-auto" />
                     <p className="mt-2 text-slate-400">Loading tenants...</p>
                   </td>
                 </tr>
               ) : tenants.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
+                  <td colSpan={7} className="px-6 py-12 text-center">
                     <Users className="w-12 h-12 text-slate-600 mx-auto" />
                     <p className="mt-2 text-slate-400">No tenants found</p>
                   </td>
@@ -470,7 +396,6 @@ export default function TenantList() {
                       </span>
                     </td>
                     <td className="px-6 py-4">{getStatusBadge(tenant.status, tenant.is_active)}</td>
-                    <td className="px-6 py-4">{getBillingBadge(tenant)}</td>
                     <td className="px-6 py-4 text-slate-300">{Number(tenant.sms_credits || 0).toLocaleString()}</td>
                     <td className="px-6 py-4 text-slate-300">
                       {new Date(tenant.created_at).toLocaleDateString()}
@@ -531,12 +456,6 @@ export default function TenantList() {
                               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-cyan-400 hover:bg-slate-600 transition-colors"
                             >
                               <Wrench className="w-4 h-4" /> Repair Tenant
-                            </button>
-                            <button
-                              onClick={() => handleExtendTrial(tenant)}
-                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-blue-400 hover:bg-slate-600 transition-colors"
-                            >
-                              <Clock className="w-4 h-4" /> Extend Trial
                             </button>
                             <button
                               onClick={() => handleAdjustSmsCredits(tenant)}
@@ -661,8 +580,6 @@ function EditTenantModal({ tenant, onClose, onSave }: { tenant: Tenant; onClose:
   const [formData, setFormData] = useState({
     name: tenant.name,
     domain: tenant.domain || '',
-    trial_ends_at: tenant.trial_ends_at ? tenant.trial_ends_at.slice(0, 10) : '',
-    subscription_ends_at: tenant.subscription_ends_at ? tenant.subscription_ends_at.slice(0, 10) : '',
     support_notes: tenant.support_notes || '',
   });
   const [saving, setSaving] = useState(false);
@@ -679,11 +596,7 @@ function EditTenantModal({ tenant, onClose, onSave }: { tenant: Tenant; onClose:
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          trial_ends_at: formData.trial_ends_at || null,
-          subscription_ends_at: formData.subscription_ends_at || null,
-        }),
+        body: JSON.stringify(formData),
       });
 
       if (response.ok) {
@@ -737,26 +650,6 @@ function EditTenantModal({ tenant, onClose, onSave }: { tenant: Tenant; onClose:
               rows={4}
               placeholder="Internal notes about this tenant"
             />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Trial Ends</label>
-              <input
-                type="date"
-                value={formData.trial_ends_at}
-                onChange={(e) => setFormData({ ...formData, trial_ends_at: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Subscription Ends</label>
-              <input
-                type="date"
-                value={formData.subscription_ends_at}
-                onChange={(e) => setFormData({ ...formData, subscription_ends_at: e.target.value })}
-                className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
           </div>
           <div className="flex gap-3 pt-4">
             <button

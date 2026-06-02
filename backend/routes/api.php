@@ -28,6 +28,8 @@ use App\Http\Controllers\PppoeClientController;
 use App\Http\Controllers\SupportTicketController;
 use App\Http\Controllers\SubUserController;
 
+Route::options('/{any}', fn () => response()->noContent())->where('any', '.*');
+
 Route::post('/super-admin/login', [SuperAdminAuthController::class, 'login']);
 
 // Tenant Authentication Routes
@@ -36,6 +38,7 @@ Route::post('/tenant/forgot-password', [TenantAuthController::class, 'forgotPass
 Route::post('/tenant/reset-password', [TenantAuthController::class, 'resetPassword']);
 
 Route::get('/system/settings/public', [SystemSettingController::class, 'publicSettings']);
+Route::get('/announcements/active', [AnnouncementController::class, 'activeAnnouncements']);
 Route::post('/billing/ipn', [SubscriptionBillingController::class, 'ipn']);
 Route::post('/billing/failure', [SubscriptionBillingController::class, 'failure']);
 Route::get('/captive/config/{token}', [CaptivePortalController::class, 'config']);
@@ -87,7 +90,6 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
         Route::post('/{tenant}/reject', [AdminTenantController::class, 'reject']);
         Route::post('/{tenant}/suspend', [TenantController::class, 'suspend']);
         Route::post('/{tenant}/activate', [TenantController::class, 'activate']);
-        Route::post('/{tenant}/extend-trial', [TenantController::class, 'extendTrial']);
         Route::post('/{tenant}/reset-password', [AdminTenantController::class, 'resetPassword']);
         Route::post('/{tenant}/repair', [AdminTenantController::class, 'repairTenant']);
         Route::post('/{tenant}/sms-credits/adjust', [AdminTenantController::class, 'adjustSmsCredits']);
@@ -147,9 +149,6 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/2fa/confirm', [TwoFactorController::class, 'confirm']);
     Route::post('/2fa/disable', [TwoFactorController::class, 'disable']);
     Route::middleware('tenant.admin')->group(function () {
-        Route::get('/billing/status', [SubscriptionBillingController::class, 'status']);
-        Route::post('/billing/subscribe', [SubscriptionBillingController::class, 'subscribe']);
-        Route::get('/billing/payment-status', [SubscriptionBillingController::class, 'paymentStatus']);
         Route::get('/captive-portal/templates', [CaptivePortalController::class, 'templates']);
         Route::post('/captive-portal/templates', [CaptivePortalController::class, 'saveTemplate']);
         Route::post('/captive-portal/preview', [CaptivePortalController::class, 'preview']);
@@ -180,10 +179,7 @@ Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     });
 });
 
-// Active announcements for all authenticated users
 Route::middleware(['auth:sanctum'])->group(function () {
-    Route::get('/announcements/active', [AnnouncementController::class, 'activeAnnouncements']);
-    
     // NAS (Network Access Server) management for FreeRADIUS
     // Uses central database, not tenant database
     Route::prefix('nas')->group(function () {

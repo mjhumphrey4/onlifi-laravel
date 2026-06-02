@@ -228,12 +228,15 @@ class TelemetryController extends Controller
                 $previous = $previousByRouter[$key] ?? null;
 
                 if ($previous && $createdAt->greaterThanOrEqualTo($start) && $createdAt->lessThanOrEqualTo($end)) {
+                    $seconds = max(0, \Carbon\Carbon::parse($previous->created_at)->diffInSeconds($createdAt));
                     $rxDelta = max(0, (int) ($row->total_rx_bytes ?? 0) - (int) ($previous->total_rx_bytes ?? 0));
                     $txDelta = max(0, (int) ($row->total_tx_bytes ?? 0) - (int) ($previous->total_tx_bytes ?? 0));
 
-                    $downloadBytes += $rxDelta;
-                    $uploadBytes += $txDelta;
-                    $sampleCount++;
+                    if ($seconds > 0 && $this->isReasonableWanDelta($rxDelta, $txDelta, $seconds)) {
+                        $downloadBytes += $rxDelta;
+                        $uploadBytes += $txDelta;
+                        $sampleCount++;
+                    }
                 }
 
                 if (!empty($row->wan_interfaces)) {
@@ -477,5 +480,18 @@ class TelemetryController extends Controller
             'download' => round(($rxDelta * 8) / ($seconds * 1024), 2),
             'upload' => round(($txDelta * 8) / ($seconds * 1024), 2),
         ];
+    }
+
+    private function isReasonableWanDelta(int $rxDelta, int $txDelta, int $seconds): bool
+    {
+        if ($seconds <= 0) {
+            return false;
+        }
+
+        // 10 Gbps ceiling for a MikroTik hotspot deployment. This filters bad counter jumps
+        // caused by stale duplicate samples, interface changes, or corrupted telemetry posts.
+        $maxBytes = (int) ceil((10_000_000_000 / 8) * $seconds);
+
+        return $rxDelta <= $maxBytes && $txDelta <= $maxBytes;
     }
 }

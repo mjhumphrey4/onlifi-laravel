@@ -281,7 +281,7 @@ class TenantAuthController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'string', 'max:100'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('central.tenant_users', 'email')->ignore($user->id)],
+            'email' => ['required', 'email', 'max:255', Rule::unique(TenantUser::class, 'email')->ignore($user->id)],
             'tenant_name' => ['required', 'string', 'max:255'],
             'default_withdraw_phone' => ['nullable', 'string', 'max:32'],
         ]);

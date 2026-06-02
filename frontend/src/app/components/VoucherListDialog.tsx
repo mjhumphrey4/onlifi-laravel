@@ -137,21 +137,37 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
 
   const buildVoucherCard = (voucher: Voucher, activeTemplate: VoucherTemplate) => {
     const salesPoint = voucher.sales_point?.name || voucher.sales_point_name || '';
+    const design = (activeTemplate as any).design || {};
+    const style = design.style || 'blue-strip';
+    const number = String(vouchers.findIndex((item) => item.id === voucher.id) + 1).padStart(4, '0');
+    const duration = voucher.validity_hours ? `${voucher.validity_hours}h` : `${group.validity_hours}h`;
+    const price = `UGX ${Number(voucher.price || group.price).toLocaleString()}`;
+    const iconClass = style === 'wifi-icon' ? 'wifi-svg-icon' : style === 'green-numbered' ? 'user-avatar-icon' : 'key-svg-icon';
+
     return `
-      <div class="voucher-card">
+      <div class="voucher-card style-${escapeHtml(style)}">
+        <div class="voucher-header">
+          ${(design.numbering ?? true) !== false ? `<span class="voucher-number">#${escapeHtml(number)}</span>` : ''}
+          <span>${escapeHtml(activeTemplate.header_text || 'STK WIFI POINT')}</span>
+        </div>
+        <div class="wifi-name">${escapeHtml(group.group_name || activeTemplate.name || 'WiFi Access')}</div>
         ${activeTemplate.logo_url ? `<img class="voucher-logo" src="${escapeHtml(activeTemplate.logo_url)}" alt="Logo" />` : ''}
-        ${activeTemplate.header_text ? `<div class="voucher-header">${escapeHtml(activeTemplate.header_text)}</div>` : ''}
-        <div class="voucher-icons"><span class="wifi-icon"></span><span class="key-icon"></span></div>
-        ${activeTemplate.show_voucher_code ? `<div class="voucher-code">${escapeHtml(voucher.voucher_code)}</div>` : ''}
-        <div class="voucher-meta">
-          ${activeTemplate.show_voucher_type ? `<div><span>Type</span><strong>${escapeHtml(voucher.voucher_type || group.group_name)}</strong></div>` : ''}
-          ${activeTemplate.show_duration ? `<div><span>Duration</span><strong>${escapeHtml(voucher.validity_hours)}h</strong></div>` : ''}
-          ${activeTemplate.show_price ? `<div><span>Price</span><strong>UGX ${Number(voucher.price || group.price).toLocaleString()}</strong></div>` : ''}
-          ${activeTemplate.show_sales_point && salesPoint ? `<div><span>Sales Point</span><strong>${escapeHtml(salesPoint)}</strong></div>` : ''}
-          ${activeTemplate.show_expiry && voucher.expires_at ? `<div><span>Expiry</span><strong>${escapeHtml(new Date(voucher.expires_at).toLocaleDateString())}</strong></div>` : ''}
+        <div class="voucher-body">
+          <div class="user-section">
+            <span class="${iconClass}"></span>
+            ${activeTemplate.show_voucher_code ? `<strong class="voucher-code">${escapeHtml(voucher.voucher_code)}</strong>` : ''}
+          </div>
+          <div class="voucher-meta">
+            ${activeTemplate.show_voucher_type ? `<div><span>Package:</span><strong>${escapeHtml(voucher.voucher_type || group.group_name)}</strong></div>` : ''}
+            ${activeTemplate.show_duration ? `<div><span>Duration:</span><strong>${escapeHtml(duration)}</strong></div>` : ''}
+            ${activeTemplate.show_price ? `<div><span>Price:</span><strong>${escapeHtml(price)}</strong></div>` : ''}
+            ${activeTemplate.show_sales_point && salesPoint ? `<div><span>Sales Point:</span><strong>${escapeHtml(salesPoint)}</strong></div>` : ''}
+            ${activeTemplate.show_expiry && voucher.expires_at ? `<div><span>Expiry:</span><strong>${escapeHtml(new Date(voucher.expires_at).toLocaleDateString())}</strong></div>` : ''}
+          </div>
         </div>
         ${activeTemplate.instructions ? `<div class="voucher-instructions">${escapeHtml(activeTemplate.instructions)}</div>` : ''}
         ${activeTemplate.footer_text ? `<div class="voucher-footer">${escapeHtml(activeTemplate.footer_text)}</div>` : ''}
+        <div class="powered">Powered by onlifi.net</div>
       </div>
     `;
   };
@@ -181,35 +197,61 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       <head>
         <title>${escapeHtml(heading)} - ${escapeHtml(group.group_name)}</title>
         <style>
-          @page { size: ${escapeHtml(activeTemplate.paper_size || 'A4')}; margin: ${dense ? '5mm' : '12mm'}; }
-          body { font-family: Arial, sans-serif; padding: 0; margin: 0; color: ${escapeHtml(activeTemplate.text_color)}; }
+          @page { size: ${escapeHtml(activeTemplate.paper_size || 'A4')}; margin: ${dense ? '5mm' : '8mm'}; }
+          body { font-family: Arial, sans-serif; padding: 0; margin: 0; color: ${escapeHtml(activeTemplate.text_color)}; background: #fff; }
           h1 { text-align: center; margin: 0 0 ${dense ? '6px' : '14px'}; font-size: ${dense ? '12px' : '20px'}; }
-          .voucher-grid { display: grid; grid-template-columns: repeat(${columns}, minmax(0, 1fr)); gap: ${dense ? '3px' : '10px'}; }
+          .voucher-grid { font-size: 0; }
           .voucher-card {
+            position: relative;
+            display: inline-block;
+            vertical-align: top;
+            width: ${dense ? '23mm' : '52mm'};
+            height: ${dense ? '25mm' : '38mm'};
+            margin: ${dense ? '1mm' : '1.4mm'};
+            box-sizing: border-box;
+            overflow: hidden;
             background: ${escapeHtml(activeTemplate.background_color)};
             color: ${escapeHtml(activeTemplate.text_color)};
-            border: 1.5px dashed ${escapeHtml(activeTemplate.accent_color)};
+            border: 2px solid ${escapeHtml(activeTemplate.accent_color)};
             border-radius: ${dense ? '4px' : '8px'};
-            padding: ${dense ? '4px' : '12px'};
-            min-height: ${dense ? '58px' : '140px'};
             page-break-inside: avoid;
             break-inside: avoid;
+            font-size: ${dense ? '5.5px' : '10.8px'};
           }
-          .voucher-logo { max-height: ${dense ? '14px' : '42px'}; max-width: ${dense ? '46px' : '120px'}; object-fit: contain; display: block; margin: 0 auto ${dense ? '2px' : '8px'}; }
-          .voucher-header, .voucher-footer { text-align: center; color: ${escapeHtml(activeTemplate.accent_color)}; font-weight: 700; font-size: ${dense ? '6px' : '12px'}; }
-          .voucher-icons { display: flex; justify-content: center; align-items: center; gap: ${dense ? '4px' : '9px'}; margin: ${dense ? '1px 0' : '6px 0 2px'}; }
-          .wifi-icon { position: relative; width: ${dense ? '14px' : '24px'}; height: ${dense ? '10px' : '18px'}; display: inline-block; }
-          .wifi-icon:before, .wifi-icon:after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); border: 2px solid ${escapeHtml(activeTemplate.accent_color)}; border-bottom: 0; border-radius: 999px 999px 0 0; }
-          .wifi-icon:before { width: 100%; height: 80%; top: 0; }
-          .wifi-icon:after { width: 54%; height: 42%; top: 42%; }
-          .key-icon { position: relative; width: ${dense ? '14px' : '24px'}; height: ${dense ? '8px' : '14px'}; display: inline-block; border: 2px solid ${escapeHtml(activeTemplate.accent_color)}; border-radius: 999px; }
-          .key-icon:before { content: ""; position: absolute; width: ${dense ? '8px' : '15px'}; height: 2px; background: ${escapeHtml(activeTemplate.accent_color)}; right: -${dense ? '8px' : '14px'}; top: 50%; transform: translateY(-50%); }
-          .voucher-code { text-align: center; color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '10px' : '24px'}; font-weight: 800; letter-spacing: ${dense ? '0' : '1px'}; margin: ${dense ? '2px 0' : '8px 0'}; }
-          .voucher-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: ${dense ? '1px' : '6px'}; font-size: ${dense ? '5.5px' : '11px'}; }
-          .voucher-meta span { display: block; opacity: .65; }
-          .voucher-meta strong { display: block; font-size: ${dense ? '6px' : '12px'}; }
-          .voucher-instructions { margin-top: ${dense ? '2px' : '8px'}; padding-top: ${dense ? '2px' : '8px'}; border-top: 1px solid ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '5px' : '10px'}; opacity: .75; text-align: center; }
-          @media print { .voucher-card { page-break-inside: avoid; } }
+          .style-modern-blue { width: ${dense ? '30mm' : '63mm'}; height: ${dense ? '25mm' : '47mm'}; border-color: #0444cf; box-shadow: none; }
+          .voucher-header { position: relative; min-height: ${dense ? '4mm' : '8mm'}; padding: ${dense ? '1mm 1.5mm' : '1.7mm 2.4mm'}; text-align: center; color: #fff; font-weight: 800; background: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '5px' : '12px'}; line-height: 1.1; }
+          .style-modern-blue .voucher-header { background: linear-gradient(90deg, #0444cf, #0666ff); text-align: left; padding-left: ${dense ? '2mm' : '8mm'}; }
+          .voucher-number { position: absolute; left: ${dense ? '1mm' : '2mm'}; top: 50%; transform: translateY(-50%); font-size: ${dense ? '4.5px' : '8.5px'}; background: rgba(255,255,255,.24); padding: 1px 4px; border-radius: 3px; }
+          .style-blue-strip .voucher-number, .style-modern-blue .voucher-number { left: auto; right: ${dense ? '1mm' : '2mm'}; }
+          .wifi-name { text-align: center; font-size: ${dense ? '4.8px' : '10px'}; font-weight: 800; color: ${escapeHtml(activeTemplate.accent_color)}; padding: ${dense ? '0.8mm 0' : '1.2mm 0'}; background: rgba(46,204,113,.06); }
+          .style-blue-strip .wifi-name, .style-modern-blue .wifi-name { color: #1e8449; background: #fff; }
+          .voucher-logo { position: absolute; right: 2mm; bottom: 8mm; max-height: ${dense ? '7mm' : '14mm'}; max-width: ${dense ? '12mm' : '26mm'}; object-fit: contain; }
+          .voucher-body { padding: ${dense ? '1mm 1.5mm' : '1.8mm 2.7mm'} ${dense ? '1.5mm' : '2.7mm'} ${dense ? '5mm' : '10mm'}; }
+          .style-modern-blue .voucher-body { padding-top: ${dense ? '1.2mm' : '3mm'}; }
+          .user-section { display: flex; align-items: center; gap: ${dense ? '1mm' : '2mm'}; margin: ${dense ? '0.8mm 0' : '1mm 0 1.8mm'}; }
+          .style-modern-blue .user-section { border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 5px; padding: ${dense ? '1mm' : '2mm'}; }
+          .voucher-code { color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '7px' : '16px'}; line-height: 1.05; word-break: break-all; letter-spacing: .3px; }
+          .style-modern-blue .voucher-code { color: #1e3a8a; }
+          .key-svg-icon, .wifi-svg-icon, .user-avatar-icon { display: inline-block; flex: 0 0 auto; width: ${dense ? '5mm' : '8mm'}; height: ${dense ? '5mm' : '8mm'}; position: relative; }
+          .key-svg-icon:before { content: ""; position: absolute; left: 1mm; top: 1mm; width: 3.2mm; height: 3.2mm; border: 2px solid ${escapeHtml(activeTemplate.accent_color)}; border-radius: 999px; }
+          .key-svg-icon:after { content: ""; position: absolute; left: 4.1mm; top: 2.5mm; width: 4mm; height: 2px; background: ${escapeHtml(activeTemplate.accent_color)}; box-shadow: 2mm 1.2mm 0 -0.5mm ${escapeHtml(activeTemplate.accent_color)}; }
+          .user-avatar-icon:before { content: ""; position: absolute; left: 1.4mm; top: .5mm; width: 4mm; height: 4mm; border-radius: 999px; background: #4c1d95; }
+          .user-avatar-icon:after { content: ""; position: absolute; left: .5mm; top: 4.5mm; width: 6mm; height: 3mm; border-radius: 4mm 4mm 0 0; background: #4c1d95; }
+          .wifi-svg-icon:before, .wifi-svg-icon:after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); border: 2.5px solid #2563eb; border-bottom: 0; border-radius: 999px 999px 0 0; }
+          .wifi-svg-icon:before { top: 1mm; width: 8mm; height: 5mm; }
+          .wifi-svg-icon:after { top: 4mm; width: 4mm; height: 2.5mm; }
+          .wifi-svg-icon { border-radius: 999px; }
+          .wifi-svg-icon span, .wifi-svg-icon i { display: none; }
+          .voucher-meta { font-size: ${dense ? '4.8px' : '10.8px'}; line-height: 1.25; }
+          .voucher-meta div { margin: ${dense ? '0' : '1mm'} 0; }
+          .voucher-meta span { display: inline-block; min-width: ${dense ? '10mm' : '17mm'}; color: #111827; }
+          .voucher-meta strong { font-weight: 700; }
+          .style-modern-blue .voucher-meta { display: flex; flex-wrap: wrap; gap: 1mm 3mm; color: #374151; }
+          .style-modern-blue .voucher-meta span { min-width: auto; font-weight: 700; }
+          .voucher-instructions { position: absolute; left: 2mm; right: 2mm; bottom: ${dense ? '3.2mm' : '6mm'}; border-top: 1px solid #eee; padding-top: .8mm; font-size: ${dense ? '4px' : '7px'}; color: #666; }
+          .voucher-footer { position: absolute; left: 0; right: 0; bottom: ${dense ? '2mm' : '4mm'}; padding: 0 2mm; font-size: ${dense ? '4px' : '7px'}; color: #666; text-align: center; }
+          .powered { position: absolute; left: 0; right: 0; bottom: .8mm; color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '3.8px' : '7px'}; font-weight: 700; text-align: center; }
+          @media print { h1 { display: none; } .voucher-card { page-break-inside: avoid; } }
         </style>
       </head>
       <body>
