@@ -184,7 +184,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       <head>
         <title>${escapeHtml(heading)} - ${escapeHtml(group.group_name)}</title>
         <style>
-          @page { size: ${escapeHtml(activeTemplate.paper_size || 'A4')}; margin: ${dense ? '5mm' : '8mm'}; }
+          @page { size: ${escapeHtml(activeTemplate.paper_size || 'A4')} landscape; margin: ${dense ? '5mm' : '8mm'}; }
           * { box-sizing: border-box; }
           body { font-family: Arial, sans-serif; padding: 0; margin: 0; color: ${escapeHtml(activeTemplate.text_color)}; background: #fff; }
           .print-toolbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; margin: 0 0 ${dense ? '6px' : '12px'}; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #334155; }

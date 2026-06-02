@@ -15,6 +15,7 @@ interface TxRow {
   origin_site: string;
   voucher_code: string;
   external_ref: string;
+  transaction_ref?: string | null;
   site_label: string;
   client_mac?: string | null;
   telecom_fee?: string | number | null;
@@ -143,7 +144,7 @@ export function Transactions() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  {['ID', 'Voucher', 'Phone', 'MAC Address', 'Amount', 'Status', 'Telecom Fee', 'Net Amount', 'Date'].map((heading) => (
+                  {['ID', 'Voucher', 'Phone', 'Reference', 'Amount', 'Telecom Fee', 'Net Amount', 'Site', 'Status', 'Date'].map((heading) => (
                     <th key={heading} className="text-left py-3 px-2 sm:px-4 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                       {heading}
                     </th>
@@ -153,20 +154,21 @@ export function Transactions() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="py-10 text-center">
+                    <td colSpan={10} className="py-10 text-center">
                       <RefreshCw className="w-5 h-5 text-primary animate-spin mx-auto" />
                     </td>
                   </tr>
                 ) : txs.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-muted-foreground text-sm">No transactions found.</td>
+                    <td colSpan={10} className="py-8 text-center text-muted-foreground text-sm">No transactions found.</td>
                   </tr>
                 ) : txs.map((tx, index) => {
                   const amount = num(tx.amount);
                   const fee = num(tx.telecom_fee ?? tx.platform_fee);
                   const net = tx.net_amount !== undefined && tx.net_amount !== null ? num(tx.net_amount) : Math.max(amount - fee, 0);
                   const voucherCode = tx.voucher_code || tx.voucher?.voucher_code || '';
-                  const macAddress = tx.client_mac || tx.voucher?.used_by_mac || '';
+                  const reference = tx.external_ref || tx.transaction_ref || '';
+                  const site = tx.origin_site || tx.site_label || selectedSite?.name || '-';
 
                   return (
                     <tr key={`${tx.id}-${index}`} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
@@ -177,13 +179,16 @@ export function Transactions() {
                           : <span className="text-muted-foreground">-</span>}
                       </td>
                       <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-card-foreground whitespace-nowrap">{tx.msisdn || '-'}</td>
-                      <td className="py-3 px-2 sm:px-4 text-xs text-muted-foreground whitespace-nowrap font-mono">{macAddress || '-'}</td>
+                      <td className="py-3 px-2 sm:px-4 text-xs text-muted-foreground whitespace-nowrap font-mono max-w-[220px] truncate" title={reference || '-'}>
+                        {reference || '-'}
+                      </td>
                       <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-card-foreground whitespace-nowrap font-semibold">{fmt(amount)}</td>
+                      <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{fmt(fee)}</td>
+                      <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-card-foreground whitespace-nowrap font-semibold">{fmt(net)}</td>
+                      <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{site}</td>
                       <td className="py-3 px-2 sm:px-4 whitespace-nowrap">
                         <span className={`inline-block px-2 py-1 rounded-full text-xs capitalize ${statusStyle(tx.status)}`}>{tx.status}</span>
                       </td>
-                      <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">{fmt(fee)}</td>
-                      <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-card-foreground whitespace-nowrap font-semibold">{fmt(net)}</td>
                       <td className="py-3 px-2 sm:px-4 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
                         {new Date(tx.created_at).toLocaleString('en-GB', {
                           day: '2-digit',

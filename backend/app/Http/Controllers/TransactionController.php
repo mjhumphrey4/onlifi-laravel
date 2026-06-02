@@ -8,6 +8,7 @@ use App\Models\Voucher;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class TransactionController extends Controller
 {
@@ -15,7 +16,7 @@ class TransactionController extends Controller
     {
         $query = Transaction::with('voucher');
         $site = SiteScope::selectedSite($request);
-        SiteScope::applyToTenantTable($query, 'transactions', $site, 'origin_site');
+        $this->applyTransactionSiteScope($query, $site);
 
         if ($request->has('status')) {
             $query->where('status', $request->status);
@@ -69,7 +70,7 @@ class TransactionController extends Controller
     {
         $query = Transaction::query();
         $site = SiteScope::selectedSite($request);
-        SiteScope::applyToTenantTable($query, 'transactions', $site, 'origin_site');
+        $this->applyTransactionSiteScope($query, $site);
 
         if ($request->has('from_date')) {
             $query->whereDate('created_at', '>=', $request->from_date);
@@ -132,7 +133,7 @@ class TransactionController extends Controller
         $transactionQuery = Transaction::query()
             ->where('status', 'success')
             ->whereBetween('created_at', [$start, $end]);
-        SiteScope::applyToTenantTable($transactionQuery, 'transactions', $site, 'origin_site');
+        $this->applyTransactionSiteScope($transactionQuery, $site);
 
         $voucherQuery = Voucher::query()
             ->whereNotNull('first_used_at')
@@ -221,6 +222,65 @@ class TransactionController extends Controller
             $transaction->setAttribute('net_amount', $netAmount);
             $transaction->setAttribute('fee_percentage', $fee?->fee_percentage !== null ? (float) $fee->fee_percentage : null);
         }
+    }
+
+    private function applyTransactionSiteScope($query, $site): void
+    {
+        if (!$site) {
+            return;
+        }
+
+        $hasSiteId = Schema::connection('tenant')->hasColumn('transactions', 'site_id');
+        $hasOriginSite = Schema::connection('tenant')->hasColumn('transactions', 'origin_site');
+
+        if ($hasSiteId) {
+            $query->where(function ($scope) use ($site, $hasOriginSite) {
+                $scope->where('transactions.site_id', $site->id)
+                    ->orWhere(function ($legacy) use ($site, $hasOriginSite) {
+                        $legacy->whereNull('transactions.site_id');
+
+                        if ($hasOriginSite && !$this->siteUsesDedicatedDatabase($site)) {
+                            $legacy->whereIn('transactions.origin_site', $this->siteOriginLabels($site));
+                        }
+                    });
+            });
+
+            return;
+        }
+
+        if ($hasOriginSite) {
+            $query->whereIn('transactions.origin_site', $this->siteOriginLabels($site));
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
+    }
+
+    private function siteUsesDedicatedDatabase($site): bool
+    {
+        $tenant = app()->bound('tenant') ? app('tenant') : null;
+
+        return filled($site?->database_name)
+            && (!$tenant || (string) $site->database_name !== (string) $tenant->database_name);
+    }
+
+    private function siteOriginLabels($site): array
+    {
+        $slugLabel = str_replace('-', ' ', (string) $site->slug);
+
+        return collect([
+            $site->name,
+            $site->slug,
+            $slugLabel,
+            Str::headline((string) $site->slug),
+            Str::upper((string) $site->name),
+            Str::upper($slugLabel),
+        ])
+            ->filter()
+            ->map(fn ($value) => trim((string) $value))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function buildPerformanceBreakdown($transactionQuery, $voucherQuery, $start, $end, string $bucket): array

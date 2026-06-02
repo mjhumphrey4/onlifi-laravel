@@ -455,7 +455,7 @@ class VoucherController extends Controller
 
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($html);
-        $dompdf->setPaper($template['paper_size'] ?? 'A4', 'portrait');
+        $dompdf->setPaper($template['paper_size'] ?? 'A4', 'landscape');
         $dompdf->render();
 
         $filename = Str::slug($group->group_name ?: 'vouchers') . '-' . ($status ?: 'all') . '.pdf';
@@ -562,7 +562,7 @@ class VoucherController extends Controller
 <head>
 <meta charset="utf-8">
 <style>
-@page { margin: ' . ($dense ? '5mm' : '10mm') . '; }
+@page { size: ' . e($template['paper_size'] ?? 'A4') . ' landscape; margin: ' . ($dense ? '5mm' : '10mm') . '; }
 body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text . '; }
 .voucher-grid { font-size: 0; }
 .voucher-card {
