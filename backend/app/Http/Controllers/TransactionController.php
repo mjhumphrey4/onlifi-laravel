@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Transaction;
+use App\Models\PlatformFee;
 use App\Models\Voucher;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class TransactionController extends Controller
 {
@@ -27,6 +29,20 @@ class TransactionController extends Controller
             $query->where('msisdn', 'LIKE', '%' . $request->msisdn . '%');
         }
 
+        if ($request->filled('search')) {
+            $search = '%' . $request->search . '%';
+            $query->where(function ($searchQuery) use ($search) {
+                $searchQuery
+                    ->where('id', 'LIKE', $search)
+                    ->orWhere('msisdn', 'LIKE', $search)
+                    ->orWhere('external_ref', 'LIKE', $search)
+                    ->orWhere('transaction_ref', 'LIKE', $search)
+                    ->orWhere('voucher_code', 'LIKE', $search)
+                    ->orWhere('client_mac', 'LIKE', $search)
+                    ->orWhere('status', 'LIKE', $search);
+            });
+        }
+
         if ($request->has('from_date')) {
             $query->whereDate('created_at', '>=', $request->from_date);
         }
@@ -37,6 +53,8 @@ class TransactionController extends Controller
 
         $transactions = $query->orderBy('created_at', 'desc')
             ->paginate($request->per_page ?? 50);
+
+        $this->attachFeeDetails($transactions);
 
         return response()->json($transactions);
     }
@@ -168,6 +186,41 @@ class TransactionController extends Controller
             'six_months' => [$now->copy()->subMonths(6)->startOfDay(), $now, 'month'],
             default => [$now->copy()->subHours(11)->startOfHour(), $now, 'hour'],
         };
+    }
+
+    private function attachFeeDetails($transactions): void
+    {
+        if (!Schema::connection('central')->hasTable('platform_fees')) {
+            return;
+        }
+
+        $tenant = app('tenant');
+        $refs = collect($transactions->items())
+            ->pluck('external_ref')
+            ->filter()
+            ->values();
+
+        if ($refs->isEmpty()) {
+            return;
+        }
+
+        $fees = PlatformFee::where('tenant_id', $tenant->id)
+            ->whereIn('transaction_ref', $refs)
+            ->get()
+            ->keyBy('transaction_ref');
+
+        foreach ($transactions->items() as $transaction) {
+            $fee = $fees->get($transaction->external_ref);
+            $platformFee = (float) ($fee?->platform_fee ?? 0);
+            $netAmount = $fee?->net_amount !== null
+                ? (float) $fee->net_amount
+                : max((float) $transaction->amount - $platformFee, 0);
+
+            $transaction->setAttribute('telecom_fee', $platformFee);
+            $transaction->setAttribute('platform_fee', $platformFee);
+            $transaction->setAttribute('net_amount', $netAmount);
+            $transaction->setAttribute('fee_percentage', $fee?->fee_percentage !== null ? (float) $fee->fee_percentage : null);
+        }
     }
 
     private function buildPerformanceBreakdown($transactionQuery, $voucherQuery, $start, $end, string $bucket): array

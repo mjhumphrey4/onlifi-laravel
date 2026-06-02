@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use ZipArchive;
 
 class CaptivePortalController extends Controller
 {
@@ -115,6 +116,23 @@ class CaptivePortalController extends Controller
             'design' => $request->input('design', []),
         ];
         $siteSlug = $site?->slug ?: \Illuminate\Support\Str::slug($site?->name ?: $tenant->name);
+        $logoAsset = $this->uploadedLogoAsset($template['design']['logo_url'] ?? null);
+
+        if ($logoAsset && class_exists(ZipArchive::class)) {
+            $logoName = 'logo.' . pathinfo($logoAsset['path'], PATHINFO_EXTENSION);
+            $template['design']['logo_url'] = $logoName;
+            $html = $portal->downloadLoginHtml($tenant, $site, $template);
+            $zipPath = storage_path('app/' . Str::random(32) . '-captive-page.zip');
+            $zip = new ZipArchive();
+
+            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
+                $zip->addFromString('login.html', $html);
+                $zip->addFromString($logoName, $logoAsset['contents']);
+                $zip->close();
+
+                return response()->download($zipPath, ($siteSlug ?: 'site') . '-hotspot.zip')->deleteFileAfterSend(true);
+            }
+        }
 
         return response($portal->downloadLoginHtml($tenant, $site, $template))
             ->header('Content-Type', 'text/html')
@@ -135,16 +153,37 @@ class CaptivePortalController extends Controller
         $site = SiteScope::selectedOrDefaultSite($request);
         $directory = 'captive-logos/tenant-' . $tenant->id . ($site ? '/site-' . $site->id : '');
         $path = $request->file('logo')->store($directory, 'public');
-        $logoUrl = Storage::disk('public')->url($path);
-        if (!Str::startsWith($logoUrl, ['http://', 'https://'])) {
-            $logoUrl = rtrim(config('app.url'), '/') . '/' . ltrim($logoUrl, '/');
-        }
+        $logoUrl = rtrim($request->getSchemeAndHttpHost(), '/') . '/storage/' . ltrim($path, '/');
 
         return response()->json([
             'message' => 'Logo uploaded',
             'logo_url' => $logoUrl,
             'path' => $path,
         ]);
+    }
+
+    private function uploadedLogoAsset(?string $logoUrl): ?array
+    {
+        $logoUrl = trim((string) $logoUrl);
+        if ($logoUrl === '') {
+            return null;
+        }
+
+        $path = parse_url($logoUrl, PHP_URL_PATH) ?: $logoUrl;
+        $storagePosition = strpos($path, '/storage/');
+        if ($storagePosition !== false) {
+            $path = substr($path, $storagePosition + strlen('/storage/'));
+        }
+        $path = ltrim($path, '/');
+
+        if (!Str::startsWith($path, 'captive-logos/') || !Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        return [
+            'path' => $path,
+            'contents' => Storage::disk('public')->get($path),
+        ];
     }
 
     public function activateTemplate(Request $request, CaptivePortalTemplate $template)

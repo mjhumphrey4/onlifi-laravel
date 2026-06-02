@@ -123,6 +123,7 @@ export function Layout() {
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteDescription, setNewSiteDescription] = useState('');
   const [savingSite, setSavingSite] = useState(false);
+  const [applicationTime, setApplicationTime] = useState('');
 
   const handleAddSite = async () => {
     if (!newSiteName.trim()) return;
@@ -168,6 +169,21 @@ export function Layout() {
       setSavingSite(false);
     }
   };
+
+  useEffect(() => {
+    const updateClock = () => {
+      setApplicationTime(new Date().toLocaleString('en-GB', {
+        timeZone: 'Africa/Nairobi',
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      }));
+    };
+
+    updateClock();
+    const interval = window.setInterval(updateClock, 30000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
   const canSeeMenuItem = (item: MenuItem) => {
@@ -458,22 +474,31 @@ export function Layout() {
             <Menu className="w-6 h-6" />
           </button>
           <h1 className="text-lg font-semibold text-primary">PayLITE</h1>
-          {/* Mobile Notification Bell */}
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 text-sidebar-foreground hover:bg-sidebar-accent rounded-lg"
-          >
-            <Bell className="w-5 h-5" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-1 text-xs text-sidebar-foreground/80 bg-sidebar-accent px-2 py-1 rounded-lg">
+              <Clock className="w-3 h-3" />
+              {applicationTime}
+            </div>
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 text-sidebar-foreground hover:bg-sidebar-accent rounded-lg"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Desktop Notification Bell - Fixed Position */}
-        <div className="hidden lg:block fixed top-4 right-4 z-40">
+        <div className="hidden lg:flex fixed top-4 right-4 z-40 items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-2 bg-card border border-border rounded-full shadow-lg text-sm text-foreground">
+            <Clock className="w-4 h-4 text-primary" />
+            <span>{applicationTime} EAT</span>
+          </div>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             className="relative p-3 bg-card border border-border rounded-full shadow-lg hover:bg-muted transition-colors"

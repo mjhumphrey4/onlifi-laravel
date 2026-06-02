@@ -14,6 +14,7 @@ import {
   Shield,
   DollarSign,
   Bell,
+  Clock,
   Search,
   Network,
   MessageSquare,
@@ -39,6 +40,7 @@ export function AdminLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [ticketNotifications, setTicketNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [applicationTime, setApplicationTime] = useState('');
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -72,6 +74,21 @@ export function AdminLayout() {
     const interval = window.setInterval(loadTicketNotifications, 60000);
     return () => window.clearInterval(interval);
   }, [user]);
+
+  useEffect(() => {
+    const updateClock = () => {
+      setApplicationTime(new Date().toLocaleString('en-GB', {
+        timeZone: 'Africa/Nairobi',
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      }));
+    };
+
+    updateClock();
+    const interval = window.setInterval(updateClock, 30000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   if (loading) {
     return (
@@ -190,6 +207,10 @@ export function AdminLayout() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-700/50 text-sm text-slate-200">
+              <Clock className="w-4 h-4 text-indigo-400" />
+              <span>{applicationTime} EAT</span>
+            </div>
             <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-slate-400 hover:bg-slate-700 rounded-lg relative">
               <Bell className="w-5 h-5" />
               {ticketNotifications.length > 0 && (

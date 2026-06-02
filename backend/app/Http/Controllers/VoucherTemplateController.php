@@ -39,7 +39,7 @@ class VoucherTemplateController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'layout' => 'required|in:single,grid-2x2,grid-2x4,grid-3x3',
+            'layout' => 'required|in:single,grid-2x2,grid-2x4,grid-3x3,grid-4x5,grid-5x8,grid-8x10',
             'paper_size' => 'required|string',
             'logo_url' => 'nullable|string',
             'background_color' => 'nullable|string|max:7',
@@ -119,7 +119,7 @@ class VoucherTemplateController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'string|max:255',
             'description' => 'nullable|string',
-            'layout' => 'in:single,grid-2x2,grid-2x4,grid-3x3',
+            'layout' => 'in:single,grid-2x2,grid-2x4,grid-3x3,grid-4x5,grid-5x8,grid-8x10',
             'paper_size' => 'string',
             'logo_url' => 'nullable|string',
             'background_color' => 'nullable|string|max:7',

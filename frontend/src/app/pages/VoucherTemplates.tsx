@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Edit2, Trash2, Printer, Star, Eye, Palette, Layout, FileText } from 'lucide-react';
+import { Plus, Edit2, Trash2, Printer, Star, Eye, Palette, Layout, FileText, Wifi, KeyRound } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
 import { API_BASE } from '../utils/api';
+
+type LayoutValue = 'single' | 'grid-2x2' | 'grid-2x4' | 'grid-3x3' | 'grid-4x5' | 'grid-5x8' | 'grid-8x10';
 
 interface VoucherTemplate {
   id: number;
   name: string;
   description: string | null;
-  layout: 'single' | 'grid-2x2' | 'grid-2x4' | 'grid-3x3';
+  layout: LayoutValue;
   paper_size: string;
   logo_url: string | null;
   background_color: string;
@@ -41,6 +43,9 @@ const LAYOUT_OPTIONS = [
   { value: 'grid-2x2', label: 'Grid 2x2 (4 per page)', cols: 2, rows: 2 },
   { value: 'grid-2x4', label: 'Grid 2x4 (8 per page)', cols: 2, rows: 4 },
   { value: 'grid-3x3', label: 'Grid 3x3 (9 per page)', cols: 3, rows: 3 },
+  { value: 'grid-4x5', label: 'Compact 4x5 (20 per page)', cols: 4, rows: 5 },
+  { value: 'grid-5x8', label: 'Dense 5x8 (40 per page)', cols: 5, rows: 8 },
+  { value: 'grid-8x10', label: 'Ultra Dense 8x10 (80 per page)', cols: 8, rows: 10 },
 ];
 
 const DEFAULT_SKINS = [
@@ -119,7 +124,7 @@ export function VoucherTemplates() {
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
-    layout: 'single' | 'grid-2x2' | 'grid-2x4' | 'grid-3x3';
+    layout: LayoutValue;
     paper_size: string;
     logo_url: string;
     background_color: string;
@@ -228,7 +233,7 @@ export function VoucherTemplates() {
     setFormData({
       name: template.name,
       description: template.description || '',
-      layout: template.layout as 'single' | 'grid-2x2' | 'grid-2x4' | 'grid-3x3',
+      layout: template.layout as LayoutValue,
       paper_size: template.paper_size,
       logo_url: template.logo_url || '',
       background_color: template.background_color,
@@ -339,6 +344,8 @@ export function VoucherTemplates() {
     return LAYOUT_OPTIONS.find(l => l.value === layout) || LAYOUT_OPTIONS[2];
   };
 
+  const isDenseLayout = (layout: string) => ['grid-4x5', 'grid-5x8', 'grid-8x10'].includes(layout);
+
   // Sample voucher for preview
   const sampleVoucher: Voucher = {
     id: 1,
@@ -350,10 +357,12 @@ export function VoucherTemplates() {
 
   const voucherNumber = (index: number) => `#${String(index + 1).padStart(4, '0')}`;
 
-  const renderVoucherCard = (template: VoucherTemplate, voucher: Voucher, index: number) => (
+  const renderVoucherCard = (template: VoucherTemplate, voucher: Voucher, index: number, compact = false) => {
+    const dense = compact || isDenseLayout(template.layout);
+    return (
     <div
       key={index}
-      className="relative border-2 rounded-lg p-4 flex flex-col overflow-hidden"
+      className={`relative border-2 rounded-lg flex flex-col overflow-hidden ${dense ? 'p-2' : 'p-4'}`}
       style={{
         backgroundColor: template.background_color,
         color: template.text_color,
@@ -366,7 +375,7 @@ export function VoucherTemplates() {
           style={{ background: template.design?.style === 'modern-blue' ? `linear-gradient(90deg, ${template.accent_color}, #0666ff)` : template.accent_color }}
         >
           {template.design?.numbering !== false && (
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] bg-white/20 px-2 py-0.5 rounded">
+            <span className={`absolute left-2 top-1/2 -translate-y-1/2 bg-white/20 px-2 py-0.5 rounded ${dense ? 'text-[8px]' : 'text-[10px]'}`}>
               {voucherNumber(index)}
             </span>
           )}
@@ -374,21 +383,20 @@ export function VoucherTemplates() {
         </div>
       )}
 
-      {template.design?.style === 'wifi-icon' && (
-        <div className="text-center text-xs font-bold mb-2" style={{ color: template.accent_color }}>
-          WIFI ACCESS
-        </div>
-      )}
+      <div className={`flex items-center justify-center gap-3 ${dense ? 'mb-1' : 'mb-2'}`} style={{ color: template.accent_color }}>
+        <Wifi className={dense ? 'w-3 h-3' : 'w-5 h-5'} />
+        <KeyRound className={dense ? 'w-3 h-3' : 'w-5 h-5'} />
+      </div>
       
       {template.show_voucher_code && (
         <div className="text-center mb-2">
-          <span className="text-2xl font-bold tracking-wider" style={{ color: template.accent_color }}>
+          <span className={`${dense ? 'text-sm' : 'text-2xl'} font-bold tracking-wider`} style={{ color: template.accent_color }}>
             {voucher.code}
           </span>
         </div>
       )}
 
-      <div className="space-y-1 text-sm flex-1">
+      <div className={`${dense ? 'space-y-0.5 text-[9px]' : 'space-y-1 text-sm'} flex-1`}>
         {template.show_voucher_type && voucher.voucher_type && (
           <div className="flex justify-between">
             <span className="opacity-70">Type:</span>
@@ -422,21 +430,22 @@ export function VoucherTemplates() {
       </div>
 
       {template.instructions && (
-        <div className="mt-2 pt-2 border-t text-xs opacity-70" style={{ borderColor: template.accent_color }}>
+        <div className={`${dense ? 'mt-1 pt-1 text-[8px]' : 'mt-2 pt-2 text-xs'} border-t opacity-70`} style={{ borderColor: template.accent_color }}>
           {template.instructions}
         </div>
       )}
 
       {template.footer_text && (
-        <div className="text-center text-xs mt-2 opacity-70">
+        <div className={`text-center ${dense ? 'text-[8px] mt-1' : 'text-xs mt-2'} opacity-70`}>
           {template.footer_text}
         </div>
       )}
-      <div className="text-center text-[10px] mt-1 font-semibold" style={{ color: template.accent_color }}>
+      <div className={`text-center ${dense ? 'text-[7px]' : 'text-[10px]'} mt-1 font-semibold`} style={{ color: template.accent_color }}>
         Powered by onlifi.net
       </div>
     </div>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -494,6 +503,11 @@ export function VoucherTemplates() {
               </div>
 
               <div className="space-y-2 mb-4">
+                <div className="rounded-lg border border-border bg-background p-2 overflow-hidden">
+                  <div className="origin-top-left scale-[0.62] w-[161%] pointer-events-none">
+                    {renderVoucherCard(template, sampleVoucher, 0, true)}
+                  </div>
+                </div>
                 <div className="flex items-center gap-2 text-sm">
                   <Layout className="w-4 h-4 text-primary" />
                   <span className="text-muted-foreground">Layout:</span>
@@ -619,7 +633,7 @@ export function VoucherTemplates() {
                   <label className="block text-sm font-medium text-card-foreground mb-2">Layout *</label>
                   <select
                     value={formData.layout}
-                    onChange={(e) => setFormData({ ...formData, layout: e.target.value as any })}
+                    onChange={(e) => setFormData({ ...formData, layout: e.target.value as LayoutValue })}
                     className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     {LAYOUT_OPTIONS.map(opt => (

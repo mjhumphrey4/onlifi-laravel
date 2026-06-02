@@ -157,10 +157,11 @@ export function CaptivePortal() {
           Accept: 'application/json',
           ...(siteId ? { 'X-Site-ID': siteId } : {}),
         },
+        credentials: 'include',
         body: formData,
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data?.message || data?.error || 'Failed to upload logo');
       }
@@ -203,10 +204,12 @@ export function CaptivePortal() {
     }
 
     const blob = await response.blob();
+    const contentType = response.headers.get('content-type') || '';
+    const isZip = contentType.includes('zip') || contentType.includes('octet-stream');
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(selectedSite?.slug || selectedSite?.name || 'site').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-login.html`;
+    a.download = `${(selectedSite?.slug || selectedSite?.name || 'site').toString().toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${isZip ? 'hotspot.zip' : 'login.html'}`;
     document.body.appendChild(a);
     a.click();
     a.remove();

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Download, Ticket, Filter, Search, Printer } from 'lucide-react';
-import { API_BASE, getDefaultVoucherTemplate, getVouchers } from '../utils/api';
+import { X, Ticket, Filter, Search, Printer } from 'lucide-react';
+import { getDefaultVoucherTemplate, getVouchers } from '../utils/api';
 
 interface Voucher {
   id: number;
@@ -31,7 +31,7 @@ interface VoucherListDialogProps {
 
 interface VoucherTemplate {
   name: string;
-  layout: 'single' | 'grid-2x2' | 'grid-2x4' | 'grid-3x3';
+  layout: 'single' | 'grid-2x2' | 'grid-2x4' | 'grid-3x3' | 'grid-4x5' | 'grid-5x8' | 'grid-8x10';
   paper_size: string;
   logo_url?: string | null;
   background_color: string;
@@ -94,40 +94,8 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     v.voucher_code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const downloadTemplateVouchers = (vouchersToDownload: Voucher[], heading: string) => {
-    const status = heading.toLowerCase().includes('unused') ? 'unused' : statusFilter === 'all' ? 'all' : statusFilter;
-    downloadGroupPdf(status);
-  };
-
-  const downloadGroupPdf = async (status: string) => {
-    try {
-      const token = localStorage.getItem('tenant_token');
-      const headers: HeadersInit = { Accept: 'application/pdf' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      const siteId = localStorage.getItem('selected_site_id');
-      if (siteId) headers['X-Site-ID'] = siteId;
-      const response = await fetch(`${API_BASE}/vouchers/groups/${group.id}/export-pdf?status=${encodeURIComponent(status)}`, {
-        headers,
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error('Failed to download PDF');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${group.group_name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'vouchers'}-${status}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Failed to download PDF:', error);
-      alert('Failed to download PDF');
-    }
-  };
-
   const handleDownloadAll = () => {
-    downloadTemplateVouchers(
+    printTemplateVouchers(
       filteredVouchers,
       statusFilter === 'all' ? 'All Vouchers' : `${formatStatus(statusFilter)} Vouchers`
     );
@@ -135,11 +103,12 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
 
   const handleDownloadUnused = () => {
     const unusedVouchers = vouchers.filter(v => v.status === 'unused');
-    downloadTemplateVouchers(unusedVouchers, 'Unused Vouchers');
+    printTemplateVouchers(unusedVouchers, 'Unused Vouchers');
   };
 
   const handlePrintUnused = () => {
-    downloadGroupPdf('unused');
+    const unusedVouchers = vouchers.filter(v => v.status === 'unused');
+    printTemplateVouchers(unusedVouchers, 'Unused Vouchers');
   };
 
   const escapeHtml = (value: string | number | null | undefined) =>
@@ -156,10 +125,15 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       case 'single': return 1;
       case 'grid-2x2': return 2;
       case 'grid-3x3': return 3;
+      case 'grid-4x5': return 4;
+      case 'grid-5x8': return 5;
+      case 'grid-8x10': return 8;
       case 'grid-2x4':
       default: return 2;
     }
   };
+
+  const isDenseLayout = (layout: VoucherTemplate['layout']) => ['grid-4x5', 'grid-5x8', 'grid-8x10'].includes(layout);
 
   const buildVoucherCard = (voucher: Voucher, activeTemplate: VoucherTemplate) => {
     const salesPoint = voucher.sales_point?.name || voucher.sales_point_name || '';
@@ -167,6 +141,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       <div class="voucher-card">
         ${activeTemplate.logo_url ? `<img class="voucher-logo" src="${escapeHtml(activeTemplate.logo_url)}" alt="Logo" />` : ''}
         ${activeTemplate.header_text ? `<div class="voucher-header">${escapeHtml(activeTemplate.header_text)}</div>` : ''}
+        <div class="voucher-icons"><span class="wifi-icon"></span><span class="key-icon"></span></div>
         ${activeTemplate.show_voucher_code ? `<div class="voucher-code">${escapeHtml(voucher.voucher_code)}</div>` : ''}
         <div class="voucher-meta">
           ${activeTemplate.show_voucher_type ? `<div><span>Type</span><strong>${escapeHtml(voucher.voucher_type || group.group_name)}</strong></div>` : ''}
@@ -198,6 +173,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       show_qr_code: false,
     } as VoucherTemplate;
     const columns = layoutColumns(activeTemplate.layout);
+    const dense = isDenseLayout(activeTemplate.layout);
 
     return `
       <!DOCTYPE html>
@@ -205,27 +181,34 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       <head>
         <title>${escapeHtml(heading)} - ${escapeHtml(group.group_name)}</title>
         <style>
-          @page { size: ${escapeHtml(activeTemplate.paper_size || 'A4')}; margin: 12mm; }
+          @page { size: ${escapeHtml(activeTemplate.paper_size || 'A4')}; margin: ${dense ? '5mm' : '12mm'}; }
           body { font-family: Arial, sans-serif; padding: 0; margin: 0; color: ${escapeHtml(activeTemplate.text_color)}; }
-          h1 { text-align: center; margin: 0 0 14px; font-size: 20px; }
-          .voucher-grid { display: grid; grid-template-columns: repeat(${columns}, minmax(0, 1fr)); gap: 10px; }
+          h1 { text-align: center; margin: 0 0 ${dense ? '6px' : '14px'}; font-size: ${dense ? '12px' : '20px'}; }
+          .voucher-grid { display: grid; grid-template-columns: repeat(${columns}, minmax(0, 1fr)); gap: ${dense ? '3px' : '10px'}; }
           .voucher-card {
             background: ${escapeHtml(activeTemplate.background_color)};
             color: ${escapeHtml(activeTemplate.text_color)};
             border: 1.5px dashed ${escapeHtml(activeTemplate.accent_color)};
-            border-radius: 8px;
-            padding: 12px;
-            min-height: 140px;
+            border-radius: ${dense ? '4px' : '8px'};
+            padding: ${dense ? '4px' : '12px'};
+            min-height: ${dense ? '58px' : '140px'};
             page-break-inside: avoid;
             break-inside: avoid;
           }
-          .voucher-logo { max-height: 42px; max-width: 120px; object-fit: contain; display: block; margin: 0 auto 8px; }
-          .voucher-header, .voucher-footer { text-align: center; color: ${escapeHtml(activeTemplate.accent_color)}; font-weight: 700; font-size: 12px; }
-          .voucher-code { text-align: center; color: ${escapeHtml(activeTemplate.accent_color)}; font-size: 24px; font-weight: 800; letter-spacing: 1px; margin: 8px 0; }
-          .voucher-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; font-size: 11px; }
+          .voucher-logo { max-height: ${dense ? '14px' : '42px'}; max-width: ${dense ? '46px' : '120px'}; object-fit: contain; display: block; margin: 0 auto ${dense ? '2px' : '8px'}; }
+          .voucher-header, .voucher-footer { text-align: center; color: ${escapeHtml(activeTemplate.accent_color)}; font-weight: 700; font-size: ${dense ? '6px' : '12px'}; }
+          .voucher-icons { display: flex; justify-content: center; align-items: center; gap: ${dense ? '4px' : '9px'}; margin: ${dense ? '1px 0' : '6px 0 2px'}; }
+          .wifi-icon { position: relative; width: ${dense ? '14px' : '24px'}; height: ${dense ? '10px' : '18px'}; display: inline-block; }
+          .wifi-icon:before, .wifi-icon:after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); border: 2px solid ${escapeHtml(activeTemplate.accent_color)}; border-bottom: 0; border-radius: 999px 999px 0 0; }
+          .wifi-icon:before { width: 100%; height: 80%; top: 0; }
+          .wifi-icon:after { width: 54%; height: 42%; top: 42%; }
+          .key-icon { position: relative; width: ${dense ? '14px' : '24px'}; height: ${dense ? '8px' : '14px'}; display: inline-block; border: 2px solid ${escapeHtml(activeTemplate.accent_color)}; border-radius: 999px; }
+          .key-icon:before { content: ""; position: absolute; width: ${dense ? '8px' : '15px'}; height: 2px; background: ${escapeHtml(activeTemplate.accent_color)}; right: -${dense ? '8px' : '14px'}; top: 50%; transform: translateY(-50%); }
+          .voucher-code { text-align: center; color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '10px' : '24px'}; font-weight: 800; letter-spacing: ${dense ? '0' : '1px'}; margin: ${dense ? '2px 0' : '8px 0'}; }
+          .voucher-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: ${dense ? '1px' : '6px'}; font-size: ${dense ? '5.5px' : '11px'}; }
           .voucher-meta span { display: block; opacity: .65; }
-          .voucher-meta strong { display: block; font-size: 12px; }
-          .voucher-instructions { margin-top: 8px; padding-top: 8px; border-top: 1px solid ${escapeHtml(activeTemplate.accent_color)}; font-size: 10px; opacity: .75; text-align: center; }
+          .voucher-meta strong { display: block; font-size: ${dense ? '6px' : '12px'}; }
+          .voucher-instructions { margin-top: ${dense ? '2px' : '8px'}; padding-top: ${dense ? '2px' : '8px'}; border-top: 1px solid ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '5px' : '10px'}; opacity: .75; text-align: center; }
           @media print { .voucher-card { page-break-inside: avoid; } }
         </style>
       </head>
@@ -327,16 +310,16 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
               disabled={unusedCount === 0}
               className="flex items-center gap-2 px-3 py-1.5 text-sm bg-emerald-500 hover:bg-emerald-600 disabled:bg-muted disabled:text-muted-foreground text-white rounded-lg transition-colors"
             >
-              <Download className="w-4 h-4" />
-              Unused PDF
+              <Printer className="w-4 h-4" />
+              Print Unused
             </button>
             <button
               onClick={handleDownloadAll}
               disabled={filteredVouchers.length === 0}
               className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground rounded-lg transition-colors"
             >
-              <Download className="w-4 h-4" />
-              Current PDF
+              <Printer className="w-4 h-4" />
+              Print Current
             </button>
             <button
               onClick={handlePrintUnused}

@@ -508,8 +508,12 @@ class VoucherController extends Controller
             'single' => [1, '170mm', '250mm'],
             'grid-2x2' => [2, '92mm', '120mm'],
             'grid-3x3' => [3, '62mm', '82mm'],
+            'grid-4x5' => [4, '47mm', '52mm'],
+            'grid-5x8' => [5, '37mm', '32mm'],
+            'grid-8x10' => [8, '23mm', '25mm'],
             default => [2, '92mm', '68mm'],
         };
+        $dense = in_array($template['layout'] ?? 'grid-2x4', ['grid-4x5', 'grid-5x8', 'grid-8x10'], true);
 
         $accent = e($template['accent_color'] ?? '#0444cf');
         $text = e($template['text_color'] ?? '#1f2937');
@@ -534,7 +538,7 @@ class VoucherController extends Controller
                         ' . (($design['numbering'] ?? true) !== false ? '<span class="voucher-number">' . $number . '</span>' : '') . '
                         ' . $header . '
                     </div>
-                    ' . ($style === 'wifi-icon' ? '<div class="wifi-mark">WIFI ACCESS</div>' : '') . '
+                    <div class="voucher-icons"><span class="wifi-icon"></span><span class="key-icon"></span></div>
                     <div class="voucher-code">' . $code . '</div>
                     <div class="voucher-details">
                         ' . (($template['show_voucher_type'] ?? true) ? '<div><span>Package</span><strong>' . e($group->group_name) . '</strong></div>' : '') . '
@@ -554,7 +558,7 @@ class VoucherController extends Controller
 <head>
 <meta charset="utf-8">
 <style>
-@page { margin: 10mm; }
+@page { margin: ' . ($dense ? '5mm' : '10mm') . '; }
 body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text . '; }
 .voucher-grid { font-size: 0; }
 .voucher-card {
@@ -563,17 +567,17 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
     vertical-align: top;
     width: ' . $cardWidth . ';
     height: ' . $cardHeight . ';
-    margin: 2.5mm;
+    margin: ' . ($dense ? '1mm' : '2.5mm') . ';
     box-sizing: border-box;
     overflow: hidden;
     border: 1.5px solid ' . $accent . ';
-    border-radius: 7px;
+    border-radius: ' . ($dense ? '4px' : '7px') . ';
     background: ' . $background . ';
-    font-size: 11px;
+    font-size: ' . ($dense ? '6px' : '11px') . ';
 }
 .voucher-header {
     position: relative;
-    padding: 6px 8px;
+    padding: ' . ($dense ? '2px 3px' : '6px 8px') . ';
     text-align: center;
     color: #fff;
     font-weight: 700;
@@ -581,22 +585,27 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
 }
 .voucher-number {
     position: absolute;
-    left: 7px;
-    top: 6px;
-    font-size: 9px;
-    padding: 1px 5px;
+    left: ' . ($dense ? '3px' : '7px') . ';
+    top: ' . ($dense ? '2px' : '6px') . ';
+    font-size: ' . ($dense ? '5px' : '9px') . ';
+    padding: 1px ' . ($dense ? '2px' : '5px') . ';
     border-radius: 3px;
     background: rgba(255,255,255,.22);
 }
-.wifi-mark { text-align: center; color: ' . $accent . '; font-size: 10px; font-weight: 700; margin: 5px 0 0; }
-.voucher-code { color: ' . $accent . '; font-size: 20px; line-height: 1.15; font-weight: 800; text-align: center; margin: 8px 8px 6px; word-break: break-all; }
-.voucher-details { margin: 0 10px; }
-.voucher-details div { display: inline-block; width: 48%; margin-bottom: 4px; vertical-align: top; }
-.voucher-details span { display: block; font-size: 8px; opacity: .7; }
-.voucher-details strong { display: block; font-size: 10px; }
-.voucher-instructions { margin: 5px 9px 0; padding-top: 4px; border-top: 1px solid ' . $accent . '; font-size: 8.5px; text-align: center; opacity: .78; }
-.voucher-footer { position: absolute; left: 7px; right: 7px; bottom: 13px; text-align: center; font-size: 8px; opacity: .72; }
-.powered { position: absolute; left: 7px; right: 7px; bottom: 4px; color: ' . $accent . '; font-size: 8px; text-align: center; font-weight: 700; }
+.voucher-icons { text-align: center; margin: ' . ($dense ? '1px 0' : '5px 0 0') . '; }
+.wifi-icon, .key-icon { display: inline-block; position: relative; vertical-align: middle; margin: 0 ' . ($dense ? '2px' : '5px') . '; }
+.wifi-icon { width: ' . ($dense ? '10px' : '20px') . '; height: ' . ($dense ? '7px' : '14px') . '; border-top: 2px solid ' . $accent . '; border-radius: 999px 999px 0 0; }
+.wifi-icon:after { content: ""; position: absolute; left: 50%; top: 45%; width: 50%; height: 45%; transform: translateX(-50%); border-top: 2px solid ' . $accent . '; border-radius: 999px 999px 0 0; }
+.key-icon { width: ' . ($dense ? '8px' : '15px') . '; height: ' . ($dense ? '6px' : '10px') . '; border: 2px solid ' . $accent . '; border-radius: 999px; }
+.key-icon:after { content: ""; position: absolute; left: 100%; top: 50%; width: ' . ($dense ? '6px' : '12px') . '; height: 2px; background: ' . $accent . '; transform: translateY(-50%); }
+.voucher-code { color: ' . $accent . '; font-size: ' . ($dense ? '8px' : '20px') . '; line-height: 1.15; font-weight: 800; text-align: center; margin: ' . ($dense ? '2px 3px' : '8px 8px 6px') . '; word-break: break-all; }
+.voucher-details { margin: 0 ' . ($dense ? '3px' : '10px') . '; }
+.voucher-details div { display: inline-block; width: 48%; margin-bottom: ' . ($dense ? '1px' : '4px') . '; vertical-align: top; }
+.voucher-details span { display: block; font-size: ' . ($dense ? '4.5px' : '8px') . '; opacity: .7; }
+.voucher-details strong { display: block; font-size: ' . ($dense ? '5.5px' : '10px') . '; }
+.voucher-instructions { margin: ' . ($dense ? '1px 3px 0' : '5px 9px 0') . '; padding-top: ' . ($dense ? '1px' : '4px') . '; border-top: 1px solid ' . $accent . '; font-size: ' . ($dense ? '4.5px' : '8.5px') . '; text-align: center; opacity: .78; }
+.voucher-footer { position: absolute; left: 7px; right: 7px; bottom: ' . ($dense ? '7px' : '13px') . '; text-align: center; font-size: ' . ($dense ? '4.8px' : '8px') . '; opacity: .72; }
+.powered { position: absolute; left: 7px; right: 7px; bottom: 2px; color: ' . $accent . '; font-size: ' . ($dense ? '4.5px' : '8px') . '; text-align: center; font-weight: 700; }
 </style>
 </head>
 <body>
