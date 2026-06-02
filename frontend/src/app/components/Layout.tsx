@@ -304,8 +304,8 @@ export function Layout() {
         </button>
 
         <div className="p-6 border-b border-sidebar-border">
-          <h1 className="text-2xl text-primary font-semibold">LITE</h1>
-          <p className="text-sm text-sidebar-foreground/70 mt-1">Mobile Money Payments Dashboard</p>
+          <h1 className="text-2xl text-primary font-semibold">ONLIFI</h1>
+          <p className="text-sm text-sidebar-foreground/70 mt-1">Network Management System</p>
           
           {/* Site Selector */}
           <div className="mt-4 relative">
@@ -473,7 +473,7 @@ export function Layout() {
           >
             <Menu className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-semibold text-primary">PayLITE</h1>
+          <h1 className="text-lg font-semibold text-primary">ONLIFI</h1>
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-1 text-xs text-sidebar-foreground/80 bg-sidebar-accent px-2 py-1 rounded-lg">
               <Clock className="w-3 h-3" />
