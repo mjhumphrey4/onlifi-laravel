@@ -8,7 +8,7 @@
 
 ### What Was Wrong:
 
-1. **Payment initiated from**: `http://pay.onlustech.com/yo/initiate.php`
+1. **Payment initiated from**: `https://pay.onlustech.com/yo/initiate.php`
 2. **IPN URL configured as**: `https://bitetechsystems.com/yo/ipn.php`
 3. **Result**: YO! Payments was sending notifications to the wrong domain
 
@@ -25,7 +25,7 @@ define('SITE_URL', 'https://bitetechsystems.com/yo/');
 
 **After:**
 ```php
-define('SITE_URL', 'http://pay.onlustech.com/yo/');
+define('SITE_URL', 'https://pay.onlustech.com/yo/');
 ```
 
 This ensures the IPN URL sent to YO! Payments matches your actual domain.
@@ -118,7 +118,7 @@ Currently using `http://`. For production, you should:
 
 3. **Test IPN endpoint is accessible**
    ```bash
-   curl -X POST http://pay.onlustech.com/yo/ipn.php
+   curl -X POST https://pay.onlustech.com/yo/ipn.php
    ```
    Should return HTTP 200 and create a log entry
 

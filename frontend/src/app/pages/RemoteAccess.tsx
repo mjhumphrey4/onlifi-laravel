@@ -52,7 +52,7 @@ export function RemoteAccess() {
 
       <div className="grid md:grid-cols-2 gap-4">
         <a
-          href={data?.mobile_app_url || 'http://onlifi.net/downloads/onlifi-mobile.apk'}
+          href={data?.mobile_app_url || 'https://onlifi.net/downloads/onlifi-mobile.apk'}
           className="group bg-card border border-border rounded-lg p-5 hover:border-primary/60 hover:bg-primary/5 transition-colors"
         >
           <div className="flex items-center gap-3">
@@ -68,7 +68,7 @@ export function RemoteAccess() {
         </a>
 
         <a
-          href={data?.web_login_url || 'http://vpn.onlifi.net'}
+          href={data?.web_login_url || 'https://vpn.onlifi.net'}
           target="_blank"
           rel="noreferrer"
           className="group bg-card border border-border rounded-lg p-5 hover:border-primary/60 hover:bg-primary/5 transition-colors"

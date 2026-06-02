@@ -11,8 +11,8 @@ Your system uses **different protocols for different purposes**, and this is per
 ### Frontend (login.html)
 ```javascript
 // Uses HTTP for API calls
-fetch('http://pay.onlustech.com/yo/initiate.php', ...)
-fetch('http://pay.onlustech.com/yo/check_status.php', ...)
+fetch('https://pay.onlustech.com/yo/initiate.php', ...)
+fetch('https://pay.onlustech.com/yo/check_status.php', ...)
 ```
 
 **Why HTTP is OK here:**
@@ -40,7 +40,7 @@ define('SITE_URL', 'https://pay.onlustech.com/yo/');
 
 1. **User initiates payment** (HTTP)
    ```
-   Browser → HTTP → http://pay.onlustech.com/yo/initiate.php
+   Browser → HTTPS → https://pay.onlustech.com/yo/initiate.php
    ```
 
 2. **initiate.php sends IPN URL to YO!** (HTTPS)
@@ -61,7 +61,7 @@ define('SITE_URL', 'https://pay.onlustech.com/yo/');
 
 5. **Frontend checks status** (HTTP)
    ```
-   Browser → HTTP → http://pay.onlustech.com/yo/check_status.php
+   Browser → HTTPS → https://pay.onlustech.com/yo/check_status.php
    ```
 
 ---
@@ -148,7 +148,7 @@ If you want to upgrade your entire site to HTTPS:
 ### Step 1: Update login.html
 ```javascript
 // Change from:
-fetch('http://pay.onlustech.com/yo/initiate.php', ...)
+fetch('https://pay.onlustech.com/yo/initiate.php', ...)
 
 // To:
 fetch('https://pay.onlustech.com/yo/initiate.php', ...)
@@ -216,7 +216,7 @@ Should show `https://pay.onlustech.com/yo/`
 
 **Current Setup (CORRECT):**
 ```
-Frontend:  HTTP  → http://pay.onlustech.com/yo/
+Frontend:  HTTPS  → https://pay.onlustech.com/yo/
 IPN:       HTTPS → https://pay.onlustech.com/yo/ipn.php
 ```
 

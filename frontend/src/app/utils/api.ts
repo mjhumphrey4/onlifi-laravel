@@ -1,4 +1,4 @@
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://api.onlifi.net/api';
+export const API_BASE = import.meta.env.VITE_API_URL || 'https://api.onlifi.net/api';
 
 // Get auth token from localStorage
 function getAuthToken(endpoint = ''): string | null {

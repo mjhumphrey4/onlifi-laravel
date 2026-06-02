@@ -18,7 +18,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: process.env.VITE_API_PROXY_TARGET || 'http://api.onlifi.net',
+        target: process.env.VITE_API_PROXY_TARGET || 'https://api.onlifi.net',
         changeOrigin: true,
       },
     },

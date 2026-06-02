@@ -476,11 +476,11 @@ HTML;
 
         $legacyReplacements = [
             "const CURRENT_ORIGIN_SITE = 'STK WIFI';" => 'const CURRENT_ORIGIN_SITE = ' . json_encode($siteName) . ';',
-            'http://pay.onlustech.com/yo/initiate.php' => $config['manual_payment']['initiate_url'],
             'https://pay.onlustech.com/yo/initiate.php' => $config['manual_payment']['initiate_url'],
-            'http://pay.onlustech.com/yo/check_status.php' => $config['manual_payment']['check_status_url'],
+            'https://pay.onlustech.com/yo/initiate.php' => $config['manual_payment']['initiate_url'],
             'https://pay.onlustech.com/yo/check_status.php' => $config['manual_payment']['check_status_url'],
-            'http://pay.onlustech.com/yo/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
+            'https://pay.onlustech.com/yo/check_status.php' => $config['manual_payment']['check_status_url'],
+            'https://pay.onlustech.com/yo/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
             'https://pay.onlustech.com/yo/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
             '<h1>STK WIFI POINT</h1>' => '<h1>' . htmlspecialchars($displayName, ENT_QUOTES) . '</h1>',
             '<p class="subtitle">Faster, Affordable Internet with a Smile</p>' => '<p class="subtitle">' . htmlspecialchars((string) $design['subtitle'], ENT_QUOTES) . '</p>',

@@ -11,9 +11,9 @@ This guide intentionally does not include Nginx configuration or SoftEther/SSTP 
 - Nginx already points the dashboard host to the built frontend output, usually `frontend/dist`.
 - SoftEther is already installed.
 - Repository destination: `/var/www/onlifi`.
-- API domain: `http://api.onlifi.net`.
-- Dashboard domain: `http://onlifi.net`.
-- Manual payment domain: `http://pay.onlifi.net`.
+- API domain: `https://api.onlifi.net`.
+- Dashboard domain: `https://onlifi.net`.
+- Manual payment domain: `https://pay.onlifi.net`.
 - FreeRADIUS runs on the same server unless you intentionally split it.
 
 Adjust paths and domains where needed.
@@ -106,10 +106,10 @@ APP_NAME=OnLiFi
 APP_ENV=production
 APP_DEBUG=false
 APP_TIMEZONE=Africa/Nairobi
-APP_URL=http://api.onlifi.net
-API_URL=http://api.onlifi.net
-FRONTEND_URL=http://onlifi.net
-MANUAL_PAYMENT_BASE_URL=http://pay.onlifi.net
+APP_URL=https://api.onlifi.net
+API_URL=https://api.onlifi.net
+FRONTEND_URL=https://onlifi.net
+MANUAL_PAYMENT_BASE_URL=https://pay.onlifi.net
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
@@ -134,7 +134,7 @@ REDIS_PORT=6379
 REDIS_CACHE_DB=1
 
 FILESYSTEM_DISK=public
-CORS_ALLOWED_ORIGINS=http://onlifi.net,http://api.onlifi.net
+CORS_ALLOWED_ORIGINS=https://onlifi.net,https://api.onlifi.net
 
 MAIL_MAILER=smtp
 MAIL_HOST=YOUR_SMTP_HOST
@@ -492,16 +492,16 @@ SMS_SENDER_ID=OnLiFi
 Confirm callback/IPN URLs with the payment provider:
 
 ```text
-http://api.onlifi.net/api/captive/ipn
-http://api.onlifi.net/api/captive/failure
+https://api.onlifi.net/api/captive/ipn
+https://api.onlifi.net/api/captive/failure
 ```
 
 If using the manual payment flow, the captive page points users to:
 
 ```text
-http://pay.onlifi.net/{site-name}/initiate.php
-http://pay.onlifi.net/{site-name}/check_status.php
-http://pay.onlifi.net/{site-name}/look/voucher-lookup.php
+https://pay.onlifi.net/{site-name}/initiate.php
+https://pay.onlifi.net/{site-name}/check_status.php
+https://pay.onlifi.net/{site-name}/look/voucher-lookup.php
 ```
 
 ## 19. Required Production Checklist
@@ -509,8 +509,8 @@ http://pay.onlifi.net/{site-name}/look/voucher-lookup.php
 - `APP_DEBUG=false`.
 - `APP_ENV=production`.
 - `APP_KEY` generated once and never changed after production data exists.
-- `APP_URL=http://api.onlifi.net`.
-- `FRONTEND_URL=http://onlifi.net`.
+- `APP_URL=https://api.onlifi.net`.
+- `FRONTEND_URL=https://onlifi.net`.
 - `FILESYSTEM_DISK=public`.
 - `CACHE_STORE=redis`.
 - `QUEUE_CONNECTION=database` or `redis`, with a matching worker.

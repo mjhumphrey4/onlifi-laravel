@@ -11,10 +11,10 @@
 # 5. Script will auto-create scheduler to run every 5 minutes
 #
 # IMPORTANT: Update dashboardUrl to your actual domain/IP!
-# Example: http://api.onlifi.net/api/telemetry
+# Example: https://api.onlifi.net/api/telemetry
 
 #---------- CONFIGURATION ----------
-:local dashboardUrl "http://api.onlifi.net/api/telemetry"
+:local dashboardUrl "https://api.onlifi.net/api/telemetry"
 :local fetchMode "http"
 :local apiToken "YOUR_SITE_API_TOKEN_HERE"
 :local schedulerName "onlifi-telemetry-scheduler"
