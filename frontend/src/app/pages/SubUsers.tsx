@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Edit2, Loader2, Plus, ShieldCheck, Trash2, UserCog } from 'lucide-react';
 import { createSubUser, deleteSubUser, getSites, getSubUsers, updateSubUser } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 
 interface SiteOption {
   id: number;
@@ -34,6 +35,7 @@ const emptyForm = {
 };
 
 export function SubUsers() {
+  const { user } = useAuth();
   const [subUsers, setSubUsers] = useState<SubUser[]>([]);
   const [sites, setSites] = useState<SiteOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +108,7 @@ export function SubUsers() {
   };
 
   const remove = async (user: SubUser) => {
-    if (!confirm(`Delete sub-user ${user.name}?`)) return;
+    if (!confirm(`Delete account user ${user.name}?`)) return;
     await deleteSubUser(user.id);
     await load();
   };
@@ -120,7 +122,7 @@ export function SubUsers() {
       <div>
         <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
           <UserCog className="w-7 h-7 text-primary" />
-          Sub-Users
+          Account Users
         </h1>
         <p className="text-muted-foreground mt-1">Give staff limited access to specific sites and dashboard sections.</p>
       </div>
@@ -128,7 +130,7 @@ export function SubUsers() {
       <form onSubmit={submit} className="bg-card border border-border rounded-lg p-5 space-y-4">
         <div className="flex items-center gap-2">
           <Plus className="w-5 h-5 text-primary" />
-          <h2 className="font-semibold text-card-foreground">{editing ? 'Edit Sub-User' : 'Add Sub-User'}</h2>
+          <h2 className="font-semibold text-card-foreground">{editing ? 'Edit Account User' : 'Add Account User'}</h2>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
@@ -179,14 +181,14 @@ export function SubUsers() {
           {editing && <button type="button" onClick={reset} className="px-4 py-2 rounded-lg border border-border hover:bg-muted">Cancel</button>}
           <button disabled={saving || form.allowed_site_ids.length === 0 || form.permissions.length === 0} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-            {editing ? 'Update sub-user' : 'Create sub-user'}
+            {editing ? 'Update account user' : 'Create account user'}
           </button>
         </div>
       </form>
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="p-5 border-b border-border">
-          <h2 className="font-semibold text-card-foreground">Existing Sub-Users</h2>
+          <h2 className="font-semibold text-card-foreground">Existing Account Users</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -200,20 +202,32 @@ export function SubUsers() {
               </tr>
             </thead>
             <tbody>
-              {subUsers.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">No sub-users yet.</td></tr>
-              ) : subUsers.map((user) => (
-                <tr key={user.id} className="border-b border-border/70 last:border-0">
+              {user && (
+                <tr className="border-b border-border/70 bg-primary/5">
                   <td className="px-5 py-3">
                     <p className="font-medium text-card-foreground">{user.name}</p>
                     <p className="text-xs text-muted-foreground">{user.email}</p>
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{user.allowed_sites?.map((site) => site.name).join(', ') || '-'}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{user.permissions.join(', ')}</td>
-                  <td className="px-5 py-3">{user.is_active ? 'Active' : 'Disabled'}</td>
+                  <td className="px-5 py-3 text-muted-foreground">All sites</td>
+                  <td className="px-5 py-3 text-muted-foreground">Owner privileges</td>
+                  <td className="px-5 py-3">Owner</td>
+                  <td className="px-5 py-3 text-right text-xs text-muted-foreground">Locked</td>
+                </tr>
+              )}
+              {subUsers.length === 0 ? (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">No additional account users yet.</td></tr>
+              ) : subUsers.map((accountUser) => (
+                <tr key={accountUser.id} className="border-b border-border/70 last:border-0">
+                  <td className="px-5 py-3">
+                    <p className="font-medium text-card-foreground">{accountUser.name}</p>
+                    <p className="text-xs text-muted-foreground">{accountUser.email}</p>
+                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">{accountUser.allowed_sites?.map((site) => site.name).join(', ') || '-'}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{accountUser.permissions.join(', ')}</td>
+                  <td className="px-5 py-3">{accountUser.is_active ? 'Active' : 'Disabled'}</td>
                   <td className="px-5 py-3 text-right">
-                    <button onClick={() => edit(user)} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4" /></button>
-                    <button onClick={() => remove(user)} className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => edit(accountUser)} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => remove(accountUser)} className="p-2 rounded-lg hover:bg-destructive/10 text-destructive"><Trash2 className="w-4 h-4" /></button>
                   </td>
                 </tr>
               ))}

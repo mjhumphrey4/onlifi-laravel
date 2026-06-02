@@ -146,7 +146,10 @@ class TenantAuthController extends Controller
                 ]
             );
 
-            $email->sendForgotPasswordLink($user, $token);
+            $expires = now()->addMinutes(60)->timestamp;
+            $signature = hash_hmac('sha256', "{$user->email}|{$token}|{$expires}", config('app.key'));
+
+            $email->sendForgotPasswordLink($user, $token, $expires, $signature);
         }
 
         return response()->json([
@@ -159,6 +162,8 @@ class TenantAuthController extends Controller
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'token' => 'required|string',
+            'expires' => 'required|integer',
+            'signature' => 'required|string',
             'password' => 'required|string|min:8|confirmed',
         ]);
 
@@ -167,6 +172,15 @@ class TenantAuthController extends Controller
                 'error' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
+        }
+
+        if ((int) $request->expires < now()->timestamp) {
+            return response()->json(['message' => 'This password reset link is invalid or has expired.'], 422);
+        }
+
+        $expected = hash_hmac('sha256', "{$request->email}|{$request->token}|{$request->expires}", config('app.key'));
+        if (!hash_equals($expected, (string) $request->signature)) {
+            return response()->json(['message' => 'This password reset link is invalid or has expired.'], 422);
         }
 
         $reset = DB::connection('central')->table('password_reset_tokens')

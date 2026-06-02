@@ -60,6 +60,7 @@ export function Vouchers() {
   const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
   const [groupPage, setGroupPage] = useState(1);
   const groupsPerPage = 9;
+  const groupTones = ['bg-card', 'bg-slate-50/70', 'bg-emerald-50/55', 'bg-sky-50/55', 'bg-amber-50/45', 'bg-violet-50/45'];
 
   useEffect(() => {
     setGroupPage(1);
@@ -327,10 +328,11 @@ export function Vouchers() {
         ) : (
           <div className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {paginatedGroups.map((group) => (
+              {paginatedGroups.map((group, index) => (
                 <VoucherGroupCard
                   key={group.id}
                   group={group}
+                  toneClassName={groupTones[index % groupTones.length]}
                   onDelete={handleDeleteGroup}
                   isDeleting={deletingGroupId === group.id}
                 />

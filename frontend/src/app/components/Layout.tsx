@@ -73,13 +73,11 @@ const menuItems: MenuItem[] = [
     ]
   },
   { path: '/users',          label: 'User Management',    icon: Users, adminOnly: true },
-  { path: '/sub-users',      label: 'Sub-Users',          icon: UserCog, adminOnly: false, tenantAdminOnly: true },
   { path: '/transactions',   label: 'Transactions',       icon: ArrowLeftRight, adminOnly: false, permission: 'view_transactions' },
   { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet, adminOnly: false, tenantAdminOnly: true },
   { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp, adminOnly: false, permission: 'view_transactions' },
   { path: '/reports',        label: 'Reports',            icon: BarChart3, adminOnly: false, permission: 'view_transactions' },
   { path: '/support-tickets', label: 'Support Tickets',    icon: MessageSquare, adminOnly: false },
-  { path: '/remote-access',  label: 'Remote Access',      icon: Network, adminOnly: false, permission: 'view_routers' },
   { path: '/sms-gateway',     label: 'SMS Gateway',        icon: MessageSquare, adminOnly: false, tenantAdminOnly: true },
   {
     path: '/router-users',
@@ -92,6 +90,7 @@ const menuItems: MenuItem[] = [
       { path: '/dhcp', label: 'DHCP', icon: Network, adminOnly: false },
       { path: '/pppoe', label: 'PPPoE', icon: Network, adminOnly: false },
       { path: '/ip-bindings', label: 'IP Bindings', icon: ShieldCheck, adminOnly: false },
+      { path: '/remote-access', label: 'Remote Access', icon: Network, adminOnly: false },
     ],
   },
   {
@@ -102,8 +101,8 @@ const menuItems: MenuItem[] = [
     tenantAdminOnly: true,
     children: [
       { path: '/settings', label: 'General Settings', icon: SettingsIcon, adminOnly: false },
+      { path: '/account-users', label: 'Account Users', icon: UserCog, adminOnly: false },
       { path: '/captive-portal', label: 'Captive Page', icon: Paintbrush, adminOnly: false },
-      { path: '/radius-setup', label: 'RADIUS Setup', icon: Server, adminOnly: false },
       { path: '/provisioning', label: 'Provisioning', icon: Router, adminOnly: false },
     ],
   },

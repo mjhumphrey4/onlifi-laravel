@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Voucher;
 use App\Models\VoucherGroup;
+use App\Models\VoucherTemplate;
 use App\Models\VoucherType;
 use App\Services\VoucherService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 
 class VoucherController extends Controller
@@ -420,6 +422,187 @@ class VoucherController extends Controller
                 return $group;
             });
         return response()->json($groups);
+    }
+
+    public function exportGroupPdf(Request $request, $id)
+    {
+        $site = $this->resolveVoucherSite($request);
+        if (!$site) {
+            abort(404);
+        }
+
+        $groupQuery = VoucherGroup::with('salesPoint');
+        SiteScope::applyToTenantTable($groupQuery, 'voucher_groups', $site);
+        $group = $groupQuery->findOrFail($id);
+
+        $voucherQuery = Voucher::with(['group', 'salesPoint'])->where('group_id', $group->id);
+        SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
+
+        $status = $request->query('status', 'unused');
+        if ($status === 'consumed') {
+            $voucherQuery->whereIn('status', ['in_use', 'used', 'expired']);
+        } elseif ($status && $status !== 'all') {
+            $voucherQuery->where('status', $status);
+        }
+
+        $vouchers = $voucherQuery->orderBy('id')->limit(5000)->get();
+        $template = $this->activeVoucherTemplate($site);
+        $html = $this->voucherPdfHtml($group, $vouchers, $template);
+
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper($template['paper_size'] ?? 'A4', 'portrait');
+        $dompdf->render();
+
+        $filename = Str::slug($group->group_name ?: 'vouchers') . '-' . ($status ?: 'all') . '.pdf';
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
+
+    private function activeVoucherTemplate($site): array
+    {
+        $tenant = app('tenant');
+        $query = VoucherTemplate::where('tenant_id', $tenant->id)
+            ->where('is_active', true);
+
+        if ($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id')) {
+            $query->where('site_id', $site->id);
+        }
+
+        $template = (clone $query)->where('is_default', true)->first()
+            ?: (clone $query)->orderBy('name')->first();
+
+        return $template?->toArray() ?: [
+            'name' => 'Default Blue Strip',
+            'layout' => 'grid-2x4',
+            'paper_size' => 'A4',
+            'design' => ['style' => 'blue-strip', 'numbering' => true],
+            'background_color' => '#ffffff',
+            'text_color' => '#1f2937',
+            'accent_color' => '#0444cf',
+            'show_voucher_code' => true,
+            'show_voucher_type' => true,
+            'show_sales_point' => true,
+            'show_duration' => true,
+            'show_price' => true,
+            'show_expiry' => false,
+            'show_qr_code' => false,
+            'header_text' => 'STK WIFI POINT',
+            'footer_text' => 'Support: +256 700 000 000',
+            'instructions' => 'One device per voucher.',
+        ];
+    }
+
+    private function voucherPdfHtml(VoucherGroup $group, $vouchers, array $template): string
+    {
+        $design = is_array($template['design'] ?? null) ? $template['design'] : [];
+        $style = $design['style'] ?? 'blue-strip';
+        [$columns, $cardWidth, $cardHeight] = match ($template['layout'] ?? 'grid-2x4') {
+            'single' => [1, '170mm', '250mm'],
+            'grid-2x2' => [2, '92mm', '120mm'],
+            'grid-3x3' => [3, '62mm', '82mm'],
+            default => [2, '92mm', '68mm'],
+        };
+
+        $accent = e($template['accent_color'] ?? '#0444cf');
+        $text = e($template['text_color'] ?? '#1f2937');
+        $background = e($template['background_color'] ?? '#ffffff');
+        $header = e($template['header_text'] ?? 'STK WIFI POINT');
+        $footer = e($template['footer_text'] ?? '');
+        $instructions = e($template['instructions'] ?? '');
+        $gradient = $style === 'modern-blue' ? "linear-gradient(90deg, {$accent}, #0666ff)" : $accent;
+
+        $cards = $vouchers->values()->map(function (Voucher $voucher, int $index) use ($template, $group, $style, $header, $footer, $instructions, $design) {
+            $number = '#' . str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT);
+            $duration = $voucher->validity_minutes
+                ? $voucher->validity_minutes . ' mins'
+                : ($voucher->validity_hours ?: $group->validity_hours) . 'h';
+            $price = 'UGX ' . number_format((float) ($voucher->price ?: $group->price));
+            $salesPoint = $voucher->salesPoint?->name ?: $group->salesPoint?->name;
+            $code = e($voucher->voucher_code);
+
+            return '
+                <div class="voucher-card">
+                    <div class="voucher-header">
+                        ' . (($design['numbering'] ?? true) !== false ? '<span class="voucher-number">' . $number . '</span>' : '') . '
+                        ' . $header . '
+                    </div>
+                    ' . ($style === 'wifi-icon' ? '<div class="wifi-mark">WIFI ACCESS</div>' : '') . '
+                    <div class="voucher-code">' . $code . '</div>
+                    <div class="voucher-details">
+                        ' . (($template['show_voucher_type'] ?? true) ? '<div><span>Package</span><strong>' . e($group->group_name) . '</strong></div>' : '') . '
+                        ' . (($template['show_duration'] ?? true) ? '<div><span>Duration</span><strong>' . e($duration) . '</strong></div>' : '') . '
+                        ' . (($template['show_price'] ?? true) ? '<div><span>Price</span><strong>' . e($price) . '</strong></div>' : '') . '
+                        ' . (($template['show_sales_point'] ?? true) && $salesPoint ? '<div><span>Sales Point</span><strong>' . e($salesPoint) . '</strong></div>' : '') . '
+                    </div>
+                    ' . ($instructions ? '<div class="voucher-instructions">' . $instructions . '</div>' : '') . '
+                    ' . ($footer ? '<div class="voucher-footer">' . $footer . '</div>' : '') . '
+                    <div class="powered">Powered by onlifi.net</div>
+                </div>
+            ';
+        })->implode('');
+
+        return '<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page { margin: 10mm; }
+body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text . '; }
+.voucher-grid { font-size: 0; }
+.voucher-card {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+    width: ' . $cardWidth . ';
+    height: ' . $cardHeight . ';
+    margin: 2.5mm;
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1.5px solid ' . $accent . ';
+    border-radius: 7px;
+    background: ' . $background . ';
+    font-size: 11px;
+}
+.voucher-header {
+    position: relative;
+    padding: 6px 8px;
+    text-align: center;
+    color: #fff;
+    font-weight: 700;
+    background: ' . $gradient . ';
+}
+.voucher-number {
+    position: absolute;
+    left: 7px;
+    top: 6px;
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,.22);
+}
+.wifi-mark { text-align: center; color: ' . $accent . '; font-size: 10px; font-weight: 700; margin: 5px 0 0; }
+.voucher-code { color: ' . $accent . '; font-size: 20px; line-height: 1.15; font-weight: 800; text-align: center; margin: 8px 8px 6px; word-break: break-all; }
+.voucher-details { margin: 0 10px; }
+.voucher-details div { display: inline-block; width: 48%; margin-bottom: 4px; vertical-align: top; }
+.voucher-details span { display: block; font-size: 8px; opacity: .7; }
+.voucher-details strong { display: block; font-size: 10px; }
+.voucher-instructions { margin: 5px 9px 0; padding-top: 4px; border-top: 1px solid ' . $accent . '; font-size: 8.5px; text-align: center; opacity: .78; }
+.voucher-footer { position: absolute; left: 7px; right: 7px; bottom: 13px; text-align: center; font-size: 8px; opacity: .72; }
+.powered { position: absolute; left: 7px; right: 7px; bottom: 4px; color: ' . $accent . '; font-size: 8px; text-align: center; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="voucher-grid" style="columns: ' . $columns . ';">' . $cards . '</div>
+</body>
+</html>';
     }
 
     public function statistics(Request $request)

@@ -73,6 +73,7 @@ export const router = createBrowserRouter([
       { path: 'radius-setup', Component: RadiusSetup },
       { path: 'provisioning', Component: Provisioning },
       { path: 'users', Component: Users },
+      { path: 'account-users', Component: SubUsers },
       { path: 'sub-users', Component: SubUsers },
     ],
   },

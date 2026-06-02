@@ -152,8 +152,8 @@ export const tenantLogin = (email: string, password: string, twoFactorCode?: str
   });
 
 export const tenantForgotPassword = (email: string) => postPublic('/tenant/forgot-password', { email });
-export const tenantResetPassword = (email: string, token: string, password: string, password_confirmation: string) =>
-  postPublic('/tenant/reset-password', { email, token, password, password_confirmation });
+export const tenantResetPassword = (email: string, token: string, password: string, password_confirmation: string, expires?: string, signature?: string) =>
+  postPublic('/tenant/reset-password', { email, token, password, password_confirmation, ...(expires ? { expires } : {}), ...(signature ? { signature } : {}) });
 
 export const tenantLogout = () => post('/tenant/logout');
 

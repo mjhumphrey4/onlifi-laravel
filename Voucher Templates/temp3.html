@@ -1,0 +1,121 @@
+<style>
+  .voucher {
+    width: 198px;
+    height: 142px;
+    border: 2px solid #2ecc71;
+    background: #fff;
+    font-family: Arial, sans-serif;
+    page-break-inside: avoid;
+    display: inline-block;
+    margin: 5px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .voucher-header {
+    background: #2ecc71;
+    color: white;
+    text-align: center;
+    padding: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    position: relative;
+  }
+  .voucher-id {
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+  }
+ 
+  .wifi-name {
+    text-align: center;
+    font-size: 13px;
+    font-weight: bold;
+    color: #27ae60;
+    padding: 4px 0;
+    background: #f8fff8;
+  }
+  .voucher-body {
+    padding: 6px 9px;
+  }
+  .user-section {
+    display: flex;
+    align-items: center;
+    margin: 5px 0 6px;
+  }
+  .user-icon {
+    margin-right: 8px;
+    width: 28px;
+    height: 28px;
+  }
+  .user-code {
+    font-size: 16.5px;
+    font-weight: bold;
+  }
+  .info-line {
+    font-size: 10.8px;
+    margin: 2.5px 0;
+  }
+  .info-label {
+    display: inline-block;
+    width: 58px;
+  }
+  .qr-section {
+    text-align: center;
+    margin: 4px 0 5px;
+  }
+  .voucher-footer {
+    font-size: 8px;
+    color: #666;
+    padding: 4px 8px;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-top: 1px solid #eee;
+  }
+  @media print {
+    .voucher { margin: 3px; }
+  }
+</style>
+
+<div class="voucher">
+  <div class="voucher-header">
+    <span class="voucher-id"><?= $num; ?></span>
+    STK WIFI POINT
+  </div>
+ 
+  <div class="wifi-name">
+    <?= $wifi_name ?? 'YOUR-WIFI-NAME'; ?>
+  </div>
+ 
+  <div class="voucher-body">
+    <div class="user-section">
+      <!-- Blue WiFi SVG Icon -->
+      <div class="user-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+          <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+          <circle cx="12" cy="18" r="2"></circle>
+        </svg>
+      </div>
+      <div class="user-code"><?= $username; ?></div>
+    </div>
+   
+    <?php if ($qr == "yes") { ?>
+      <div class="qr-section">
+        <?= $qrcode ?>
+      </div>
+    <?php } ?>
+   
+    <div class="info-line"><?= $validity; ?></div>
+    <div class="info-line"><span class="info-label">Duration:</span> <span class="info-value"><?= $timelimit; ?></span></div>
+    <div class="info-line"><span class="info-label">Price:</span> <span class="info-value"><?= $price; ?></span></div>
+  </div>
+ 
+  <div class="voucher-footer">
+    <?= $helptext; ?> • Support: +256 700 000 000
+  </div>
+</div>

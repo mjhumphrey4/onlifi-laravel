@@ -1,0 +1,117 @@
+<style>
+  .voucher {
+    width: 205px;
+    height: 150px;
+    border: 2px solid #0444cf;
+    background: #fff;
+    font-family: Arial, sans-serif;
+    page-break-inside: avoid;
+    display: inline-block;
+    margin: 5px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .voucher-header {
+    background: #0444cf;
+    color: white;
+    text-align: center;
+    padding: 6px 5px;
+    font-size: 12.5px;
+    font-weight: bold;
+    position: relative;
+  }
+  .voucher-id {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 9.5px;
+    background: rgba(255,255,255,0.25);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  
+  .wifi-name {
+    text-align: center;
+    font-size: 13.5px;
+    font-weight: bold;
+    color: #1e8449;
+    padding: 5px 0;
+  }
+
+  .voucher-body {
+    padding: 7px 10px 30px;
+  }
+  .user-section {
+    display: flex;
+    align-items: center;
+    margin-bottom: 7px;
+  }
+  .user-icon {
+    font-size: 24px;
+    margin-right: 7px;
+  }
+  .user-code {
+    font-size: 17px;
+    font-weight: bold;
+  }
+  .info-line {
+    font-size: 11px;
+    margin: 3.5px 0;
+    line-height: 1.35;
+  }
+  .info-label {
+    display: inline-block;
+    width: 62px;
+  }
+  .qr-section {
+    text-align: center;
+    margin: 5px 0;
+  }
+  .voucher-footer {
+    font-size: 8px;
+    color: #555;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 5px 8px;
+    background: #f1f1f1;
+    text-align: center;
+    line-height: 1.2;
+  }
+  @media print {
+    .voucher { margin: 3px; }
+  }
+</style>
+
+<div class="voucher">
+  <div class="voucher-header">
+    STK WIFI POINT <span class="voucher-id"><?= $num; ?></span>
+  </div>
+  
+  <div class="wifi-name">
+    <?= $wifi_name ?? 'YOUR-WIFI-NAME'; ?>
+  </div>
+  
+  <div class="voucher-body">
+    <div class="user-section">
+      <div class="user-icon">🔑</div>
+      <div class="user-code"><?= $username; ?></div>
+    </div>
+    
+    <?php if ($qr == "yes") { ?>
+      <div class="qr-section">
+        <?= $qrcode ?>
+      </div>
+    <?php } ?>
+    
+    <div class="info-line"><?= $validity; ?></div>
+    <div class="info-line"><span class="info-label">Duration:</span> <span class="info-value"><?= $timelimit; ?></span></div>
+    <div class="info-line"><span class="info-label">Price:</span> <span class="info-value"><?= $price; ?></span></div>
+  </div>
+  
+  <div class="voucher-footer">
+    <?= $helptext; ?><br>Support: +256 700 000 000
+  </div>
+</div>

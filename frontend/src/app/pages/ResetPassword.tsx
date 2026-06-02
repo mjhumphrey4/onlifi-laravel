@@ -8,6 +8,8 @@ export function ResetPassword() {
   const navigate = useNavigate();
   const emailFromLink = useMemo(() => params.get('email') || '', [params]);
   const token = useMemo(() => params.get('token') || '', [params]);
+  const expires = useMemo(() => params.get('expires') || '', [params]);
+  const signature = useMemo(() => params.get('signature') || '', [params]);
   const [email, setEmail] = useState(emailFromLink);
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -22,7 +24,7 @@ export function ResetPassword() {
     setLoading(true);
 
     try {
-      const response = await tenantResetPassword(email.trim(), token, password, confirmation);
+      const response = await tenantResetPassword(email.trim(), token, password, confirmation, expires, signature);
       setMessage(response.message || 'Password reset successfully.');
       window.setTimeout(() => navigate('/login'), 1500);
     } catch (err: any) {
@@ -45,7 +47,7 @@ export function ResetPassword() {
         <h1 className="text-2xl font-semibold">Create a new password</h1>
         <p className="text-sm text-muted-foreground mt-2">Use at least 8 characters.</p>
 
-        {!token && <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/10 text-destructive p-3 text-sm">Missing reset token. Request a fresh reset link.</div>}
+        {(!token || !expires || !signature) && <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/10 text-destructive p-3 text-sm">Missing signed reset link details. Request a fresh reset link.</div>}
         {message && <div className="mt-5 rounded-lg border border-green-500/30 bg-green-500/10 text-green-700 p-3 text-sm">{message}</div>}
         {error && <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/10 text-destructive p-3 text-sm">{error}</div>}
 
@@ -62,7 +64,7 @@ export function ResetPassword() {
             <span className="text-card-foreground">Confirm password</span>
             <input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} type="password" className="mt-2 w-full px-4 py-3 bg-input-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" required minLength={8} />
           </label>
-          <button disabled={loading || !token} className="w-full inline-flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-60">
+          <button disabled={loading || !token || !expires || !signature} className="w-full inline-flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-60">
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             Reset Password
           </button>

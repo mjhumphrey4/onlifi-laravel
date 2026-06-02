@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Download, Ticket, Filter, Search, Printer } from 'lucide-react';
-import { getDefaultVoucherTemplate, getVouchers } from '../utils/api';
+import { API_BASE, getDefaultVoucherTemplate, getVouchers } from '../utils/api';
 
 interface Voucher {
   id: number;
@@ -95,7 +95,35 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
   );
 
   const downloadTemplateVouchers = (vouchersToDownload: Voucher[], heading: string) => {
-    printTemplateVouchers(vouchersToDownload, heading);
+    const status = heading.toLowerCase().includes('unused') ? 'unused' : statusFilter === 'all' ? 'all' : statusFilter;
+    downloadGroupPdf(status);
+  };
+
+  const downloadGroupPdf = async (status: string) => {
+    try {
+      const token = localStorage.getItem('tenant_token');
+      const headers: HeadersInit = { Accept: 'application/pdf' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const siteId = localStorage.getItem('selected_site_id');
+      if (siteId) headers['X-Site-ID'] = siteId;
+      const response = await fetch(`${API_BASE}/vouchers/groups/${group.id}/export-pdf?status=${encodeURIComponent(status)}`, {
+        headers,
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to download PDF');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${group.group_name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'vouchers'}-${status}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+      alert('Failed to download PDF');
+    }
   };
 
   const handleDownloadAll = () => {
@@ -111,8 +139,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
   };
 
   const handlePrintUnused = () => {
-    const unusedVouchers = vouchers.filter(v => v.status === 'unused');
-    printTemplateVouchers(unusedVouchers, 'Unused Vouchers');
+    downloadGroupPdf('unused');
   };
 
   const escapeHtml = (value: string | number | null | undefined) =>

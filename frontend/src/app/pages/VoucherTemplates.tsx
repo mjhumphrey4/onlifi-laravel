@@ -13,6 +13,7 @@ interface VoucherTemplate {
   background_color: string;
   text_color: string;
   accent_color: string;
+  design?: { style?: string; numbering?: boolean } | null;
   show_voucher_code: boolean;
   show_voucher_type: boolean;
   show_sales_point: boolean;
@@ -44,91 +45,66 @@ const LAYOUT_OPTIONS = [
 
 const DEFAULT_SKINS = [
   {
-    id: 'classic',
-    name: 'Classic',
-    description: 'Clean and professional look',
-    preview: 'bg-white border-gray-200',
+    id: 'blue-strip',
+    name: 'Default Blue Strip',
+    description: 'Compact blue voucher with numbered header',
+    preview: 'bg-blue-50 border-blue-300',
     settings: {
+      design: { style: 'blue-strip', numbering: true },
       background_color: '#ffffff',
       text_color: '#1f2937',
-      accent_color: '#3b82f6',
-      header_text: 'WiFi Voucher',
-      footer_text: 'Thank you for choosing us!',
-      instructions: 'Connect to WiFi network and enter the code above',
+      accent_color: '#0444cf',
+      header_text: 'STK WIFI POINT',
+      footer_text: 'Support: +256 700 000 000',
+      instructions: 'One device per voucher.',
     }
   },
   {
-    id: 'modern-dark',
-    name: 'Modern Dark',
-    description: 'Sleek dark theme',
-    preview: 'bg-slate-900 border-slate-700',
+    id: 'green-numbered',
+    name: 'Green Numbered',
+    description: 'Soft green voucher with left-side numbering',
+    preview: 'bg-emerald-50 border-emerald-300',
     settings: {
-      background_color: '#0f172a',
-      text_color: '#f1f5f9',
-      accent_color: '#22d3ee',
-      header_text: 'Internet Access',
-      footer_text: 'Enjoy your connection!',
-      instructions: 'Select our network and enter this code',
+      design: { style: 'green-numbered', numbering: true },
+      background_color: '#ffffff',
+      text_color: '#14532d',
+      accent_color: '#2ecc71',
+      header_text: 'STK WIFI POINT',
+      footer_text: 'Support: +256 700 000 000',
+      instructions: 'Use this voucher on one device only.',
     }
   },
   {
-    id: 'vibrant',
-    name: 'Vibrant',
-    description: 'Bold and colorful',
-    preview: 'bg-gradient-to-br from-purple-600 to-pink-500',
+    id: 'wifi-icon',
+    name: 'WiFi Icon',
+    description: 'Clean green layout with a WiFi mark',
+    preview: 'bg-cyan-50 border-blue-300',
     settings: {
-      background_color: '#7c3aed',
-      text_color: '#ffffff',
-      accent_color: '#fbbf24',
-      header_text: '🌐 WiFi Pass',
-      footer_text: 'Stay Connected!',
-      instructions: 'Join our network with this code',
+      design: { style: 'wifi-icon', numbering: true },
+      background_color: '#ffffff',
+      text_color: '#164e63',
+      accent_color: '#2563eb',
+      header_text: 'STK WIFI POINT',
+      footer_text: 'Support: +256 700 000 000',
+      instructions: 'Connect to WiFi and enter the code.',
     }
   },
   {
-    id: 'minimal',
-    name: 'Minimal',
-    description: 'Simple and clean',
-    preview: 'bg-gray-50 border-gray-100',
+    id: 'modern-blue',
+    name: 'Modern Blue Card',
+    description: 'Larger modern voucher with gradient header',
+    preview: 'bg-blue-100 border-blue-400',
     settings: {
-      background_color: '#f9fafb',
-      text_color: '#374151',
-      accent_color: '#6b7280',
-      header_text: '',
-      footer_text: '',
-      instructions: '',
-    }
-  },
-  {
-    id: 'nature',
-    name: 'Nature',
-    description: 'Fresh green theme',
-    preview: 'bg-emerald-50 border-emerald-200',
-    settings: {
-      background_color: '#ecfdf5',
-      text_color: '#065f46',
-      accent_color: '#10b981',
-      header_text: 'WiFi Access Code',
-      footer_text: 'Enjoy browsing!',
-      instructions: 'Connect to our WiFi and use this code',
-    }
-  },
-  {
-    id: 'sunset',
-    name: 'Sunset',
-    description: 'Warm orange tones',
-    preview: 'bg-orange-50 border-orange-200',
-    settings: {
-      background_color: '#fff7ed',
-      text_color: '#9a3412',
-      accent_color: '#f97316',
-      header_text: 'Internet Voucher',
-      footer_text: 'Happy Surfing!',
-      instructions: 'Enter this code after connecting',
+      design: { style: 'modern-blue', numbering: true },
+      background_color: '#ffffff',
+      text_color: '#111827',
+      accent_color: '#0444cf',
+      header_text: 'STK WIFI POINT',
+      footer_text: 'Support: +256 700 000 000',
+      instructions: 'Terms apply. One device per voucher.',
     }
   },
 ];
-
 export function VoucherTemplates() {
   const { selectedSite } = useSite();
   const [templates, setTemplates] = useState<VoucherTemplate[]>([]);
@@ -149,6 +125,7 @@ export function VoucherTemplates() {
     background_color: string;
     text_color: string;
     accent_color: string;
+    design: { style?: string; numbering?: boolean };
     show_voucher_code: boolean;
     show_voucher_type: boolean;
     show_sales_point: boolean;
@@ -169,6 +146,7 @@ export function VoucherTemplates() {
     background_color: '#ffffff',
     text_color: '#000000',
     accent_color: '#3b82f6',
+    design: { style: 'blue-strip', numbering: true },
     show_voucher_code: true,
     show_voucher_type: true,
     show_sales_point: true,
@@ -256,6 +234,7 @@ export function VoucherTemplates() {
       background_color: template.background_color,
       text_color: template.text_color,
       accent_color: template.accent_color,
+      design: template.design || { style: 'blue-strip', numbering: true },
       show_voucher_code: template.show_voucher_code,
       show_voucher_type: template.show_voucher_type,
       show_sales_point: template.show_sales_point,
@@ -323,6 +302,7 @@ export function VoucherTemplates() {
       background_color: '#ffffff',
       text_color: '#000000',
       accent_color: '#3b82f6',
+      design: { style: 'blue-strip', numbering: true },
       show_voucher_code: true,
       show_voucher_type: true,
       show_sales_point: true,
@@ -368,18 +348,35 @@ export function VoucherTemplates() {
     expires_at: new Date(Date.now() + 86400000).toISOString(),
   };
 
+  const voucherNumber = (index: number) => `#${String(index + 1).padStart(4, '0')}`;
+
   const renderVoucherCard = (template: VoucherTemplate, voucher: Voucher, index: number) => (
     <div
       key={index}
-      className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex flex-col"
+      className="relative border-2 rounded-lg p-4 flex flex-col overflow-hidden"
       style={{
         backgroundColor: template.background_color,
         color: template.text_color,
+        borderColor: template.accent_color,
       }}
     >
       {template.header_text && (
-        <div className="text-center text-sm font-semibold mb-2" style={{ color: template.accent_color }}>
+        <div
+          className="relative text-center text-sm font-semibold -m-4 mb-3 px-3 py-2 text-white"
+          style={{ background: template.design?.style === 'modern-blue' ? `linear-gradient(90deg, ${template.accent_color}, #0666ff)` : template.accent_color }}
+        >
+          {template.design?.numbering !== false && (
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] bg-white/20 px-2 py-0.5 rounded">
+              {voucherNumber(index)}
+            </span>
+          )}
           {template.header_text}
+        </div>
+      )}
+
+      {template.design?.style === 'wifi-icon' && (
+        <div className="text-center text-xs font-bold mb-2" style={{ color: template.accent_color }}>
+          WIFI ACCESS
         </div>
       )}
       
@@ -431,10 +428,13 @@ export function VoucherTemplates() {
       )}
 
       {template.footer_text && (
-        <div className="text-center text-xs mt-2 opacity-60">
+        <div className="text-center text-xs mt-2 opacity-70">
           {template.footer_text}
         </div>
       )}
+      <div className="text-center text-[10px] mt-1 font-semibold" style={{ color: template.accent_color }}>
+        Powered by onlifi.net
+      </div>
     </div>
   );
 

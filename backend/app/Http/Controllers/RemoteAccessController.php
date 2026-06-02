@@ -30,6 +30,8 @@ class RemoteAccessController extends Controller
 
         return response()->json([
             'vpn_host' => 'vpn.onlifi.net',
+            'mobile_app_url' => SystemSetting::get('remote_access_mobile_app_url', 'http://onlifi.net/downloads/onlifi-mobile.apk'),
+            'web_login_url' => SystemSetting::get('remote_access_web_login_url', 'http://vpn.onlifi.net'),
             'sites' => $sites->map(fn (array $site) => [
                 'id' => $site['id'],
                 'name' => $site['name'],

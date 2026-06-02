@@ -70,7 +70,7 @@ class EmailNotificationService
         );
     }
 
-    public function sendForgotPasswordLink(TenantUser $user, string $token): void
+    public function sendForgotPasswordLink(TenantUser $user, string $token, int $expires, string $signature): void
     {
         if (!SystemSetting::get('notify_password_reset_email', true) || !$user->email) {
             return;
@@ -78,7 +78,11 @@ class EmailNotificationService
 
         $this->configureMailer();
         $dashboardUrl = rtrim((string) SystemSetting::get('dashboard_url', config('app.frontend_url')), '/');
-        $resetUrl = $dashboardUrl . '/reset-password?token=' . urlencode($token) . '&email=' . urlencode($user->email);
+        $resetUrl = $dashboardUrl
+            . '/reset-password?token=' . urlencode($token)
+            . '&email=' . urlencode($user->email)
+            . '&expires=' . urlencode((string) $expires)
+            . '&signature=' . urlencode($signature);
         $body = "Hello {$user->name},\n\nWe received a request to reset your OnLiFi password.\n\nOpen this link to set a new password:\n{$resetUrl}\n\nThis link expires in 60 minutes. If you did not request it, ignore this email.";
 
         try {

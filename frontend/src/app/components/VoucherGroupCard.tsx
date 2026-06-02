@@ -1,6 +1,7 @@
 import { Package, Clock, DollarSign, Users, TrendingUp, Download, Eye, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { VoucherListDialog } from './VoucherListDialog';
+import { API_BASE } from '../utils/api';
 
 interface VoucherGroup {
   id: number;
@@ -24,10 +25,12 @@ interface VoucherGroupCardProps {
   onSelect?: () => void;
   onDelete?: (id: number) => void;
   isDeleting?: boolean;
+  toneClassName?: string;
 }
 
-export function VoucherGroupCard({ group, onDelete, isDeleting }: VoucherGroupCardProps) {
+export function VoucherGroupCard({ group, onDelete, isDeleting, toneClassName = 'bg-card' }: VoucherGroupCardProps) {
   const [showVoucherList, setShowVoucherList] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const usagePercent = group.total_vouchers > 0 
     ? ((group.used_count + (group.in_use_count || 0)) / group.total_vouchers) * 100
@@ -37,12 +40,43 @@ export function VoucherGroupCard({ group, onDelete, isDeleting }: VoucherGroupCa
     return `UGX ${amount.toLocaleString()}`;
   };
 
-  const handleDownloadUnused = () => {
-    setShowVoucherList(true);
+  const handleDownloadUnused = async () => {
+    setDownloadingPdf(true);
+    try {
+      const token = localStorage.getItem('tenant_token');
+      const headers: HeadersInit = { Accept: 'application/pdf' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const siteId = localStorage.getItem('selected_site_id');
+      if (siteId) headers['X-Site-ID'] = siteId;
+
+      const response = await fetch(`${API_BASE}/vouchers/groups/${group.id}/export-pdf?status=unused`, {
+        headers,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download PDF');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${group.group_name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'vouchers'}-unused.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download vouchers PDF:', error);
+      alert('Failed to download vouchers PDF');
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   return (
-    <div className="bg-card border border-border rounded-lg p-5 hover:shadow-lg transition-all">
+    <div className={`${toneClassName} border border-border rounded-lg p-5 hover:shadow-lg transition-all`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
@@ -130,11 +164,12 @@ export function VoucherGroupCard({ group, onDelete, isDeleting }: VoucherGroupCa
         {group.unused_count > 0 && (
           <button
             onClick={handleDownloadUnused}
+            disabled={downloadingPdf}
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
-            title="Open print and download options"
+            title="Download unused vouchers as PDF"
           >
-            <Download className="w-4 h-4" />
-            Print/Download
+            <Download className={`w-4 h-4 ${downloadingPdf ? 'animate-pulse' : ''}`} />
+            {downloadingPdf ? 'Preparing PDF...' : 'Print/Download'}
           </button>
         )}
         

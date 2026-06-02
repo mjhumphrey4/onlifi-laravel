@@ -154,7 +154,7 @@ export function Dashboard() {
       const headers = getAuthHeaders();
       
       const range = getDateRange(dateFilter);
-      const params = new URLSearchParams({ per_page: '15', ...range });
+      const params = new URLSearchParams({ per_page: '10', status: 'success', ...range });
       const performancePeriod = dateFilter === 'all'
         ? 'six_months'
         : dateFilter === 'week'
@@ -268,7 +268,7 @@ export function Dashboard() {
 
   useEffect(() => {
     load();
-    const iv = setInterval(load, 5000); // Refresh every 5 seconds
+    const iv = setInterval(load, 300000); // Refresh every 5 minutes
     return () => clearInterval(iv);
   }, [load]);
 
@@ -400,12 +400,17 @@ export function Dashboard() {
 
       {/* Clients and Recent Transactions - Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Clients */}
+        {/* Active Clients */}
         <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-card-foreground">Top Clients</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-card-foreground">Active Clients ({clients.length})</h2>
+                <p className="text-xs text-muted-foreground">
+                  {lastUpdated ? `Last updated ${lastUpdated.toLocaleTimeString()}; refreshes every 5 minutes` : 'Refreshing every 5 minutes'}
+                </p>
+              </div>
             </div>
             <Link to="/clients" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
               View all <ArrowRight className="w-4 h-4" />
@@ -419,7 +424,7 @@ export function Dashboard() {
                 <p className="text-sm text-muted-foreground">No clients yet</p>
               </div>
             ) : (
-              clients.slice(0, 15).map((client, i) => (
+              clients.slice(0, 10).map((client, i) => (
                 <div
                   key={client.id || i}
                   className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
@@ -474,7 +479,7 @@ export function Dashboard() {
                 <p className="text-sm text-muted-foreground">No transactions found</p>
               </div>
             ) : (
-              txs.slice(0, 15).map((tx, i) => (
+              txs.slice(0, 10).map((tx, i) => (
                 <div
                   key={`${tx.id}-${i}`}
                   className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"

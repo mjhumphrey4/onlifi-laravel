@@ -21,6 +21,7 @@ class VoucherTemplateController extends Controller
     {
         $tenant = app('tenant');
         $site = $this->resolveTemplateSite($request);
+        $this->ensurePresetTemplates($tenant->id, $site);
         
         $templates = VoucherTemplate::where('tenant_id', $tenant->id)
             ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
@@ -51,6 +52,7 @@ class VoucherTemplateController extends Controller
             'show_price' => 'boolean',
             'show_expiry' => 'boolean',
             'show_qr_code' => 'boolean',
+            'design' => 'nullable|array',
             'header_text' => 'nullable|string',
             'footer_text' => 'nullable|string',
             'instructions' => 'nullable|string',
@@ -80,6 +82,7 @@ class VoucherTemplateController extends Controller
             ...$request->only([
                 'name', 'description', 'layout', 'paper_size', 'logo_url',
                 'background_color', 'text_color', 'accent_color',
+                'design',
                 'show_voucher_code', 'show_voucher_type', 'show_sales_point',
                 'show_duration', 'show_price', 'show_expiry', 'show_qr_code',
                 'header_text', 'footer_text', 'instructions', 'is_default',
@@ -129,6 +132,7 @@ class VoucherTemplateController extends Controller
             'show_price' => 'boolean',
             'show_expiry' => 'boolean',
             'show_qr_code' => 'boolean',
+            'design' => 'nullable|array',
             'header_text' => 'nullable|string',
             'footer_text' => 'nullable|string',
             'instructions' => 'nullable|string',
@@ -154,6 +158,7 @@ class VoucherTemplateController extends Controller
         $template->update($request->only([
             'name', 'description', 'layout', 'paper_size', 'logo_url',
             'background_color', 'text_color', 'accent_color',
+            'design',
             'show_voucher_code', 'show_voucher_type', 'show_sales_point',
             'show_duration', 'show_price', 'show_expiry', 'show_qr_code',
             'header_text', 'footer_text', 'instructions', 'is_default', 'is_active',
@@ -169,6 +174,7 @@ class VoucherTemplateController extends Controller
     {
         $tenant = app('tenant');
         $site = $this->resolveTemplateSite($request);
+        $this->ensurePresetTemplates($tenant->id, $site);
         
         $template = VoucherTemplate::where('tenant_id', $tenant->id)
             ->when($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
@@ -227,8 +233,10 @@ class VoucherTemplateController extends Controller
             return response()->json([
                 'template' => [
                     'name' => 'Default',
+                    'description' => 'Default OnLiFi voucher template',
                     'layout' => 'grid-2x4',
                     'paper_size' => 'A4',
+                    'design' => ['style' => 'blue-strip', 'numbering' => true],
                     'background_color' => '#ffffff',
                     'text_color' => '#000000',
                     'accent_color' => '#3b82f6',
@@ -246,5 +254,118 @@ class VoucherTemplateController extends Controller
         return response()->json([
             'template' => $template,
         ]);
+    }
+
+    private function ensurePresetTemplates(int $tenantId, $site): void
+    {
+        $hasSiteColumn = Schema::connection('central')->hasColumn('voucher_templates', 'site_id');
+        $query = VoucherTemplate::where('tenant_id', $tenantId)
+            ->when($site && $hasSiteColumn, fn ($query) => $query->where('site_id', $site->id));
+
+        $hasDefault = (clone $query)->where('is_default', true)->exists();
+
+        foreach ($this->presetTemplates() as $index => $preset) {
+            if ((clone $query)->where('name', $preset['name'])->exists()) {
+                continue;
+            }
+
+            VoucherTemplate::create([
+                'tenant_id' => $tenantId,
+                ...($site && $hasSiteColumn ? ['site_id' => $site->id] : []),
+                ...$preset,
+                'is_default' => !$hasDefault && $index === 0,
+                'is_active' => true,
+            ]);
+
+            if (!$hasDefault && $index === 0) {
+                $hasDefault = true;
+            }
+        }
+    }
+
+    private function presetTemplates(): array
+    {
+        return [
+            [
+                'name' => 'Default Blue Strip',
+                'description' => 'Compact blue voucher with numbered header.',
+                'layout' => 'grid-2x4',
+                'paper_size' => 'A4',
+                'design' => ['style' => 'blue-strip', 'numbering' => true],
+                'background_color' => '#ffffff',
+                'text_color' => '#1f2937',
+                'accent_color' => '#0444cf',
+                'show_voucher_code' => true,
+                'show_voucher_type' => true,
+                'show_sales_point' => true,
+                'show_duration' => true,
+                'show_price' => true,
+                'show_expiry' => false,
+                'show_qr_code' => false,
+                'header_text' => 'STK WIFI POINT',
+                'footer_text' => 'Support: +256 700 000 000',
+                'instructions' => 'One device per voucher.',
+            ],
+            [
+                'name' => 'Green Numbered',
+                'description' => 'Soft green voucher with number on the left.',
+                'layout' => 'grid-2x4',
+                'paper_size' => 'A4',
+                'design' => ['style' => 'green-numbered', 'numbering' => true],
+                'background_color' => '#ffffff',
+                'text_color' => '#14532d',
+                'accent_color' => '#2ecc71',
+                'show_voucher_code' => true,
+                'show_voucher_type' => true,
+                'show_sales_point' => true,
+                'show_duration' => true,
+                'show_price' => true,
+                'show_expiry' => false,
+                'show_qr_code' => false,
+                'header_text' => 'STK WIFI POINT',
+                'footer_text' => 'Support: +256 700 000 000',
+                'instructions' => 'Use this voucher on one device only.',
+            ],
+            [
+                'name' => 'WiFi Icon',
+                'description' => 'Green voucher with WiFi icon emphasis.',
+                'layout' => 'grid-2x4',
+                'paper_size' => 'A4',
+                'design' => ['style' => 'wifi-icon', 'numbering' => true],
+                'background_color' => '#ffffff',
+                'text_color' => '#164e63',
+                'accent_color' => '#2563eb',
+                'show_voucher_code' => true,
+                'show_voucher_type' => true,
+                'show_sales_point' => true,
+                'show_duration' => true,
+                'show_price' => true,
+                'show_expiry' => false,
+                'show_qr_code' => false,
+                'header_text' => 'STK WIFI POINT',
+                'footer_text' => 'Support: +256 700 000 000',
+                'instructions' => 'Connect to WiFi and enter the code.',
+            ],
+            [
+                'name' => 'Modern Blue Card',
+                'description' => 'Larger modern voucher with gradient header.',
+                'layout' => 'grid-2x2',
+                'paper_size' => 'A4',
+                'design' => ['style' => 'modern-blue', 'numbering' => true],
+                'background_color' => '#ffffff',
+                'text_color' => '#111827',
+                'accent_color' => '#0444cf',
+                'show_voucher_code' => true,
+                'show_voucher_type' => true,
+                'show_sales_point' => true,
+                'show_duration' => true,
+                'show_price' => true,
+                'show_expiry' => false,
+                'show_qr_code' => false,
+                'header_text' => 'STK WIFI POINT',
+                'footer_text' => 'Support: +256 700 000 000',
+                'instructions' => 'Terms apply. One device per voucher.',
+            ],
+        ];
     }
 }

@@ -234,6 +234,7 @@ Route::middleware(['tenant'])->group(function () {
         Route::put('/types/{id}', [VoucherController::class, 'updateType']);
         Route::delete('/types/{id}', [VoucherController::class, 'destroyType']);
         Route::get('/groups', [VoucherController::class, 'getGroups']);
+        Route::get('/groups/{id}/export-pdf', [VoucherController::class, 'exportGroupPdf']);
         Route::post('/generate-batch', [VoucherController::class, 'generateBatch']);
         Route::post('/validate', [VoucherController::class, 'validate']);
         Route::get('/{id}', [VoucherController::class, 'show']);
