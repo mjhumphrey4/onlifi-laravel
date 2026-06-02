@@ -7,6 +7,7 @@ use App\Models\SystemSetting;
 use App\Services\MikrotikService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -20,11 +21,14 @@ class ClientController extends Controller
     {
         $limit = $request->input('limit', 100);
         $site = SiteScope::selectedOrDefaultSite($request);
+        $cacheKey = $this->clientsCacheKey($site?->id, (int) $limit);
 
         if ($request->boolean('refresh')) {
             $this->refreshFromRouter($request, true);
-        } else {
-            $this->refreshFromRouter($request, false);
+            Cache::forget($cacheKey);
+        } elseif ($cached = Cache::get($cacheKey)) {
+            $cached['cache']['source'] = 'cache';
+            return response()->json($cached);
         }
 
         try {
@@ -70,11 +74,19 @@ class ClientController extends Controller
                 ->limit($limit)
                 ->get();
 
-            return response()->json([
+            $payload = [
                 'clients' => $clients,
                 'total' => $clients->count(),
                 'refreshed_at' => $clients->max('last_seen'),
-            ]);
+                'cache' => [
+                    'source' => 'database',
+                    'ttl_seconds' => 300,
+                ],
+            ];
+
+            Cache::put($cacheKey, $payload, now()->addMinutes(5));
+
+            return response()->json($payload);
         } catch (\Exception $e) {
             return response()->json([
                 'clients' => [],
@@ -112,7 +124,15 @@ class ClientController extends Controller
     public function refresh(Request $request)
     {
         $this->refreshFromRouter($request, true);
+        $site = SiteScope::selectedOrDefaultSite($request);
+        Cache::forget($this->clientsCacheKey($site?->id, (int) $request->input('limit', 100)));
         return $this->index($request);
+    }
+
+    private function clientsCacheKey(?int $siteId, int $limit): string
+    {
+        $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
+        return "tenant:{$tenantId}:site:" . ($siteId ?: 'default') . ":clients:limit:{$limit}";
     }
 
     private function refreshFromRouter(Request $request, bool $force): void

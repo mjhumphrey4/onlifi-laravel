@@ -140,6 +140,7 @@ Route::middleware(['auth:sanctum'])->prefix('super-admin')->group(function () {
 Route::middleware(['auth:sanctum'])->prefix('tenant')->group(function () {
     Route::post('/logout', [TenantAuthController::class, 'logout']);
     Route::get('/me', [TenantAuthController::class, 'me']);
+    Route::middleware('tenant.admin')->put('/profile', [TenantAuthController::class, 'updateProfile']);
     Route::post('/change-password', [TenantAuthController::class, 'changePassword']);
     Route::get('/2fa/status', [TwoFactorController::class, 'status']);
     Route::post('/2fa/setup', [TwoFactorController::class, 'setup']);

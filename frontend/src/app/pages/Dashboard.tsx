@@ -101,6 +101,7 @@ export function Dashboard() {
     totalEarnings: 0,
     voucherAmount: 0,
     mobileMoneyAmount: 0,
+    accountBalance: 0,
   });
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
@@ -182,10 +183,22 @@ export function Dashboard() {
         .sort((a: TopSalesAgent, b: TopSalesAgent) => Number(b.revenue || 0) - Number(a.revenue || 0))
         .slice(0, 5);
       setTopSalesAgents(agents);
+
+      const voucherAmount = dateFilter === 'all'
+        ? Number(voucherStats.total_revenue ?? 0)
+        : Number(performanceStats.summary?.voucher_total ?? 0);
+      const mobileMoneyAmount = dateFilter === 'all'
+        ? Number(statsRes.total_revenue ?? 0)
+        : Number(performanceStats.summary?.mobile_money_total ?? 0);
+      const totalEarnings = dateFilter === 'all'
+        ? voucherAmount + mobileMoneyAmount
+        : Number(performanceStats.summary?.combined_total ?? 0);
+
       setSummary({
-        totalEarnings: canViewFinancials ? Number(voucherStats.total_revenue ?? statsRes.voucher_revenue ?? statsRes.total_revenue ?? 0) : 0,
-        voucherAmount: canManageVouchers ? Number(performanceStats.summary?.voucher_total ?? 0) : 0,
-        mobileMoneyAmount: canViewTransactions ? Number(performanceStats.summary?.mobile_money_total ?? 0) : 0,
+        totalEarnings: canViewFinancials ? totalEarnings : 0,
+        voucherAmount: canManageVouchers ? voucherAmount : 0,
+        mobileMoneyAmount: canViewTransactions ? mobileMoneyAmount : 0,
+        accountBalance: canViewTransactions ? Number(statsRes.balance ?? statsRes.total_revenue ?? 0) : 0,
       });
 
       const groupedSites = transactions.reduce((acc: Record<string, SiteStat>, tx: TxRow) => {
@@ -273,7 +286,7 @@ export function Dashboard() {
   }, [load]);
 
   const siteList = Object.entries(sites);
-  const filteredEarnings = siteList.reduce((s, [, v]) => s + v.total_amount, 0);
+  const periodLabel = DATE_FILTERS.find((f) => f.id === dateFilter)?.label || 'Period';
 
   if (loading) {
     return (
@@ -365,9 +378,9 @@ export function Dashboard() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings || filteredEarnings)} icon={DollarSign} trend={{ value: 'All time', isPositive: true }} />
-        <StatsCard title="Vouchers" value={fmt(summary.voucherAmount)} icon={Users} trend={{ value: DATE_FILTERS.find((f) => f.id === dateFilter)?.label || 'Period', isPositive: true }} />
-        <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: DATE_FILTERS.find((f) => f.id === dateFilter)?.label || 'Period', isPositive: true }} />
+        <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings)} icon={DollarSign} trend={{ value: periodLabel, isPositive: true }} />
+        <StatsCard title="Vouchers" value={fmt(summary.voucherAmount)} icon={Users} trend={{ value: periodLabel, isPositive: true }} />
+        <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: periodLabel, isPositive: true }} note={`Available balance: ${fmt(summary.accountBalance)}`} />
       </div>
 
       {/* Per-site cards (admin sees all, user sees their own) */}
@@ -384,7 +397,7 @@ export function Dashboard() {
                 <p className="text-2xl font-bold mb-3">{fmt(stat.total_amount)}</p>
                 <div className="space-y-1 text-xs bg-white/10 rounded-lg p-3">
                   <div className="flex justify-between">
-                    <span className="opacity-80">{DATE_FILTERS.find((f) => f.id === dateFilter)?.label}</span>
+                    <span className="opacity-80">{periodLabel}</span>
                     <span className="font-semibold">{fmt(stat.today_amount)}</span>
                   </div>
                   <div className="flex justify-between border-t border-white/20 pt-1 mt-1">

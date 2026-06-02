@@ -158,6 +158,7 @@ export const tenantResetPassword = (email: string, token: string, password: stri
 export const tenantLogout = () => post('/tenant/logout');
 
 export const tenantMe = () => get('/tenant/me');
+export const updateTenantProfile = (data: Record<string, unknown>) => put('/tenant/profile', data);
 export const getTenantBillingStatus = () => get('/tenant/billing/status');
 export const initiateSubscriptionPayment = (data: Record<string, unknown>) => post('/tenant/billing/subscribe', data);
 export const checkSubscriptionPaymentStatus = (ref: string) => get(`/tenant/billing/payment-status?ref=${encodeURIComponent(ref)}`);

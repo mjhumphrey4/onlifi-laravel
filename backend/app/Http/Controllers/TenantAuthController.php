@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 
@@ -270,6 +271,62 @@ class TenantAuthController extends Controller
 
         return response()->json([
             'message' => 'Password changed successfully',
+        ]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $user = $request->user();
+        $tenant = $user->tenant;
+
+        $validator = Validator::make($request->all(), [
+            'name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('central.tenant_users', 'email')->ignore($user->id)],
+            'tenant_name' => ['required', 'string', 'max:255'],
+            'default_withdraw_phone' => ['nullable', 'string', 'max:32'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $data = $validator->validated();
+
+        $user->update([
+            'name' => $data['name'],
+            'email' => $data['email'],
+        ]);
+
+        $settings = $tenant->settings ?: [];
+        $settings['default_withdraw_phone'] = $data['default_withdraw_phone'] ?? null;
+
+        $tenant->update([
+            'name' => $data['tenant_name'],
+            'settings' => $settings,
+        ]);
+
+        return response()->json([
+            'message' => 'Profile updated successfully',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->fresh()->name,
+                'email' => $user->fresh()->email,
+                'role' => $user->role,
+                'tenant_id' => $tenant->id,
+                'tenant_name' => $tenant->fresh()->name,
+                'permissions' => $user->permissions ?: [],
+                'allowed_site_ids' => $user->allowed_site_ids ?: [],
+            ],
+            'tenant' => [
+                'id' => $tenant->id,
+                'name' => $tenant->fresh()->name,
+                'slug' => $tenant->slug,
+                'domain' => $tenant->domain,
+                'settings' => $tenant->fresh()->settings,
+            ],
         ]);
     }
 }

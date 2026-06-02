@@ -60,7 +60,7 @@ export function Vouchers() {
   const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
   const [groupPage, setGroupPage] = useState(1);
   const groupsPerPage = 9;
-  const groupTones = ['bg-card', 'bg-slate-50/70', 'bg-emerald-50/55', 'bg-sky-50/55', 'bg-amber-50/45', 'bg-violet-50/45'];
+  const groupToneForIndex = (index: number) => (index >= 3 && index <= 5 ? 'bg-primary/5' : 'bg-card');
 
   useEffect(() => {
     setGroupPage(1);
@@ -332,7 +332,7 @@ export function Vouchers() {
                 <VoucherGroupCard
                   key={group.id}
                   group={group}
-                  toneClassName={groupTones[index % groupTones.length]}
+                  toneClassName={groupToneForIndex(index)}
                   onDelete={handleDeleteGroup}
                   isDeleting={deletingGroupId === group.id}
                 />
