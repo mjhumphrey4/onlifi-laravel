@@ -120,19 +120,6 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       "'": '&#039;',
     }[char] || char));
 
-  const layoutColumns = (layout: VoucherTemplate['layout']) => {
-    switch (layout) {
-      case 'single': return 1;
-      case 'grid-2x2': return 2;
-      case 'grid-3x3': return 3;
-      case 'grid-4x5': return 4;
-      case 'grid-5x8': return 5;
-      case 'grid-8x10': return 8;
-      case 'grid-2x4':
-      default: return 2;
-    }
-  };
-
   const isDenseLayout = (layout: VoucherTemplate['layout']) => ['grid-4x5', 'grid-5x8', 'grid-8x10'].includes(layout);
 
   const buildVoucherCard = (voucher: Voucher, activeTemplate: VoucherTemplate) => {
@@ -142,7 +129,6 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     const number = String(vouchers.findIndex((item) => item.id === voucher.id) + 1).padStart(4, '0');
     const duration = voucher.validity_hours ? `${voucher.validity_hours}h` : `${group.validity_hours}h`;
     const price = `UGX ${Number(voucher.price || group.price).toLocaleString()}`;
-    const iconClass = style === 'wifi-icon' ? 'wifi-svg-icon' : style === 'green-numbered' ? 'user-avatar-icon' : 'key-svg-icon';
 
     return `
       <div class="voucher-card style-${escapeHtml(style)}">
@@ -151,10 +137,10 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
           <span>${escapeHtml(activeTemplate.header_text || 'STK WIFI POINT')}</span>
         </div>
         <div class="wifi-name">${escapeHtml(group.group_name || activeTemplate.name || 'WiFi Access')}</div>
-        ${activeTemplate.logo_url ? `<img class="voucher-logo" src="${escapeHtml(activeTemplate.logo_url)}" alt="Logo" />` : ''}
         <div class="voucher-body">
-          <div class="user-section">
-            <span class="${iconClass}"></span>
+          ${activeTemplate.logo_url ? `<img class="voucher-logo" src="${escapeHtml(activeTemplate.logo_url)}" alt="Logo" />` : ''}
+          <div class="voucher-code-panel">
+            <span class="code-label">Voucher Code</span>
             ${activeTemplate.show_voucher_code ? `<strong class="voucher-code">${escapeHtml(voucher.voucher_code)}</strong>` : ''}
           </div>
           <div class="voucher-meta">
@@ -165,14 +151,16 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
             ${activeTemplate.show_expiry && voucher.expires_at ? `<div><span>Expiry:</span><strong>${escapeHtml(new Date(voucher.expires_at).toLocaleDateString())}</strong></div>` : ''}
           </div>
         </div>
-        ${activeTemplate.instructions ? `<div class="voucher-instructions">${escapeHtml(activeTemplate.instructions)}</div>` : ''}
-        ${activeTemplate.footer_text ? `<div class="voucher-footer">${escapeHtml(activeTemplate.footer_text)}</div>` : ''}
-        <div class="powered">Powered by onlifi.net</div>
+        <div class="voucher-footer-block">
+          ${activeTemplate.instructions ? `<div class="voucher-instructions">${escapeHtml(activeTemplate.instructions)}</div>` : ''}
+          ${activeTemplate.footer_text ? `<div class="voucher-footer">${escapeHtml(activeTemplate.footer_text)}</div>` : ''}
+          <div class="powered">Powered by onlifi.net</div>
+        </div>
       </div>
     `;
   };
 
-  const buildTemplateHtml = (vouchersToRender: Voucher[], autoPrint: boolean, heading: string) => {
+  const buildTemplateHtml = (vouchersToRender: Voucher[], heading: string) => {
     const activeTemplate = template || {
       name: 'Default',
       layout: 'grid-2x4',
@@ -188,7 +176,6 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       show_expiry: false,
       show_qr_code: false,
     } as VoucherTemplate;
-    const columns = layoutColumns(activeTemplate.layout);
     const dense = isDenseLayout(activeTemplate.layout);
 
     return `
@@ -198,78 +185,75 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
         <title>${escapeHtml(heading)} - ${escapeHtml(group.group_name)}</title>
         <style>
           @page { size: ${escapeHtml(activeTemplate.paper_size || 'A4')}; margin: ${dense ? '5mm' : '8mm'}; }
+          * { box-sizing: border-box; }
           body { font-family: Arial, sans-serif; padding: 0; margin: 0; color: ${escapeHtml(activeTemplate.text_color)}; background: #fff; }
+          .print-toolbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; margin: 0 0 ${dense ? '6px' : '12px'}; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #334155; }
+          .print-toolbar button { border: 0; border-radius: 6px; padding: 8px 12px; background: #0f172a; color: #fff; font-weight: 700; cursor: pointer; }
           h1 { text-align: center; margin: 0 0 ${dense ? '6px' : '14px'}; font-size: ${dense ? '12px' : '20px'}; }
           .voucher-grid { font-size: 0; }
           .voucher-card {
             position: relative;
-            display: inline-block;
+            display: inline-flex;
+            flex-direction: column;
             vertical-align: top;
-            width: ${dense ? '23mm' : '52mm'};
-            height: ${dense ? '25mm' : '38mm'};
-            margin: ${dense ? '1mm' : '1.4mm'};
-            box-sizing: border-box;
+            width: ${dense ? '24mm' : '54mm'};
+            min-height: ${dense ? '29mm' : '45mm'};
+            margin: ${dense ? '1mm' : '1.6mm'};
             overflow: hidden;
             background: ${escapeHtml(activeTemplate.background_color)};
             color: ${escapeHtml(activeTemplate.text_color)};
             border: 2px solid ${escapeHtml(activeTemplate.accent_color)};
-            border-radius: ${dense ? '4px' : '8px'};
+            border-radius: ${dense ? '3px' : '6px'};
             page-break-inside: avoid;
             break-inside: avoid;
             font-size: ${dense ? '5.5px' : '10.8px'};
           }
-          .style-modern-blue { width: ${dense ? '30mm' : '63mm'}; height: ${dense ? '25mm' : '47mm'}; border-color: #0444cf; box-shadow: none; }
-          .voucher-header { position: relative; min-height: ${dense ? '4mm' : '8mm'}; padding: ${dense ? '1mm 1.5mm' : '1.7mm 2.4mm'}; text-align: center; color: #fff; font-weight: 800; background: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '5px' : '12px'}; line-height: 1.1; }
-          .style-modern-blue .voucher-header { background: linear-gradient(90deg, #0444cf, #0666ff); text-align: left; padding-left: ${dense ? '2mm' : '8mm'}; }
+          .style-modern-blue { width: ${dense ? '31mm' : '64mm'}; min-height: ${dense ? '31mm' : '48mm'}; border-color: #0444cf; }
+          .voucher-header { position: relative; min-height: ${dense ? '4mm' : '8mm'}; padding: ${dense ? '1mm 1.5mm' : '1.9mm 2.6mm'}; text-align: center; color: #fff; font-weight: 800; background: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '5px' : '11.5px'}; line-height: 1.1; }
+          .style-modern-blue .voucher-header { background: #064fe0; text-align: left; padding-left: ${dense ? '2mm' : '7mm'}; }
           .voucher-number { position: absolute; left: ${dense ? '1mm' : '2mm'}; top: 50%; transform: translateY(-50%); font-size: ${dense ? '4.5px' : '8.5px'}; background: rgba(255,255,255,.24); padding: 1px 4px; border-radius: 3px; }
           .style-blue-strip .voucher-number, .style-modern-blue .voucher-number { left: auto; right: ${dense ? '1mm' : '2mm'}; }
           .wifi-name { text-align: center; font-size: ${dense ? '4.8px' : '10px'}; font-weight: 800; color: ${escapeHtml(activeTemplate.accent_color)}; padding: ${dense ? '0.8mm 0' : '1.2mm 0'}; background: rgba(46,204,113,.06); }
           .style-blue-strip .wifi-name, .style-modern-blue .wifi-name { color: #1e8449; background: #fff; }
-          .voucher-logo { position: absolute; right: 2mm; bottom: 8mm; max-height: ${dense ? '7mm' : '14mm'}; max-width: ${dense ? '12mm' : '26mm'}; object-fit: contain; }
-          .voucher-body { padding: ${dense ? '1mm 1.5mm' : '1.8mm 2.7mm'} ${dense ? '1.5mm' : '2.7mm'} ${dense ? '5mm' : '10mm'}; }
+          .voucher-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: ${dense ? '.8mm' : '1.5mm'}; padding: ${dense ? '1mm 1.5mm' : '2mm 2.8mm'}; }
+          .voucher-logo { align-self: center; max-height: ${dense ? '5mm' : '9mm'}; max-width: ${dense ? '12mm' : '22mm'}; object-fit: contain; margin-bottom: ${dense ? '.3mm' : '.6mm'}; }
           .style-modern-blue .voucher-body { padding-top: ${dense ? '1.2mm' : '3mm'}; }
-          .user-section { display: flex; align-items: center; gap: ${dense ? '1mm' : '2mm'}; margin: ${dense ? '0.8mm 0' : '1mm 0 1.8mm'}; }
-          .style-modern-blue .user-section { border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 5px; padding: ${dense ? '1mm' : '2mm'}; }
-          .voucher-code { color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '7px' : '16px'}; line-height: 1.05; word-break: break-all; letter-spacing: .3px; }
+          .voucher-code-panel { border: 1px solid rgba(15,23,42,.16); background: rgba(15,23,42,.035); border-radius: ${dense ? '2px' : '4px'}; padding: ${dense ? '.8mm 1mm' : '1.5mm 1.8mm'}; text-align: center; }
+          .code-label { display: block; margin-bottom: ${dense ? '.2mm' : '.7mm'}; color: #64748b; font-size: ${dense ? '3.8px' : '7px'}; font-weight: 700; text-transform: uppercase; }
+          .voucher-code { display: block; color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '7px' : '16px'}; line-height: 1.05; word-break: break-all; letter-spacing: .3px; }
           .style-modern-blue .voucher-code { color: #1e3a8a; }
-          .key-svg-icon, .wifi-svg-icon, .user-avatar-icon { display: inline-block; flex: 0 0 auto; width: ${dense ? '5mm' : '8mm'}; height: ${dense ? '5mm' : '8mm'}; position: relative; }
-          .key-svg-icon:before { content: ""; position: absolute; left: 1mm; top: 1mm; width: 3.2mm; height: 3.2mm; border: 2px solid ${escapeHtml(activeTemplate.accent_color)}; border-radius: 999px; }
-          .key-svg-icon:after { content: ""; position: absolute; left: 4.1mm; top: 2.5mm; width: 4mm; height: 2px; background: ${escapeHtml(activeTemplate.accent_color)}; box-shadow: 2mm 1.2mm 0 -0.5mm ${escapeHtml(activeTemplate.accent_color)}; }
-          .user-avatar-icon:before { content: ""; position: absolute; left: 1.4mm; top: .5mm; width: 4mm; height: 4mm; border-radius: 999px; background: #4c1d95; }
-          .user-avatar-icon:after { content: ""; position: absolute; left: .5mm; top: 4.5mm; width: 6mm; height: 3mm; border-radius: 4mm 4mm 0 0; background: #4c1d95; }
-          .wifi-svg-icon:before, .wifi-svg-icon:after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); border: 2.5px solid #2563eb; border-bottom: 0; border-radius: 999px 999px 0 0; }
-          .wifi-svg-icon:before { top: 1mm; width: 8mm; height: 5mm; }
-          .wifi-svg-icon:after { top: 4mm; width: 4mm; height: 2.5mm; }
-          .wifi-svg-icon { border-radius: 999px; }
-          .wifi-svg-icon span, .wifi-svg-icon i { display: none; }
           .voucher-meta { font-size: ${dense ? '4.8px' : '10.8px'}; line-height: 1.25; }
-          .voucher-meta div { margin: ${dense ? '0' : '1mm'} 0; }
+          .voucher-meta div { display: flex; justify-content: space-between; gap: 1mm; margin: ${dense ? '0' : '.6mm'} 0; border-bottom: 1px solid rgba(15,23,42,.06); padding-bottom: ${dense ? '0' : '.4mm'}; }
           .voucher-meta span { display: inline-block; min-width: ${dense ? '10mm' : '17mm'}; color: #111827; }
           .voucher-meta strong { font-weight: 700; }
           .style-modern-blue .voucher-meta { display: flex; flex-wrap: wrap; gap: 1mm 3mm; color: #374151; }
           .style-modern-blue .voucher-meta span { min-width: auto; font-weight: 700; }
-          .voucher-instructions { position: absolute; left: 2mm; right: 2mm; bottom: ${dense ? '3.2mm' : '6mm'}; border-top: 1px solid #eee; padding-top: .8mm; font-size: ${dense ? '4px' : '7px'}; color: #666; }
-          .voucher-footer { position: absolute; left: 0; right: 0; bottom: ${dense ? '2mm' : '4mm'}; padding: 0 2mm; font-size: ${dense ? '4px' : '7px'}; color: #666; text-align: center; }
-          .powered { position: absolute; left: 0; right: 0; bottom: .8mm; color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '3.8px' : '7px'}; font-weight: 700; text-align: center; }
-          @media print { h1 { display: none; } .voucher-card { page-break-inside: avoid; } }
+          .voucher-footer-block { flex: 0 0 auto; margin: ${dense ? '.5mm 1.5mm 1mm' : '1mm 2.8mm 1.6mm'}; padding-top: ${dense ? '.5mm' : '1mm'}; border-top: 1px solid rgba(15,23,42,.12); text-align: center; }
+          .voucher-instructions { margin-bottom: ${dense ? '.3mm' : '.8mm'}; font-size: ${dense ? '4px' : '7px'}; line-height: 1.15; color: #666; }
+          .voucher-footer { margin-bottom: ${dense ? '.2mm' : '.5mm'}; font-size: ${dense ? '4px' : '7px'}; line-height: 1.15; color: #666; }
+          .powered { color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '3.8px' : '7px'}; font-weight: 700; line-height: 1.15; }
+          @media print { .print-toolbar, h1 { display: none; } .voucher-card { page-break-inside: avoid; } }
         </style>
       </head>
       <body>
+        <div class="print-toolbar">
+          <span>${escapeHtml(heading)} - ${escapeHtml(group.group_name)} (${vouchersToRender.length} vouchers)</span>
+          <button type="button" onclick="window.print()">Print this page</button>
+        </div>
         <h1>${escapeHtml(group.group_name)} - ${escapeHtml(heading)}</h1>
         <div class="voucher-grid">
           ${vouchersToRender.map((voucher) => buildVoucherCard(voucher, activeTemplate)).join('')}
         </div>
-        ${autoPrint ? '<script>window.print();</script>' : ''}
       </body>
       </html>
     `;
   };
 
   const printTemplateVouchers = (vouchersToPrint: Voucher[], heading: string) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(buildTemplateHtml(vouchersToPrint, true, heading));
-    printWindow.document.close();
+    const html = buildTemplateHtml(vouchersToPrint, heading);
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    window.open(url, '_blank', 'noopener,noreferrer');
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
   const getStatusColor = (status: string) => {

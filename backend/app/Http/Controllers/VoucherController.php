@@ -538,17 +538,21 @@ class VoucherController extends Controller
                         ' . (($design['numbering'] ?? true) !== false ? '<span class="voucher-number">' . $number . '</span>' : '') . '
                         ' . $header . '
                     </div>
-                    <div class="voucher-icons"><span class="wifi-icon"></span><span class="key-icon"></span></div>
-                    <div class="voucher-code">' . $code . '</div>
+                    <div class="voucher-code-panel">
+                        <span>Voucher Code</span>
+                        <strong>' . $code . '</strong>
+                    </div>
                     <div class="voucher-details">
                         ' . (($template['show_voucher_type'] ?? true) ? '<div><span>Package</span><strong>' . e($group->group_name) . '</strong></div>' : '') . '
                         ' . (($template['show_duration'] ?? true) ? '<div><span>Duration</span><strong>' . e($duration) . '</strong></div>' : '') . '
                         ' . (($template['show_price'] ?? true) ? '<div><span>Price</span><strong>' . e($price) . '</strong></div>' : '') . '
                         ' . (($template['show_sales_point'] ?? true) && $salesPoint ? '<div><span>Sales Point</span><strong>' . e($salesPoint) . '</strong></div>' : '') . '
                     </div>
-                    ' . ($instructions ? '<div class="voucher-instructions">' . $instructions . '</div>' : '') . '
-                    ' . ($footer ? '<div class="voucher-footer">' . $footer . '</div>' : '') . '
-                    <div class="powered">Powered by onlifi.net</div>
+                    <div class="voucher-footer-block">
+                        ' . ($instructions ? '<div class="voucher-instructions">' . $instructions . '</div>' : '') . '
+                        ' . ($footer ? '<div class="voucher-footer">' . $footer . '</div>' : '') . '
+                        <div class="powered">Powered by onlifi.net</div>
+                    </div>
                 </div>
             ';
         })->implode('');
@@ -566,7 +570,7 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
     display: inline-block;
     vertical-align: top;
     width: ' . $cardWidth . ';
-    height: ' . $cardHeight . ';
+    min-height: ' . $cardHeight . ';
     margin: ' . ($dense ? '1mm' : '2.5mm') . ';
     box-sizing: border-box;
     overflow: hidden;
@@ -592,20 +596,24 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
     border-radius: 3px;
     background: rgba(255,255,255,.22);
 }
-.voucher-icons { text-align: center; margin: ' . ($dense ? '1px 0' : '5px 0 0') . '; }
-.wifi-icon, .key-icon { display: inline-block; position: relative; vertical-align: middle; margin: 0 ' . ($dense ? '2px' : '5px') . '; }
-.wifi-icon { width: ' . ($dense ? '10px' : '20px') . '; height: ' . ($dense ? '7px' : '14px') . '; border-top: 2px solid ' . $accent . '; border-radius: 999px 999px 0 0; }
-.wifi-icon:after { content: ""; position: absolute; left: 50%; top: 45%; width: 50%; height: 45%; transform: translateX(-50%); border-top: 2px solid ' . $accent . '; border-radius: 999px 999px 0 0; }
-.key-icon { width: ' . ($dense ? '8px' : '15px') . '; height: ' . ($dense ? '6px' : '10px') . '; border: 2px solid ' . $accent . '; border-radius: 999px; }
-.key-icon:after { content: ""; position: absolute; left: 100%; top: 50%; width: ' . ($dense ? '6px' : '12px') . '; height: 2px; background: ' . $accent . '; transform: translateY(-50%); }
-.voucher-code { color: ' . $accent . '; font-size: ' . ($dense ? '8px' : '20px') . '; line-height: 1.15; font-weight: 800; text-align: center; margin: ' . ($dense ? '2px 3px' : '8px 8px 6px') . '; word-break: break-all; }
+.voucher-code-panel {
+    margin: ' . ($dense ? '2px 3px' : '8px 10px 6px') . ';
+    padding: ' . ($dense ? '2px 3px' : '6px 8px') . ';
+    border: 1px solid rgba(15,23,42,.16);
+    border-radius: ' . ($dense ? '3px' : '5px') . ';
+    background: rgba(15,23,42,.035);
+    text-align: center;
+}
+.voucher-code-panel span { display: block; color: #64748b; font-size: ' . ($dense ? '4px' : '7px') . '; font-weight: 700; text-transform: uppercase; margin-bottom: ' . ($dense ? '1px' : '4px') . '; }
+.voucher-code-panel strong { display: block; color: ' . $accent . '; font-size: ' . ($dense ? '8px' : '20px') . '; line-height: 1.15; font-weight: 800; word-break: break-all; }
 .voucher-details { margin: 0 ' . ($dense ? '3px' : '10px') . '; }
 .voucher-details div { display: inline-block; width: 48%; margin-bottom: ' . ($dense ? '1px' : '4px') . '; vertical-align: top; }
 .voucher-details span { display: block; font-size: ' . ($dense ? '4.5px' : '8px') . '; opacity: .7; }
 .voucher-details strong { display: block; font-size: ' . ($dense ? '5.5px' : '10px') . '; }
-.voucher-instructions { margin: ' . ($dense ? '1px 3px 0' : '5px 9px 0') . '; padding-top: ' . ($dense ? '1px' : '4px') . '; border-top: 1px solid ' . $accent . '; font-size: ' . ($dense ? '4.5px' : '8.5px') . '; text-align: center; opacity: .78; }
-.voucher-footer { position: absolute; left: 7px; right: 7px; bottom: ' . ($dense ? '7px' : '13px') . '; text-align: center; font-size: ' . ($dense ? '4.8px' : '8px') . '; opacity: .72; }
-.powered { position: absolute; left: 7px; right: 7px; bottom: 2px; color: ' . $accent . '; font-size: ' . ($dense ? '4.5px' : '8px') . '; text-align: center; font-weight: 700; }
+.voucher-footer-block { margin: ' . ($dense ? '2px 3px 3px' : '6px 10px 8px') . '; padding-top: ' . ($dense ? '1px' : '4px') . '; border-top: 1px solid rgba(15,23,42,.16); text-align: center; }
+.voucher-instructions { margin: 0 0 ' . ($dense ? '1px' : '4px') . '; font-size: ' . ($dense ? '4.5px' : '8px') . '; line-height: 1.15; opacity: .78; }
+.voucher-footer { margin: 0 0 ' . ($dense ? '1px' : '3px') . '; font-size: ' . ($dense ? '4.8px' : '8px') . '; line-height: 1.15; opacity: .72; }
+.powered { color: ' . $accent . '; font-size: ' . ($dense ? '4.5px' : '8px') . '; line-height: 1.15; text-align: center; font-weight: 700; }
 </style>
 </head>
 <body>
