@@ -76,7 +76,7 @@ export function VoucherGroupCard({ group, onDelete, isDeleting, toneClassName = 
   };
 
   return (
-    <div className={`${toneClassName} border border-border rounded-lg p-5 hover:shadow-lg transition-all`}>
+    <div className={`${toneClassName} border rounded-lg p-5 hover:shadow-lg transition-all`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">

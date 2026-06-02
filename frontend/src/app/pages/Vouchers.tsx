@@ -60,7 +60,15 @@ export function Vouchers() {
   const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
   const [groupPage, setGroupPage] = useState(1);
   const groupsPerPage = 9;
-  const groupToneForIndex = (index: number) => (index >= 3 && index <= 5 ? 'bg-primary/5' : 'bg-card');
+  const groupToneForIndex = (index: number) => {
+    const middleRowTones = [
+      'bg-blue-700 border-blue-500 text-white [--card-foreground:0_0%_100%] [--muted-foreground:214_32%_91%] [--border:217_91%_70%]',
+      'bg-sky-700 border-sky-500 text-white [--card-foreground:0_0%_100%] [--muted-foreground:214_32%_91%] [--border:199_89%_72%]',
+      'bg-indigo-700 border-indigo-500 text-white [--card-foreground:0_0%_100%] [--muted-foreground:226_100%_94%] [--border:239_84%_77%]',
+    ];
+
+    return index >= 3 && index <= 5 ? middleRowTones[index - 3] : 'bg-card';
+  };
 
   useEffect(() => {
     setGroupPage(1);

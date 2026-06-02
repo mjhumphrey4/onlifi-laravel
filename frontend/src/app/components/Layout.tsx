@@ -493,23 +493,33 @@ export function Layout() {
           </div>
         </div>
 
-        {/* Desktop Notification Bell - Fixed Position */}
-        <div className="hidden lg:flex fixed top-4 right-4 z-40 items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-2 bg-card border border-border rounded-full shadow-lg text-sm text-foreground">
-            <Clock className="w-4 h-4 text-primary" />
-            <span>{applicationTime} EAT</span>
+        {/* Desktop top bar */}
+        <div className="hidden lg:flex sticky top-0 z-30 h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active Site</p>
+            <p className="truncate text-sm font-semibold text-foreground">
+              {selectedSite?.name || 'Default Site'}
+            </p>
           </div>
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-3 bg-card border border-border rounded-full shadow-lg hover:bg-muted transition-colors"
-          >
-            <Bell className="w-5 h-5 text-foreground" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex min-w-[190px] items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground shadow-sm">
+              <Clock className="w-4 h-4 text-primary" />
+              <span className="font-medium">{applicationTime}</span>
+              <span className="text-xs text-muted-foreground">EAT</span>
+            </div>
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative flex h-10 w-12 items-center justify-center rounded-lg border border-border bg-card shadow-sm transition-colors hover:bg-muted"
+              aria-label="Open notifications"
+            >
+              <Bell className="w-5 h-5 text-foreground" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Notifications Panel */}
@@ -519,7 +529,7 @@ export function Layout() {
               className="fixed inset-0 z-40" 
               onClick={() => setShowNotifications(false)} 
             />
-            <div className="fixed top-16 right-4 z-50 w-80 max-h-[70vh] bg-card border border-border rounded-lg shadow-xl overflow-hidden">
+            <div className="fixed top-20 right-4 lg:right-6 z-50 w-80 max-h-[70vh] bg-card border border-border rounded-lg shadow-xl overflow-hidden">
               <div className="p-4 border-b border-border flex items-center justify-between">
                 <h3 className="font-semibold text-card-foreground">Notifications</h3>
                 {unreadCount > 0 && (

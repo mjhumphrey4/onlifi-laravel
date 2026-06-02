@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Edit2, Trash2, Printer, Star, Eye, Palette, Layout, FileText, Wifi, KeyRound } from 'lucide-react';
+import { Plus, Edit2, Trash2, Printer, Star, Eye, Palette, Layout, FileText } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
 import { API_BASE } from '../utils/api';
 
@@ -81,8 +81,8 @@ const DEFAULT_SKINS = [
   },
   {
     id: 'wifi-icon',
-    name: 'WiFi Icon',
-    description: 'Clean green layout with a WiFi mark',
+    name: 'Standard',
+    description: 'Clean standard voucher without decorative icons',
     preview: 'bg-cyan-50 border-blue-300',
     settings: {
       design: { style: 'wifi-icon', numbering: true },
@@ -213,8 +213,9 @@ export function VoucherTemplates() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        alert(data.error || 'Failed to save template');
+        const contentType = response.headers.get('content-type') || '';
+        const data = contentType.includes('application/json') ? await response.json() : null;
+        alert(data?.message || data?.error || 'Failed to save template');
         return;
       }
 
@@ -359,6 +360,7 @@ export function VoucherTemplates() {
 
   const renderVoucherCard = (template: VoucherTemplate, voucher: Voucher, index: number, compact = false) => {
     const dense = compact || isDenseLayout(template.layout);
+    const headerMargin = dense ? '-m-2 mb-2' : '-m-4 mb-3';
     return (
     <div
       key={index}
@@ -371,8 +373,8 @@ export function VoucherTemplates() {
     >
       {template.header_text && (
         <div
-          className="relative text-center text-sm font-semibold -m-4 mb-3 px-3 py-2 text-white"
-          style={{ background: template.design?.style === 'modern-blue' ? `linear-gradient(90deg, ${template.accent_color}, #0666ff)` : template.accent_color }}
+          className={`relative text-center font-semibold px-3 py-2 text-white ${headerMargin} ${dense ? 'text-[9px]' : 'text-sm'}`}
+          style={{ background: template.design?.style === 'modern-blue' ? '#064fe0' : template.accent_color }}
         >
           {template.design?.numbering !== false && (
             <span className={`absolute left-2 top-1/2 -translate-y-1/2 bg-white/20 px-2 py-0.5 rounded ${dense ? 'text-[8px]' : 'text-[10px]'}`}>
@@ -383,14 +385,12 @@ export function VoucherTemplates() {
         </div>
       )}
 
-      <div className={`flex items-center justify-center gap-3 ${dense ? 'mb-1' : 'mb-2'}`} style={{ color: template.accent_color }}>
-        <Wifi className={dense ? 'w-3 h-3' : 'w-5 h-5'} />
-        <KeyRound className={dense ? 'w-3 h-3' : 'w-5 h-5'} />
-      </div>
-      
       {template.show_voucher_code && (
-        <div className="text-center mb-2">
-          <span className={`${dense ? 'text-sm' : 'text-2xl'} font-bold tracking-wider`} style={{ color: template.accent_color }}>
+        <div className={`${dense ? 'mb-1 rounded px-2 py-1' : 'mb-2 rounded-md px-3 py-2'} border text-center bg-slate-500/5`} style={{ borderColor: `${template.accent_color}55` }}>
+          <span className={`${dense ? 'text-[7px]' : 'text-[10px]'} block uppercase font-bold text-muted-foreground ${dense ? 'mb-0' : 'mb-1'}`}>
+            Voucher Code
+          </span>
+          <span className={`${dense ? 'text-sm' : 'text-2xl'} block font-bold tracking-wider`} style={{ color: template.accent_color }}>
             {voucher.code}
           </span>
         </div>
@@ -430,7 +430,7 @@ export function VoucherTemplates() {
       </div>
 
       {template.instructions && (
-        <div className={`${dense ? 'mt-1 pt-1 text-[8px]' : 'mt-2 pt-2 text-xs'} border-t opacity-70`} style={{ borderColor: template.accent_color }}>
+        <div className={`${dense ? 'mt-1 pt-1 text-[8px]' : 'mt-2 pt-2 text-xs'} border-t text-center opacity-70`} style={{ borderColor: `${template.accent_color}66` }}>
           {template.instructions}
         </div>
       )}
@@ -604,10 +604,35 @@ export function VoucherTemplates() {
                             : 'border-border hover:border-primary/50'
                         }`}
                       >
-                        <div 
-                          className={`w-full h-8 rounded mb-2 border ${skin.preview}`}
-                          style={{ backgroundColor: skin.settings.background_color }}
-                        />
+                        <div
+                          className={`w-full h-20 rounded mb-2 border overflow-hidden ${skin.preview}`}
+                          style={{
+                            backgroundColor: skin.settings.background_color,
+                            color: skin.settings.text_color,
+                            borderColor: skin.settings.accent_color,
+                          }}
+                        >
+                          <div
+                            className="relative px-2 py-1 text-center text-[9px] font-bold text-white"
+                            style={{ backgroundColor: skin.settings.accent_color }}
+                          >
+                            <span className="absolute left-1 top-1/2 -translate-y-1/2 rounded bg-white/20 px-1 text-[7px]">#0001</span>
+                            {skin.settings.header_text}
+                          </div>
+                          <div className="px-2 py-1.5">
+                            <div
+                              className="rounded border px-2 py-1 text-center"
+                              style={{ borderColor: `${skin.settings.accent_color}55`, backgroundColor: 'rgba(15,23,42,.035)' }}
+                            >
+                              <span className="block text-[6px] font-bold uppercase text-slate-500">Voucher Code</span>
+                              <span className="block text-[13px] font-black leading-tight" style={{ color: skin.settings.accent_color }}>ABC123</span>
+                            </div>
+                            <div className="mt-1 grid grid-cols-2 gap-x-2 text-[7px] leading-tight">
+                              <span className="text-slate-500">Duration</span><strong>1h</strong>
+                              <span className="text-slate-500">Price</span><strong>UGX 500</strong>
+                            </div>
+                          </div>
+                        </div>
                         <p className="text-sm font-medium text-card-foreground">{skin.name}</p>
                         <p className="text-xs text-muted-foreground">{skin.description}</p>
                       </button>

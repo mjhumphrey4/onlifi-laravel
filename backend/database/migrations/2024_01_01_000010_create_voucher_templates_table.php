@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('tenant_id')->constrained('tenants')->onDelete('cascade');
             $table->string('name');
             $table->text('description')->nullable();
-            $table->enum('layout', ['single', 'grid-2x2', 'grid-2x4', 'grid-3x3'])->default('grid-2x4');
+            $table->enum('layout', ['single', 'grid-2x2', 'grid-2x4', 'grid-3x3', 'grid-4x5', 'grid-5x8', 'grid-8x10'])->default('grid-2x4');
             $table->string('paper_size')->default('A4');
             $table->json('design')->nullable(); // Stores design settings like colors, fonts, logo position
             $table->string('logo_url')->nullable();

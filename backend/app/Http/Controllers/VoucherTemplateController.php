@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\VoucherTemplate;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
@@ -76,18 +77,32 @@ class VoucherTemplateController extends Controller
                 ->update(['is_default' => false]);
         }
 
-        $template = VoucherTemplate::create([
-            'tenant_id' => $tenant->id,
-            ...($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id') ? ['site_id' => $site->id] : []),
-            ...$request->only([
-                'name', 'description', 'layout', 'paper_size', 'logo_url',
-                'background_color', 'text_color', 'accent_color',
-                'design',
-                'show_voucher_code', 'show_voucher_type', 'show_sales_point',
-                'show_duration', 'show_price', 'show_expiry', 'show_qr_code',
-                'header_text', 'footer_text', 'instructions', 'is_default',
-            ]),
-        ]);
+        try {
+            $template = VoucherTemplate::create([
+                'tenant_id' => $tenant->id,
+                ...($site && Schema::connection('central')->hasColumn('voucher_templates', 'site_id') ? ['site_id' => $site->id] : []),
+                ...$request->only([
+                    'name', 'description', 'layout', 'paper_size', 'logo_url',
+                    'background_color', 'text_color', 'accent_color',
+                    'design',
+                    'show_voucher_code', 'show_voucher_type', 'show_sales_point',
+                    'show_duration', 'show_price', 'show_expiry', 'show_qr_code',
+                    'header_text', 'footer_text', 'instructions', 'is_default',
+                ]),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Voucher template create failed', [
+                'tenant_id' => $tenant->id,
+                'site_id' => $site?->id,
+                'layout' => $request->input('layout'),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Template save failed',
+                'message' => 'Unable to save template: ' . $e->getMessage(),
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Template created successfully',
@@ -155,14 +170,29 @@ class VoucherTemplateController extends Controller
                 ->update(['is_default' => false]);
         }
 
-        $template->update($request->only([
-            'name', 'description', 'layout', 'paper_size', 'logo_url',
-            'background_color', 'text_color', 'accent_color',
-            'design',
-            'show_voucher_code', 'show_voucher_type', 'show_sales_point',
-            'show_duration', 'show_price', 'show_expiry', 'show_qr_code',
-            'header_text', 'footer_text', 'instructions', 'is_default', 'is_active',
-        ]));
+        try {
+            $template->update($request->only([
+                'name', 'description', 'layout', 'paper_size', 'logo_url',
+                'background_color', 'text_color', 'accent_color',
+                'design',
+                'show_voucher_code', 'show_voucher_type', 'show_sales_point',
+                'show_duration', 'show_price', 'show_expiry', 'show_qr_code',
+                'header_text', 'footer_text', 'instructions', 'is_default', 'is_active',
+            ]));
+        } catch (\Throwable $e) {
+            Log::error('Voucher template update failed', [
+                'tenant_id' => $tenant->id,
+                'site_id' => $site?->id,
+                'template_id' => $template->id,
+                'layout' => $request->input('layout'),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Template save failed',
+                'message' => 'Unable to save template: ' . $e->getMessage(),
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Template updated successfully',
@@ -327,8 +357,8 @@ class VoucherTemplateController extends Controller
                 'instructions' => 'Use this voucher on one device only.',
             ],
             [
-                'name' => 'WiFi Icon',
-                'description' => 'Green voucher with WiFi icon emphasis.',
+                'name' => 'Standard',
+                'description' => 'Clean standard voucher without decorative icons.',
                 'layout' => 'grid-2x4',
                 'paper_size' => 'A4',
                 'design' => ['style' => 'wifi-icon', 'numbering' => true],
