@@ -8,6 +8,8 @@ const features = [
   { icon: Wallet, title: 'Mobile Money First', text: 'Support MTN Momo and Airtel Money mobile money payments with our API backends or bring your own YoPayments or IOTEC API.' },
   { icon: Wallet, title: 'FREE', text: 'Free like Free Beer. No Monthly Subscriptions, But per transaction charges limited to 1%.' },
   { icon: Router, title: 'Remote Access', text: 'Not Home, No Problem. Roam on the Go!' },
+  { icon: Ticket, title: 'Multiple Users', text: 'Have a Team, give your employees account access with limited privileges with rights to print vouchers, track transactions, but not amounts, or define your own rules.' },
+  { icon: Ticket, title: 'Real-Time Support', text: 'Experiencing Issues? Simply open a support ticket and get help.' },
 ];
 
 export function Landing() {
