@@ -25,6 +25,8 @@ import { API_BASE } from '../utils/api';
 const adminMenuItems = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/admin/tenants', label: 'All Tenants', icon: Users },
+  { path: '/admin/mikrotik-users', label: 'Mikrotik Users', icon: Network },
+  { path: '/admin/omada-users', label: 'Omada Users', icon: Network },
   { path: '/admin/vpn-management', label: 'VPN Management', icon: Network },
   { path: '/admin/tenants/pending', label: 'Pending Approvals', icon: UserCheck },
   { path: '/admin/support-tickets', label: 'Support Tickets', icon: MessageSquare },

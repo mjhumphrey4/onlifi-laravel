@@ -458,6 +458,11 @@ class NasController extends Controller
         $hotspotDns = "{$siteSlug}.wifi";
         $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
         $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
+        $vpnClientName = 'onlifi-sstp';
+        $vpnHost = $site?->vpn_public_host ?: 'vpn.onlifi.net';
+        $vpnPort = (int) ($site?->vpn_public_port ?: 8443);
+        $vpnUsername = $site?->vpn_username ?: $siteSlug;
+        $vpnPassword = $site?->vpn_password ?: '';
         $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
         $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
@@ -486,6 +491,11 @@ class NasController extends Controller
         $acctPort = $this->rscString((string) $acctPort);
         $remoteAdminUser = $this->rscString($remoteAdminUser);
         $remoteAdminPassword = $this->rscString($remoteAdminPassword);
+        $vpnClientName = $this->rscString($vpnClientName);
+        $vpnHost = $this->rscString($vpnHost);
+        $vpnPort = $this->rscString((string) $vpnPort);
+        $vpnUsername = $this->rscString($vpnUsername);
+        $vpnPassword = $this->rscString($vpnPassword);
         $telemetryUrl = $this->rscString($telemetryUrl);
         $telemetryToken = $this->rscString($telemetryToken);
         $appHost = $this->rscString($appHost);
@@ -536,6 +546,11 @@ class NasController extends Controller
 :local routerIdentifier "{$routerIdentifier}"
 :local remoteAdminUser "{$remoteAdminUser}"
 :local remoteAdminPassword "{$remoteAdminPassword}"
+:local vpnClientName "{$vpnClientName}"
+:local vpnHost "{$vpnHost}"
+:local vpnPort "{$vpnPort}"
+:local vpnUsername "{$vpnUsername}"
+:local vpnPassword "{$vpnPassword}"
 :local telemetryUrl "{$telemetryUrl}"
 :local telemetryToken "{$telemetryToken}"
 :local appHost "{$appHost}"
@@ -609,6 +624,18 @@ class NasController extends Controller
 }
 # Router management services are intentionally left unchanged.
 # Winbox/API/SSH/www ports and allowed-address settings remain under the router owner's control.
+
+# SSTP client for OnLiFi remote access.
+# The SoftEther server-side user/password must match the values shown to the administrator.
+:if ([:len \$vpnPassword] > 0) do={
+  :if ([:len [/interface sstp-client find name=\$vpnClientName]] = 0) do={
+    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnHost port=\$vpnPort user=\$vpnUsername password=\$vpnPassword profile=default-encryption verify-server-certificate=no disabled=no comment="OnLiFi SSTP VPN"
+  } else={
+    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnHost port=\$vpnPort user=\$vpnUsername password=\$vpnPassword profile=default-encryption verify-server-certificate=no disabled=no comment="OnLiFi SSTP VPN"
+  }
+} else={
+  :log warning "OnLiFi SSTP VPN password missing; skipping SSTP client setup"
+}
 
 # DHCP
 :if ([:len [/ip pool find name=\$dhcpPool]] = 0) do={
@@ -715,6 +742,7 @@ class NasController extends Controller
 :put "============================================"
 :put "Router Identifier: {$routerIdentifier}"
 :put "RADIUS Server: {$serverIp}:{$authPort}/{$acctPort}"
+:put "SSTP VPN: {$vpnHost}:{$vpnPort}"
 :put "LAN Gateway: {$lanGateway}"
 :put "Hotspot: on {$hotspotDns}"
 :put ""
@@ -907,11 +935,12 @@ RSC;
                 'name' => $name,
                 'slug' => Str::slug($name),
                 'description' => 'Auto-created for router provisioning',
+                'site_type' => 'mikrotik',
                 'is_active' => true,
                 'vpn_username' => Str::slug($name),
                 'vpn_password' => Str::random(24),
                 'vpn_public_host' => 'vpn.onlifi.net',
-                'vpn_public_port' => Site::uniqueVpnPublicPort(),
+                'vpn_public_port' => Site::defaultVpnPublicPort(),
                 'vpn_status' => 'active',
             ]);
         }
@@ -933,7 +962,7 @@ RSC;
             $updates['vpn_public_host'] = 'vpn.onlifi.net';
         }
         if (!$site->vpn_public_port) {
-            $updates['vpn_public_port'] = Site::uniqueVpnPublicPort($site->id);
+            $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
         }
         if (!$site->vpn_status || $site->vpn_status === 'pending') {
             $updates['vpn_status'] = 'active';

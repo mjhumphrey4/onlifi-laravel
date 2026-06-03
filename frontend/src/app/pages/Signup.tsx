@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
-import { Building2, User, Mail, Lock, Phone, UserPlus, CheckCircle, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Building2, User, Mail, Lock, Phone, UserPlus, CheckCircle, AlertCircle, Eye, EyeOff, Loader2, CreditCard, Router } from 'lucide-react';
 import { API_BASE } from '../utils/api';
 
 interface SignupFormData {
@@ -11,6 +11,8 @@ interface SignupFormData {
   full_name: string;
   phone: string;
   site_name: string;
+  mobile_money_provider: 'yo' | 'iotec';
+  router_types: Array<'mikrotik' | 'omada'>;
 }
 
 interface ValidationErrors {
@@ -20,6 +22,7 @@ interface ValidationErrors {
   confirmPassword?: string;
   full_name?: string;
   site_name?: string;
+  router_types?: string;
 }
 
 export function Signup() {
@@ -32,6 +35,8 @@ export function Signup() {
     full_name: '',
     phone: '',
     site_name: '',
+    mobile_money_provider: 'yo',
+    router_types: ['mikrotik'],
   });
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [loading, setLoading] = useState(false);
@@ -65,6 +70,10 @@ export function Signup() {
       newErrors.site_name = 'Default site name is required';
     }
 
+    if (formData.router_types.length === 0) {
+      newErrors.router_types = 'Select at least one router type';
+    }
+
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 8) {
@@ -94,6 +103,18 @@ export function Signup() {
     setApiError('');
   };
 
+  const toggleRouterType = (type: 'mikrotik' | 'omada') => {
+    setFormData((prev) => {
+      const exists = prev.router_types.includes(type);
+      const router_types = exists
+        ? prev.router_types.filter((item) => item !== type)
+        : [...prev.router_types, type];
+      return { ...prev, router_types };
+    });
+    setErrors((prev) => ({ ...prev, router_types: undefined }));
+    setApiError('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -112,10 +133,16 @@ export function Signup() {
           name: formData.username,
           domain: `${formData.username}.onlifi.local`,
           site_name: formData.site_name,
+          mobile_money_provider: formData.mobile_money_provider,
+          router_types: formData.router_types,
           admin_email: formData.email,
           admin_name: formData.full_name,
           admin_password: formData.password,
-          settings: { phone: formData.phone },
+          settings: {
+            phone: formData.phone,
+            mobile_money_provider: formData.mobile_money_provider,
+            router_types: formData.router_types,
+          },
         }),
       });
 
@@ -178,7 +205,7 @@ export function Signup() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-primary/80 p-8 text-center">
           <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -305,6 +332,64 @@ export function Signup() {
             {errors.site_name && (
               <p className="text-xs text-destructive mt-1">{errors.site_name}</p>
             )}
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-card-foreground mb-2">
+                Mobile Money Provider
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'yo' as const, label: 'YoPayments', fee: '5.5%' },
+                  { id: 'iotec' as const, label: 'IOTEC', fee: '5%' },
+                ].map((provider) => (
+                  <button
+                    type="button"
+                    key={provider.id}
+                    onClick={() => setFormData((prev) => ({ ...prev, mobile_money_provider: provider.id }))}
+                    className={`text-left rounded-lg border p-3 transition-colors ${
+                      formData.mobile_money_provider === provider.id ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4 text-primary mb-2" />
+                    <p className="text-sm font-semibold text-card-foreground">{provider.label}</p>
+                    <p className="text-xs text-muted-foreground">{provider.fee} transaction fee</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-card-foreground mb-2">
+                Router Types
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'omada' as const, label: 'TP-Link Omada' },
+                  { id: 'mikrotik' as const, label: 'Mikrotik' },
+                ].map((type) => (
+                  <label
+                    key={type.id}
+                    className={`rounded-lg border p-3 cursor-pointer transition-colors ${
+                      formData.router_types.includes(type.id) ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.router_types.includes(type.id)}
+                      onChange={() => toggleRouterType(type.id)}
+                      className="sr-only"
+                    />
+                    <Router className="w-4 h-4 text-primary mb-2" />
+                    <span className="text-sm font-semibold text-card-foreground">{type.label}</span>
+                  </label>
+                ))}
+              </div>
+              {errors.router_types && (
+                <p className="text-xs text-destructive mt-1">{errors.router_types}</p>
+              )}
+            </div>
           </div>
 
           {/* Password */}

@@ -219,7 +219,7 @@ class RemoteAccessController extends Controller
             $updates['vpn_public_host'] = 'vpn.onlifi.net';
         }
         if (!$site->vpn_public_port) {
-            $updates['vpn_public_port'] = Site::uniqueVpnPublicPort($site->id);
+            $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
         }
         if (!$site->vpn_status || $site->vpn_status === 'pending') {
             $updates['vpn_status'] = 'active';

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import {
   Users,
   Search,
@@ -38,10 +38,25 @@ interface Tenant {
   users?: { id: number; name: string; email: string }[];
   primary_email?: string;
   database?: string;
+  mobile_money_provider?: 'yo' | 'iotec';
+  router_types?: string[];
+  signup_site_name?: string | null;
+  settings?: {
+    phone?: string;
+    mobile_money_provider?: 'yo' | 'iotec';
+    router_types?: string[];
+    signup_site_name?: string;
+  } | null;
 }
 
 export default function TenantList() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const routerTypeFilter = location.pathname.includes('omada-users')
+    ? 'omada'
+    : location.pathname.includes('mikrotik-users')
+      ? 'mikrotik'
+      : '';
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,6 +68,7 @@ export default function TenantList() {
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [showRadiusModal, setShowRadiusModal] = useState(false);
   const [showRemoteAccessModal, setShowRemoteAccessModal] = useState(false);
+  const [showSignupProfileModal, setShowSignupProfileModal] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState<number | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [radiusSettings, setRadiusSettings] = useState({
@@ -64,7 +80,7 @@ export default function TenantList() {
   useEffect(() => {
     fetchTenants();
     fetchRadiusSettings();
-  }, [currentPage, statusFilter]);
+  }, [currentPage, statusFilter, routerTypeFilter]);
 
   const fetchTenants = async () => {
     try {
@@ -74,6 +90,7 @@ export default function TenantList() {
       params.set('page', String(currentPage));
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (searchQuery) params.set('search', searchQuery);
+      if (routerTypeFilter) params.set('router_type', routerTypeFilter);
 
       const response = await fetch(`${API_BASE}/super-admin/tenants?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -307,8 +324,12 @@ export default function TenantList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">All Tenants</h1>
-          <p className="text-slate-400 mt-1">Manage all tenant accounts</p>
+          <h1 className="text-2xl font-bold text-white">
+            {routerTypeFilter === 'omada' ? 'Omada Users' : routerTypeFilter === 'mikrotik' ? 'Mikrotik Users' : 'All Tenants'}
+          </h1>
+          <p className="text-slate-400 mt-1">
+            {routerTypeFilter ? `Tenants that selected ${routerTypeFilter === 'omada' ? 'TP-Link Omada' : 'Mikrotik'} during signup.` : 'Manage all tenant accounts'}
+          </p>
         </div>
         <button
           onClick={fetchTenants}
@@ -354,6 +375,7 @@ export default function TenantList() {
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Tenant</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Email</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Database</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Signup</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Status</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">SMS</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-slate-400">Created</th>
@@ -363,14 +385,14 @@ export default function TenantList() {
             <tbody className="divide-y divide-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin mx-auto" />
                     <p className="mt-2 text-slate-400">Loading tenants...</p>
                   </td>
                 </tr>
               ) : tenants.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <Users className="w-12 h-12 text-slate-600 mx-auto" />
                     <p className="mt-2 text-slate-400">No tenants found</p>
                   </td>
@@ -395,6 +417,12 @@ export default function TenantList() {
                         {tenant.database || '-'}
                       </span>
                     </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-300">{providerLabel(tenant.mobile_money_provider || tenant.settings?.mobile_money_provider)}</p>
+                        <p className="text-xs text-slate-400">{routerTypeLabel(tenant.router_types || tenant.settings?.router_types || ['mikrotik'])}</p>
+                      </div>
+                    </td>
                     <td className="px-6 py-4">{getStatusBadge(tenant.status, tenant.is_active)}</td>
                     <td className="px-6 py-4 text-slate-300">{Number(tenant.sms_credits || 0).toLocaleString()}</td>
                     <td className="px-6 py-4 text-slate-300">
@@ -411,6 +439,16 @@ export default function TenantList() {
                         
                         {actionMenuOpen === tenant.id && (
                           <div className="absolute right-0 top-full mt-1 w-48 bg-slate-700 rounded-xl shadow-xl border border-slate-600 z-10 overflow-hidden">
+                            <button
+                              onClick={() => {
+                                setSelectedTenant(tenant);
+                                setShowSignupProfileModal(true);
+                                setActionMenuOpen(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-emerald-400 hover:bg-slate-600 transition-colors"
+                            >
+                              <Eye className="w-4 h-4" /> Signup Profile
+                            </button>
                             <button
                               onClick={() => {
                                 setSelectedTenant(tenant);
@@ -572,6 +610,65 @@ export default function TenantList() {
           }}
         />
       )}
+
+      {showSignupProfileModal && selectedTenant && (
+        <SignupProfileModal
+          tenant={selectedTenant}
+          onClose={() => {
+            setShowSignupProfileModal(false);
+            setSelectedTenant(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function providerLabel(provider?: string) {
+  if (provider === 'iotec') return 'IOTEC - 5%';
+  return 'YoPayments - 5.5%';
+}
+
+function routerTypeLabel(types?: string[]) {
+  const list = types?.length ? types : ['mikrotik'];
+  return list.map((type) => type === 'omada' ? 'TP-Link Omada' : 'Mikrotik').join(', ');
+}
+
+function SignupProfileModal({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
+  const provider = tenant.mobile_money_provider || tenant.settings?.mobile_money_provider || 'yo';
+  const routerTypes = tenant.router_types || tenant.settings?.router_types || ['mikrotik'];
+  const requestedSite = tenant.signup_site_name || tenant.settings?.signup_site_name || tenant.name;
+  const phone = tenant.settings?.phone || '-';
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-2xl w-full max-w-lg border border-slate-700">
+        <div className="p-6 border-b border-slate-700 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-white">Signup Profile</h2>
+            <p className="text-sm text-slate-400 mt-1">{tenant.name} setup selections</p>
+          </div>
+          <button onClick={onClose} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl">Close</button>
+        </div>
+        <div className="p-6 grid gap-3">
+          <InfoRow label="Requested default site" value={requestedSite} />
+          <InfoRow label="Mobile money provider" value={providerLabel(provider)} />
+          <InfoRow label="Router types" value={routerTypeLabel(routerTypes)} />
+          <InfoRow label="Contact phone" value={phone} />
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+            Omada is currently a setup marker only. Actual Omada controller integration will be added later.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-sm font-medium text-slate-100 mt-1">{value}</p>
     </div>
   );
 }
@@ -764,7 +861,7 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
             vpn_username: site.vpn_username || '',
             vpn_password: site.vpn_password || '',
             vpn_public_host: site.vpn_public_host || 'vpn.onlifi.net',
-            vpn_public_port: site.vpn_public_port || '',
+            vpn_public_port: site.vpn_public_port || 8443,
             vpn_status: site.vpn_status || 'active',
             router_api_port: site.router_api_port || 8728,
             remote_access_notes: site.remote_access_notes || '',
@@ -857,12 +954,13 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
                   <input value={forms[site.id]?.vpn_public_host || 'vpn.onlifi.net'} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_public_host: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
                 <label className="block text-sm">
-                  <span className="text-slate-300">Public port</span>
-                  <input type="number" value={forms[site.id]?.vpn_public_port || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_public_port: e.target.value ? Number(e.target.value) : null } })} placeholder="443" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                  <span className="text-slate-300">SSTP port</span>
+                  <input type="number" value={forms[site.id]?.vpn_public_port || 8443} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_public_port: e.target.value ? Number(e.target.value) : 8443 } })} placeholder="8443" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
               </div>
               <div className="rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm text-slate-300">
-                Tenant-visible endpoint: <span className="font-mono text-sky-300">{forms[site.id]?.vpn_public_host || 'vpn.onlifi.net'}:{forms[site.id]?.vpn_public_port || 'pending'}</span>
+                SSTP setup: <span className="font-mono text-sky-300">{forms[site.id]?.vpn_public_host || 'vpn.onlifi.net'}:{forms[site.id]?.vpn_public_port || 8443}</span>
+                <span className="block mt-1">SoftEther user: <span className="font-mono text-sky-300">{forms[site.id]?.vpn_username || site.slug}</span> / <span className="font-mono text-sky-300">{forms[site.id]?.vpn_password || 'pending'}</span></span>
               </div>
               <label className="block text-sm">
                 <span className="text-slate-300">SoftEther notes</span>

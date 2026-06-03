@@ -36,6 +36,10 @@ class TenantController extends Controller
                   });
             });
         }
+
+        if ($request->filled('router_type') && in_array($request->router_type, ['mikrotik', 'omada'], true)) {
+            $query->whereRaw("JSON_CONTAINS(JSON_EXTRACT(settings, '$.router_types'), ?)", [json_encode($request->router_type)]);
+        }
         
         $tenants = $query->orderBy('created_at', 'desc')->paginate(20);
         
@@ -46,6 +50,9 @@ class TenantController extends Controller
             $tenant->billing = $tenant->billingStatus();
             $tenant->sms_credits = $tenant->smsWallet?->credits ?? 0;
             $tenant->sms_enabled = (bool) $tenant->sms_enabled;
+            $tenant->mobile_money_provider = $tenant->settings['mobile_money_provider'] ?? 'yo';
+            $tenant->router_types = $tenant->settings['router_types'] ?? ['mikrotik'];
+            $tenant->signup_site_name = $tenant->settings['signup_site_name'] ?? null;
             return $tenant;
         });
         
@@ -61,6 +68,9 @@ class TenantController extends Controller
             'admin_name' => 'required|string',
             'admin_password' => 'required|string|min:8',
             'site_name' => 'required|string|max:100',
+            'mobile_money_provider' => 'nullable|string|in:yo,iotec',
+            'router_types' => 'nullable|array|min:1',
+            'router_types.*' => 'string|in:mikrotik,omada',
             'settings' => 'nullable|array',
         ]);
 

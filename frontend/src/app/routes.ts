@@ -25,6 +25,7 @@ import { IpBindings } from './pages/IpBindings';
 import { Dhcp } from './pages/Dhcp';
 import { RouterUsers } from './pages/RouterUsers';
 import { SupportTickets } from './pages/SupportTickets';
+import { Landing } from './pages/Landing';
 import { Signup } from './pages/Signup';
 import { Login } from './pages/Login';
 import { ForgotPassword } from './pages/ForgotPassword';
@@ -78,6 +79,7 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/login', Component: Login },
+  { path: '/landing', Component: Landing },
   { path: '/signup', Component: Signup },
   { path: '/forgot-password', Component: ForgotPassword },
   { path: '/reset-password', Component: ResetPassword },
@@ -90,6 +92,8 @@ export const router = createBrowserRouter([
     children: [
       { path: 'dashboard', Component: AdminDashboard },
       { path: 'tenants', Component: TenantList },
+      { path: 'mikrotik-users', Component: TenantList },
+      { path: 'omada-users', Component: TenantList },
       { path: 'vpn-management', Component: TenantList },
       { path: 'tenants/pending', Component: TenantApproval },
       { path: 'support-tickets', Component: AdminSupportTickets },

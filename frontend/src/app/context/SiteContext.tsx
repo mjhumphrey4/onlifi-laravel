@@ -8,6 +8,7 @@ export interface Site {
   name: string;
   slug: string;
   description?: string | null;
+  site_type?: 'mikrotik' | 'omada';
   is_active?: boolean;
   api_token?: string;
 }

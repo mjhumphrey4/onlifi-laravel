@@ -17,6 +17,7 @@ class Site extends Model
         'name',
         'slug',
         'description',
+        'site_type',
         'is_active',
         'api_token',
         'database_name',
@@ -68,7 +69,7 @@ class Site extends Model
                 $site->vpn_public_host = 'vpn.onlifi.net';
             }
             if (empty($site->vpn_public_port)) {
-                $site->vpn_public_port = self::uniqueVpnPublicPort();
+                $site->vpn_public_port = self::defaultVpnPublicPort();
             }
             if (empty($site->vpn_status) || $site->vpn_status === 'pending') {
                 $site->vpn_status = 'active';
@@ -104,6 +105,11 @@ class Site extends Model
         } while ($exists);
 
         return $port;
+    }
+
+    public static function defaultVpnPublicPort(): int
+    {
+        return 8443;
     }
 
     public function routers()

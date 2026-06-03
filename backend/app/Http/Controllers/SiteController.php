@@ -64,6 +64,7 @@ class SiteController extends Controller
                 Rule::unique('central.sites', 'name')->where(fn ($query) => $query->where('tenant_id', $this->tenantId($request))),
             ],
             'description' => 'nullable|string|max:255',
+            'site_type' => 'nullable|string|in:mikrotik,omada',
         ]);
 
         if ($validator->fails()) {
@@ -92,11 +93,12 @@ class SiteController extends Controller
             'name' => $request->name,
             'slug' => Site::uniqueSlug($request->name),
             'description' => $request->description,
+            'site_type' => $request->input('site_type', 'mikrotik'),
             'is_active' => true,
             'vpn_username' => Str::slug($request->name),
             'vpn_password' => Str::random(24),
             'vpn_public_host' => 'vpn.onlifi.net',
-            'vpn_public_port' => Site::uniqueVpnPublicPort(),
+            'vpn_public_port' => Site::defaultVpnPublicPort(),
             'vpn_status' => 'active',
         ]);
 
@@ -134,6 +136,7 @@ class SiteController extends Controller
                     ->where(fn ($query) => $query->where('tenant_id', $this->tenantId($request))),
             ],
             'description' => 'nullable|string|max:255',
+            'site_type' => 'sometimes|string|in:mikrotik,omada',
             'is_active' => 'sometimes|boolean',
         ]);
 
@@ -144,7 +147,7 @@ class SiteController extends Controller
             ], 422);
         }
 
-        $site->update($request->only(['name', 'description', 'is_active']));
+        $site->update($request->only(['name', 'description', 'site_type', 'is_active']));
 
         if ($request->has('name')) {
             $site->slug = Site::uniqueSlug($request->name, $site->id);
@@ -281,7 +284,7 @@ class SiteController extends Controller
             $updates['vpn_public_host'] = 'vpn.onlifi.net';
         }
         if (!$site->vpn_public_port) {
-            $updates['vpn_public_port'] = Site::uniqueVpnPublicPort($site->id);
+            $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
         }
         if (!$site->vpn_username) {
             $updates['vpn_username'] = Str::slug($site->name) ?: 'site-' . $site->id;

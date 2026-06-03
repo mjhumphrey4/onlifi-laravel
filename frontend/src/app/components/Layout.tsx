@@ -122,6 +122,7 @@ export function Layout() {
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteDescription, setNewSiteDescription] = useState('');
+  const [newSiteType, setNewSiteType] = useState<'mikrotik' | 'omada'>('mikrotik');
   const [savingSite, setSavingSite] = useState(false);
   const [applicationTime, setApplicationTime] = useState('');
 
@@ -147,6 +148,7 @@ export function Layout() {
         body: JSON.stringify({
           name: newSiteName.trim(),
           description: newSiteDescription.trim() || null,
+          site_type: newSiteType,
         }),
       });
 
@@ -158,6 +160,7 @@ export function Layout() {
         setShowAddSiteModal(false);
         setNewSiteName('');
         setNewSiteDescription('');
+        setNewSiteType('mikrotik');
       } else {
         const error = await readJson(response);
         alert(error.message || error.error || 'Failed to create site');
@@ -636,6 +639,32 @@ export function Layout() {
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-card-foreground mb-2">
+                  Site Type
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['mikrotik', 'omada'] as const).map((type) => (
+                    <label
+                      key={type}
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${
+                        newSiteType === type ? 'border-primary bg-primary/10 text-primary' : 'border-input text-card-foreground hover:bg-muted'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="site_type"
+                        value={type}
+                        checked={newSiteType === type}
+                        onChange={() => setNewSiteType(type)}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm font-medium">{type === 'mikrotik' ? 'Mikrotik' : 'TP-Link Omada'}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Omada is tracked for admin setup now; controller integration comes later.</p>
+              </div>
             </div>
             <div className="p-6 border-t border-border flex gap-3">
               <button
@@ -643,6 +672,7 @@ export function Layout() {
                   setShowAddSiteModal(false);
                   setNewSiteName('');
                   setNewSiteDescription('');
+                  setNewSiteType('mikrotik');
                 }}
                 className="flex-1 px-4 py-2 border border-border text-card-foreground rounded-lg hover:bg-muted transition-colors"
               >

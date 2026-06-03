@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
-import { Users, UserCheck, UserX, Clock, Settings, Megaphone, ChevronRight, RefreshCw, DollarSign, Router, AlertCircle } from 'lucide-react';
+import { Users, UserCheck, UserX, Clock, Settings, Megaphone, ChevronRight, RefreshCw, DollarSign, Router, AlertCircle, Network, CreditCard, Wrench } from 'lucide-react';
 import { API_BASE } from '../../utils/api';
 
 interface Statistics {
@@ -16,6 +16,10 @@ interface Statistics {
   tenants_with_fee_overrides: number;
   registered_radius_routers: number;
   platform_fees_collected: number;
+  yo_payment_tenants: number;
+  iotec_payment_tenants: number;
+  mikrotik_tenants: number;
+  omada_tenants: number;
 }
 
 export default function AdminDashboard() {
@@ -217,6 +221,43 @@ export default function AdminDashboard() {
         />
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Mikrotik Users"
+          value={stats?.mikrotik_tenants || 0}
+          icon={Router}
+          description="Selected Mikrotik during signup"
+          color="text-sky-600"
+          bgColor="bg-sky-500"
+          onClick={() => navigate('/admin/mikrotik-users')}
+        />
+        <StatCard
+          title="Omada Users"
+          value={stats?.omada_tenants || 0}
+          icon={Network}
+          description="Marked for future Omada setup"
+          color="text-violet-600"
+          bgColor="bg-violet-500"
+          onClick={() => navigate('/admin/omada-users')}
+        />
+        <StatCard
+          title="YoPayments"
+          value={stats?.yo_payment_tenants || 0}
+          icon={CreditCard}
+          description="5.5% selected provider"
+          color="text-orange-600"
+          bgColor="bg-orange-500"
+        />
+        <StatCard
+          title="IOTEC"
+          value={stats?.iotec_payment_tenants || 0}
+          icon={CreditCard}
+          description="5% selected provider"
+          color="text-teal-600"
+          bgColor="bg-teal-500"
+        />
+      </div>
+
       {/* Quick Actions */}
       <div>
         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
@@ -236,6 +277,22 @@ export default function AdminDashboard() {
             onClick={() => navigate('/admin/tenants/pending')}
             color="#EAB308"
             bgColor="bg-yellow-500"
+          />
+          <ActionCard
+            title="VPN Setup"
+            description="View SSTP usernames, passwords, IPs, and ports"
+            icon={Network}
+            onClick={() => navigate('/admin/vpn-management')}
+            color="#0EA5E9"
+            bgColor="bg-sky-500"
+          />
+          <ActionCard
+            title="Repair Tools"
+            description="Fix tenant databases, migrations, and default sites"
+            icon={Wrench}
+            onClick={() => navigate('/admin/tenants')}
+            color="#06B6D4"
+            bgColor="bg-cyan-500"
           />
           <ActionCard
             title="Announcements"

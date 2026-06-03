@@ -22,6 +22,10 @@ class TenantService
             $slug = Str::slug($data['name']);
             $autoApprove = SystemSetting::get('auto_approve_tenants', false);
             $databasePassword = Str::random(32);
+            $settings = is_array($data['settings'] ?? null) ? $data['settings'] : [];
+            $settings['mobile_money_provider'] = $data['mobile_money_provider'] ?? ($settings['mobile_money_provider'] ?? 'yo');
+            $settings['router_types'] = array_values(array_unique($data['router_types'] ?? ($settings['router_types'] ?? ['mikrotik'])));
+            $settings['signup_site_name'] = $data['site_name'] ?? ($settings['signup_site_name'] ?? $data['name']);
 
             $tenant = Tenant::create([
                 'name' => $data['name'],
@@ -40,7 +44,7 @@ class TenantService
                 'trial_ends_at' => null,
                 'subscription_ends_at' => null,
                 'sms_enabled' => true,
-                'settings' => $data['settings'] ?? null,
+                'settings' => $settings,
             ]);
 
             if (isset($data['admin_email'])) {
@@ -59,7 +63,7 @@ class TenantService
                 $tenant->runMigrations();
             }
 
-            $this->ensureDefaultSite($tenant->fresh(), $data['site_name'] ?? $data['name']);
+            $this->ensureDefaultSite($tenant->fresh(), $data['site_name'] ?? $data['name'], $this->defaultSiteType($settings['router_types']));
 
             DB::connection('central')->commit();
 
@@ -70,7 +74,7 @@ class TenantService
         }
     }
 
-    public function ensureDefaultSite(Tenant $tenant, ?string $siteName = null): Site
+    public function ensureDefaultSite(Tenant $tenant, ?string $siteName = null, ?string $siteType = null): Site
     {
         SiteScope::ensureCentralSitesTable();
 
@@ -92,12 +96,13 @@ class TenantService
             'slug' => $slug,
             'name' => $name,
             'description' => 'Default site created during signup.',
+            'site_type' => $siteType ?: $this->defaultSiteType($tenant->settings['router_types'] ?? ['mikrotik']),
             'is_active' => true,
             'api_token' => Str::random(64),
             'vpn_username' => $slug,
             'vpn_password' => Str::random(24),
             'vpn_public_host' => 'vpn.onlifi.net',
-            'vpn_public_port' => Site::uniqueVpnPublicPort(),
+            'vpn_public_port' => Site::defaultVpnPublicPort(),
             'vpn_status' => 'active',
         ]);
 
@@ -112,6 +117,11 @@ class TenantService
     private function tenantReadyForSiteDatabase(Tenant $tenant): bool
     {
         return (bool) $tenant->database_name && ($tenant->status === 'approved' || $tenant->is_active);
+    }
+
+    private function defaultSiteType(array $routerTypes): string
+    {
+        return in_array('mikrotik', $routerTypes, true) ? 'mikrotik' : 'omada';
     }
 
     public function deleteTenant(Tenant $tenant): bool

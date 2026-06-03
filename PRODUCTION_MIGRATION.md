@@ -138,11 +138,11 @@ CORS_ALLOWED_ORIGINS=https://onlifi.net,https://api.onlifi.net
 CORS_ALLOWED_ORIGIN_PATTERNS=#^https://([a-z0-9-]+\.)?onlifi\.net$#
 
 MAIL_MAILER=smtp
+MAIL_SCHEME=smtp
 MAIL_HOST=YOUR_SMTP_HOST
 MAIL_PORT=587
 MAIL_USERNAME=YOUR_SMTP_USERNAME
 MAIL_PASSWORD=YOUR_SMTP_PASSWORD
-MAIL_ENCRYPTION=tls
 MAIL_FROM_ADDRESS=noreply@onlifi.net
 MAIL_FROM_NAME="${APP_NAME}"
 
@@ -175,7 +175,7 @@ cd /var/www/onlifi/backend
 composer install --no-dev --optimize-autoloader
 php artisan storage:link
 sudo chown -R www-data:www-data storage bootstrap/cache
-sudo chmod -R ug+rw storage bootstrap/cache
+sudo chmod -R ug+rwX storage bootstrap/cache
 ```
 
 ## 7. Build Frontend
@@ -407,13 +407,42 @@ php artisan route:cache
 php artisan view:cache
 ```
 
-If this is a fresh install, create the first super administrator using the existing project flow or Tinker, depending on what credentials you want:
+If this is a fresh install, create the first super administrator from Tinker:
 
 ```bash
 php artisan tinker
 ```
 
-Then create the admin using the current `SuperAdmin` model fields used by the application.
+```php
+\App\Models\SuperAdmin::updateOrCreate(
+    ['email' => 'admin@onlifi.net'],
+    [
+        'name' => 'OnLiFi Administrator',
+        'password' => \Illuminate\Support\Facades\Hash::make('CHANGE_THIS_ADMIN_PASSWORD'),
+        'role' => 'super_admin',
+        'is_active' => true,
+        'email_verified_at' => now(),
+    ]
+);
+```
+
+Then sign in at:
+
+```text
+https://onlifi.net/admin/login
+```
+
+If signup logging or email fails with `storage/logs/laravel.log permission denied`, repair ownership and permissions:
+
+```bash
+cd /var/www/onlifi/backend
+sudo mkdir -p storage/logs bootstrap/cache
+sudo chown -R www-data:www-data storage bootstrap/cache
+sudo chmod -R ug+rwX storage bootstrap/cache
+sudo systemctl restart php8.3-fpm
+```
+
+For SMTP, do not set `MAIL_SCHEME=tls`. Laravel expects `smtp` for port `587` or `smtps` for port `465`.
 
 ## 10. Queue Worker Service
 
@@ -633,6 +662,7 @@ npm run build
 
 cd /var/www/onlifi/backend
 sudo chown -R www-data:www-data storage bootstrap/cache
+sudo chmod -R ug+rwX storage bootstrap/cache
 sudo systemctl restart php8.3-fpm
 sudo systemctl reload nginx
 sudo systemctl restart onlifi-worker

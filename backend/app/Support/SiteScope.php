@@ -74,11 +74,12 @@ class SiteScope
             'name' => $name,
             'slug' => Site::uniqueSlug($name),
             'description' => 'Default site created for existing tenant data.',
+            'site_type' => 'mikrotik',
             'is_active' => true,
             'vpn_username' => Str::slug($name),
             'vpn_password' => Str::random(24),
             'vpn_public_host' => 'vpn.onlifi.net',
-            'vpn_public_port' => Site::uniqueVpnPublicPort(),
+            'vpn_public_port' => Site::defaultVpnPublicPort(),
             'vpn_status' => 'active',
         ]);
     }
@@ -151,6 +152,7 @@ class SiteScope
             $table->string('name', 100);
             $table->string('slug', 100);
             $table->string('description', 255)->nullable();
+            $table->string('site_type', 32)->default('mikrotik');
             $table->boolean('is_active')->default(true);
             $table->string('api_token', 64)->unique();
             $table->string('database_name')->nullable();

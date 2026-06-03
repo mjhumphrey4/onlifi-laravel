@@ -18,6 +18,15 @@ interface Tenant {
   domain: string | null;
   status: string;
   created_at: string;
+  mobile_money_provider?: 'yo' | 'iotec';
+  router_types?: string[];
+  signup_site_name?: string | null;
+  settings?: {
+    phone?: string;
+    mobile_money_provider?: 'yo' | 'iotec';
+    router_types?: string[];
+    signup_site_name?: string;
+  } | null;
   users: Array<{
     name: string;
     email: string;
@@ -210,6 +219,17 @@ export default function TenantApproval() {
                           <span className="text-sm">Domain: {tenant.domain}</span>
                         </div>
                       )}
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        <Badge variant="secondary">
+                          Site: {tenant.signup_site_name || tenant.settings?.signup_site_name || tenant.name}
+                        </Badge>
+                        <Badge variant="secondary">
+                          {providerLabel(tenant.mobile_money_provider || tenant.settings?.mobile_money_provider)}
+                        </Badge>
+                        <Badge variant="secondary">
+                          {routerTypeLabel(tenant.router_types || tenant.settings?.router_types || ['mikrotik'])}
+                        </Badge>
+                      </div>
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="ml-4">
@@ -281,6 +301,16 @@ export default function TenantApproval() {
       </Dialog>
     </div>
   );
+}
+
+function providerLabel(provider?: string) {
+  if (provider === 'iotec') return 'IOTEC - 5%';
+  return 'YoPayments - 5.5%';
+}
+
+function routerTypeLabel(types?: string[]) {
+  const list = types?.length ? types : ['mikrotik'];
+  return list.map((type) => type === 'omada' ? 'TP-Link Omada' : 'Mikrotik').join(', ');
 }
 
 async function readJson(response: Response) {

@@ -27,6 +27,13 @@ class AdminTenantController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 
+        $tenants->getCollection()->transform(function (Tenant $tenant) {
+            $tenant->mobile_money_provider = $tenant->settings['mobile_money_provider'] ?? 'yo';
+            $tenant->router_types = $tenant->settings['router_types'] ?? ['mikrotik'];
+            $tenant->signup_site_name = $tenant->settings['signup_site_name'] ?? null;
+            return $tenant;
+        });
+
         return response()->json($tenants);
     }
 
@@ -135,6 +142,10 @@ class AdminTenantController extends Controller
                 ->count(),
             'registered_radius_routers' => RadiusNas::count(),
             'platform_fees_collected' => PlatformFee::getTotalPlatformFees(),
+            'yo_payment_tenants' => Tenant::whereRaw("JSON_UNQUOTE(JSON_EXTRACT(settings, '$.mobile_money_provider')) = 'yo'")->count(),
+            'iotec_payment_tenants' => Tenant::whereRaw("JSON_UNQUOTE(JSON_EXTRACT(settings, '$.mobile_money_provider')) = 'iotec'")->count(),
+            'mikrotik_tenants' => Tenant::whereRaw("JSON_CONTAINS(JSON_EXTRACT(settings, '$.router_types'), ?)", [json_encode('mikrotik')])->count(),
+            'omada_tenants' => Tenant::whereRaw("JSON_CONTAINS(JSON_EXTRACT(settings, '$.router_types'), ?)", [json_encode('omada')])->count(),
         ];
 
         return response()->json($stats);
