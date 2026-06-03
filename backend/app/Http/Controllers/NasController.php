@@ -463,6 +463,7 @@ class NasController extends Controller
         $vpnPort = (int) ($site?->vpn_public_port ?: 8443);
         $vpnUsername = $site?->vpn_username ?: $siteSlug;
         $vpnPassword = $site?->vpn_password ?: '';
+        $vpnConnectTo = str_contains($vpnHost, ':') ? $vpnHost : "{$vpnHost}:{$vpnPort}";
         $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
         $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
@@ -496,6 +497,7 @@ class NasController extends Controller
         $vpnPort = $this->rscString((string) $vpnPort);
         $vpnUsername = $this->rscString($vpnUsername);
         $vpnPassword = $this->rscString($vpnPassword);
+        $vpnConnectTo = $this->rscString($vpnConnectTo);
         $telemetryUrl = $this->rscString($telemetryUrl);
         $telemetryToken = $this->rscString($telemetryToken);
         $appHost = $this->rscString($appHost);
@@ -551,6 +553,7 @@ class NasController extends Controller
 :local vpnPort "{$vpnPort}"
 :local vpnUsername "{$vpnUsername}"
 :local vpnPassword "{$vpnPassword}"
+:local vpnConnectTo "{$vpnConnectTo}"
 :local telemetryUrl "{$telemetryUrl}"
 :local telemetryToken "{$telemetryToken}"
 :local appHost "{$appHost}"
@@ -629,9 +632,9 @@ class NasController extends Controller
 # The SoftEther server-side user/password must match the values shown to the administrator.
 :if ([:len \$vpnPassword] > 0) do={
   :if ([:len [/interface sstp-client find name=\$vpnClientName]] = 0) do={
-    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnHost port=\$vpnPort user=\$vpnUsername password=\$vpnPassword profile=default-encryption verify-server-certificate=no disabled=no comment="OnLiFi SSTP VPN"
+    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnConnectTo user=\$vpnUsername password=\$vpnPassword profile=default-encryption verify-server-certificate=no disabled=no comment="OnLiFi SSTP VPN"
   } else={
-    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnHost port=\$vpnPort user=\$vpnUsername password=\$vpnPassword profile=default-encryption verify-server-certificate=no disabled=no comment="OnLiFi SSTP VPN"
+    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnConnectTo user=\$vpnUsername password=\$vpnPassword profile=default-encryption verify-server-certificate=no disabled=no comment="OnLiFi SSTP VPN"
   }
 } else={
   :log warning "OnLiFi SSTP VPN password missing; skipping SSTP client setup"
