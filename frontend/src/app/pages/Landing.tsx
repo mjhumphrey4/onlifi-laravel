@@ -32,12 +32,12 @@ export function Landing() {
 
         <div className="flex-1 grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center px-6 lg:px-12 py-12">
           <div className="max-w-3xl">
-            <p className="text-cyan-300 font-semibold mb-4">ZERO Nonsense Network Management System - Built by Network Owners for Network Owners</p>
+            <p className="text-cyan-300 font-semibold mb-4"> The ZERO Nonsense Network Management System - Built by Network Owners for Network Owners</p>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight tracking-normal">
-              Run hotspot billing, router access, and voucher control from one serious dashboard.
+              Run hotspot billing, manage router, and control vouchers from one serious dashboard.
             </h1>
             <p className="text-lg text-slate-300 mt-6 max-w-2xl">
-              ONLIFI gives you the practical tools they need: site isolation, MikroTik provisioning, RADIUS vouchers, captive pages, mobile money payments, and router monitoring. It's under active development and new feature enrollments overtime. Expect functionality in brief, just like this page, we gurantee satisfaction not excuses. Get started today!
+              ONLIFI gives you the practical tools you need: site isolation, MikroTik or Omada provisioning, RADIUS, captive page designs, mobile money payments, and router monitoring on the go. Under active development and new feature enrollments overtime. Expect functionality in brief, just like this page, we gurantee satisfaction not excuses. Get started today!
             </p>
             <div className="flex flex-wrap gap-3 mt-8">
               <Link to="/signup" className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-cyan-400 text-slate-950 font-semibold hover:bg-cyan-300">
@@ -72,7 +72,7 @@ export function Landing() {
             <div className="mt-5 rounded-lg bg-emerald-500/10 border border-emerald-400/20 p-4">
               <div className="flex items-center gap-2 text-emerald-300 font-semibold">
                 <CheckCircle2 className="w-4 h-4" />
-                Built for network onwers and operators, not brochures
+                Built for network owners and operators, not brochures
               </div>
               <p className="text-sm text-slate-300 mt-2">No fluff or bluff. Just the controls you need to keep clients online, paid, and visible while tracking your installed network routers.</p>
             </div>
