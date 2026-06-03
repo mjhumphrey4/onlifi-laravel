@@ -460,10 +460,13 @@ class NasController extends Controller
         $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
         $vpnClientName = 'onlifi-sstp';
         $vpnHost = $site?->vpn_public_host ?: 'vpn.onlifi.net';
-        $vpnPort = (int) ($site?->vpn_public_port ?: 8443);
+        $vpnPort = 8443;
         $vpnUsername = $site?->vpn_username ?: $siteSlug;
         $vpnPassword = $site?->vpn_password ?: '';
-        $vpnConnectTo = str_contains($vpnHost, ':') ? $vpnHost : "{$vpnHost}:{$vpnPort}";
+        $vpnPrivateAddress = trim((string) ($site?->vpn_private_ip ?: ''));
+        if ($vpnPrivateAddress !== '' && !str_contains($vpnPrivateAddress, '/')) {
+            $vpnPrivateAddress .= '/32';
+        }
         $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
         $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
@@ -497,7 +500,7 @@ class NasController extends Controller
         $vpnPort = $this->rscString((string) $vpnPort);
         $vpnUsername = $this->rscString($vpnUsername);
         $vpnPassword = $this->rscString($vpnPassword);
-        $vpnConnectTo = $this->rscString($vpnConnectTo);
+        $vpnPrivateAddress = $this->rscString($vpnPrivateAddress);
         $telemetryUrl = $this->rscString($telemetryUrl);
         $telemetryToken = $this->rscString($telemetryToken);
         $appHost = $this->rscString($appHost);
@@ -553,7 +556,7 @@ class NasController extends Controller
 :local vpnPort "{$vpnPort}"
 :local vpnUsername "{$vpnUsername}"
 :local vpnPassword "{$vpnPassword}"
-:local vpnConnectTo "{$vpnConnectTo}"
+:local vpnPrivateAddress "{$vpnPrivateAddress}"
 :local telemetryUrl "{$telemetryUrl}"
 :local telemetryToken "{$telemetryToken}"
 :local appHost "{$appHost}"
@@ -632,9 +635,18 @@ class NasController extends Controller
 # The SoftEther server-side user/password must match the values shown to the administrator.
 :if ([:len \$vpnPassword] > 0) do={
   :if ([:len [/interface sstp-client find name=\$vpnClientName]] = 0) do={
-    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnConnectTo user=\$vpnUsername password=\$vpnPassword profile=default-encryption verify-server-certificate=no disabled=no comment="OnLiFi SSTP VPN"
+    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnHost port=\$vpnPort proxy-port=\$vpnPort user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
   } else={
-    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnConnectTo user=\$vpnUsername password=\$vpnPassword profile=default-encryption verify-server-certificate=no disabled=no comment="OnLiFi SSTP VPN"
+    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnHost port=\$vpnPort proxy-port=\$vpnPort user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
+  }
+  :if ([:len \$vpnPrivateAddress] > 0) do={
+    :if ([:len [/ip address find comment="OnLiFi SSTP static address"]] = 0) do={
+      /ip address add address=\$vpnPrivateAddress interface=\$vpnClientName comment="OnLiFi SSTP static address"
+    } else={
+      /ip address set [find comment="OnLiFi SSTP static address"] address=\$vpnPrivateAddress interface=\$vpnClientName disabled=no
+    }
+  } else={
+    :log warning "OnLiFi SSTP private IP missing; skipping static SSTP address"
   }
 } else={
   :log warning "OnLiFi SSTP VPN password missing; skipping SSTP client setup"

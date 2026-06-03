@@ -97,14 +97,7 @@ class Site extends Model
 
     public static function uniqueVpnPublicPort(?int $ignoreId = null): int
     {
-        do {
-            $port = random_int(20000, 65000);
-            $exists = self::where('vpn_public_port', $port)
-                ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
-                ->exists();
-        } while ($exists);
-
-        return $port;
+        return self::defaultVpnPublicPort();
     }
 
     public static function defaultVpnPublicPort(): int

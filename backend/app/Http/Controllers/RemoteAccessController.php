@@ -88,17 +88,19 @@ class RemoteAccessController extends Controller
             ], 422);
         }
 
-        $site->update($request->only([
+        $updates = $request->only([
             'vpn_private_ip',
             'vpn_username',
             'vpn_password',
             'vpn_public_host',
-            'vpn_public_port',
             'vpn_status',
             'vpn_last_seen_at',
             'router_api_port',
             'remote_access_notes',
-        ]));
+        ]);
+        $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
+
+        $site->update($updates);
 
         $this->syncTenantRouterRecord($tenant, $site->fresh());
 
@@ -168,7 +170,7 @@ class RemoteAccessController extends Controller
             'vpn_username' => $site->vpn_username ?: $this->defaultVpnUsername($site),
             'vpn_password' => $site->vpn_password,
             'vpn_public_host' => $site->vpn_public_host ?: 'vpn.onlifi.net',
-            'vpn_public_port' => $site->vpn_public_port,
+            'vpn_public_port' => Site::defaultVpnPublicPort(),
             'vpn_public_endpoint' => $this->publicEndpoint($site),
             'vpn_status' => $site->vpn_status ?: 'active',
             'vpn_last_seen_at' => $site->vpn_last_seen_at?->toIso8601String(),
@@ -179,11 +181,7 @@ class RemoteAccessController extends Controller
 
     private function publicEndpoint(Site $site): ?string
     {
-        if (!$site->vpn_public_port) {
-            return null;
-        }
-
-        return ($site->vpn_public_host ?: 'vpn.onlifi.net') . ':' . $site->vpn_public_port;
+        return ($site->vpn_public_host ?: 'vpn.onlifi.net') . ':' . Site::defaultVpnPublicPort();
     }
 
     private function defaultVpnUsername(Site $site): string
@@ -218,7 +216,7 @@ class RemoteAccessController extends Controller
         if (!$site->vpn_public_host) {
             $updates['vpn_public_host'] = 'vpn.onlifi.net';
         }
-        if (!$site->vpn_public_port) {
+        if ((int) $site->vpn_public_port !== Site::defaultVpnPublicPort()) {
             $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
         }
         if (!$site->vpn_status || $site->vpn_status === 'pending') {
