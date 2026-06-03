@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
@@ -99,6 +100,13 @@ class TenantAuthController extends Controller
             if (!$twoFactor->verifyCode($secret, $request->two_factor_code)) {
                 return response()->json(['message' => 'Invalid two-factor code'], 401);
             }
+        }
+
+        if (!Schema::connection('central')->hasTable('personal_access_tokens')) {
+            return response()->json([
+                'error' => 'Authentication storage is not migrated',
+                'message' => 'Run php artisan migrate --force on the backend server so the personal_access_tokens table is created.',
+            ], 503);
         }
 
         // Create token

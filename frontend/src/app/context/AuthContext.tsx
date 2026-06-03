@@ -122,7 +122,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: 'super_admin',
         });
       } catch (adminError) {
-        // Both failed, throw the tenant error (more relevant for main login)
+        const status = adminError instanceof Error
+          ? (adminError as Error & { status?: number }).status
+          : undefined;
+
+        if (status && status >= 500) {
+          throw adminError;
+        }
+
+        // Both credential checks failed, so show the tenant-facing credential message.
         throw tenantError;
       }
     }

@@ -34,7 +34,6 @@ import { Users } from './pages/Users';
 import { SubUsers } from './pages/SubUsers';
 
 // Admin pages
-import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import TenantApproval from './pages/admin/TenantApproval';
 import TenantList from './pages/admin/TenantList';
@@ -87,7 +86,7 @@ export const router = createBrowserRouter([
   { path: '/reset-password', Component: ResetPassword },
 
   // Admin Routes with AdminLayout
-  { path: '/admin/login', Component: AdminLogin },
+  { path: '/admin/login', Component: Login },
   {
     path: '/admin',
     Component: AdminLayout,

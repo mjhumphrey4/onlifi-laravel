@@ -66,7 +66,9 @@ async function request<T = any>(
   }
 
   if (!res.ok) {
-    throw new Error(data?.message || data?.error || `Request failed: ${res.status} ${res.statusText}`);
+    const error = new Error(data?.message || data?.error || `Request failed: ${res.status} ${res.statusText}`);
+    (error as Error & { status?: number }).status = res.status;
+    throw error;
   }
 
   return data;

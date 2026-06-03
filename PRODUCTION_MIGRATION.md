@@ -395,11 +395,32 @@ access-control-allow-origin: https://onlifi.net
 access-control-allow-credentials: true
 ```
 
+### Login 500 Recovery Check
+
+If admin login returns `500` and the Laravel log mentions `personal_access_tokens`, the central Sanctum token table is missing. Run:
+
+```bash
+cd /var/www/onlifi/backend
+php artisan migrate --force
+php artisan migrate:status | grep -i personal_access_tokens
+php artisan optimize:clear
+php artisan config:cache
+sudo systemctl restart php8.3-fpm
+```
+
+If the migration is not listed, publish Sanctum migrations and run migrations again:
+
+```bash
+php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
+php artisan migrate --force
+```
+
 ## 9. Run Migrations And Seed Required Data
 
 ```bash
 cd /var/www/onlifi/backend
 php artisan migrate --force
+php artisan migrate:status | grep -i personal_access_tokens
 php artisan onlifi:tenants:migrate
 php artisan optimize:clear
 php artisan config:cache
@@ -649,6 +670,7 @@ git pull origin main
 cd /var/www/onlifi/backend
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
+php artisan migrate:status | grep -i personal_access_tokens
 php artisan onlifi:tenants:migrate
 php artisan storage:link
 php artisan optimize:clear
@@ -821,6 +843,7 @@ https://pay.onlifi.net/{site-name}/look/voucher-lookup.php
 - `QUEUE_CONNECTION=database` or `redis`, with a matching worker.
 - `php artisan storage:link` completed.
 - `php artisan migrate --force` completed.
+- `php artisan migrate:status | grep -i personal_access_tokens` shows the Sanctum token table migration has run.
 - `php artisan onlifi:tenants:migrate` completed.
 - FreeRADIUS validates with `freeradius -XC`.
 - UDP `1812`, `1813`, and `3799` reachable from routers.
