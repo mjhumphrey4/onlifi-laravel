@@ -459,8 +459,10 @@ class NasController extends Controller
         $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
         $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
         $vpnClientName = 'onlifi-sstp';
-        $vpnHost = $site?->vpn_public_host ?: 'vpn.onlifi.net';
+        $vpnHost = preg_replace('/:\d+$/', '', trim((string) ($site?->vpn_public_host ?: 'vpn.onlifi.net'))) ?: 'vpn.onlifi.net';
         $vpnPort = 8443;
+        $vpnConnectTo = "{$vpnHost}:{$vpnPort}";
+        $vpnProxy = "0.0.0.0:{$vpnPort}";
         $vpnUsername = $site?->vpn_username ?: $siteSlug;
         $vpnPassword = $site?->vpn_password ?: '';
         $vpnPrivateAddress = trim((string) ($site?->vpn_private_ip ?: ''));
@@ -498,6 +500,8 @@ class NasController extends Controller
         $vpnClientName = $this->rscString($vpnClientName);
         $vpnHost = $this->rscString($vpnHost);
         $vpnPort = $this->rscString((string) $vpnPort);
+        $vpnConnectTo = $this->rscString($vpnConnectTo);
+        $vpnProxy = $this->rscString($vpnProxy);
         $vpnUsername = $this->rscString($vpnUsername);
         $vpnPassword = $this->rscString($vpnPassword);
         $vpnPrivateAddress = $this->rscString($vpnPrivateAddress);
@@ -554,6 +558,8 @@ class NasController extends Controller
 :local vpnClientName "{$vpnClientName}"
 :local vpnHost "{$vpnHost}"
 :local vpnPort "{$vpnPort}"
+:local vpnConnectTo "{$vpnConnectTo}"
+:local vpnProxy "{$vpnProxy}"
 :local vpnUsername "{$vpnUsername}"
 :local vpnPassword "{$vpnPassword}"
 :local vpnPrivateAddress "{$vpnPrivateAddress}"
@@ -635,9 +641,9 @@ class NasController extends Controller
 # The SoftEther server-side user/password must match the values shown to the administrator.
 :if ([:len \$vpnPassword] > 0) do={
   :if ([:len [/interface sstp-client find name=\$vpnClientName]] = 0) do={
-    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnHost port=8443 proxy-port=8443 user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
+    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnConnectTo http-proxy=\$vpnProxy user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
   } else={
-    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnHost port=8443 proxy-port=8443 user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
+    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnConnectTo http-proxy=\$vpnProxy user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
   }
   :if ([:len \$vpnPrivateAddress] > 0) do={
     :if ([:len [/ip address find comment="OnLiFi SSTP static address"]] = 0) do={
