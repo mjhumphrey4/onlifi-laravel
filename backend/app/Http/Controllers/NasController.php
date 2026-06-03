@@ -635,9 +635,9 @@ class NasController extends Controller
 # The SoftEther server-side user/password must match the values shown to the administrator.
 :if ([:len \$vpnPassword] > 0) do={
   :if ([:len [/interface sstp-client find name=\$vpnClientName]] = 0) do={
-    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnHost port=\$vpnPort proxy-port=\$vpnPort user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
+    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnHost port=8443 proxy-port=8443 user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
   } else={
-    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnHost port=\$vpnPort proxy-port=\$vpnPort user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
+    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnHost port=8443 proxy-port=8443 user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
   }
   :if ([:len \$vpnPrivateAddress] > 0) do={
     :if ([:len [/ip address find comment="OnLiFi SSTP static address"]] = 0) do={
