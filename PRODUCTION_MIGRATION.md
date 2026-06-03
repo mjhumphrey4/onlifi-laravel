@@ -2,13 +2,13 @@
 
 This is the single production checklist for installing the required OnLiFi application components and deploying by pulling the GitHub repository into the server destination directory.
 
-This guide intentionally does not include Nginx configuration or SoftEther/SSTP installation. Those are assumed to already be installed and managed separately.
+This guide intentionally does not include SoftEther/SSTP installation. SoftEther is assumed to already be installed and managed separately.
 
 ## 1. Server Assumptions
 
 - Ubuntu/Debian server with shell access.
-- Nginx already points the API host to `backend/public`.
-- Nginx already points the dashboard host to the built frontend output, usually `frontend/dist`.
+- Nginx points the API host to `backend/public`.
+- Nginx points the dashboard host to the built frontend output, usually `frontend/dist`.
 - SoftEther is already installed.
 - Repository destination: `/var/www/onlifi`.
 - API domain: `https://api.onlifi.net`.
@@ -23,7 +23,7 @@ Adjust paths and domains where needed.
 ```bash
 sudo apt update
 sudo apt install -y \
-  git curl unzip zip supervisor cron redis-server mysql-server mysql-client \
+  git curl unzip zip redis-server mysql-server mysql-client nginx certbot python3-certbot-nginx \
   php8.3-cli php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl \
   php8.3-zip php8.3-bcmath php8.3-gd php8.3-intl php8.3-redis \
   freeradius freeradius-mysql freeradius-utils libdbi-perl libdbd-mysql-perl
@@ -55,11 +55,11 @@ Create the central database and application user:
 ```sql
 CREATE DATABASE onlifi_central CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE USER 'onlifi_user'@'localhost' IDENTIFIED BY 'CHANGE_THIS_STRONG_PASSWORD';
+CREATE USER 'onlifi_user'@'localhost' IDENTIFIED BY '##Onlus@Tech2026&&Onlifi##';
 GRANT ALL PRIVILEGES ON onlifi_central.* TO 'onlifi_user'@'localhost';
 GRANT ALL PRIVILEGES ON `onlifi\_%`.* TO 'onlifi_user'@'localhost';
 
-CREATE USER 'radius_user'@'localhost' IDENTIFIED BY 'CHANGE_THIS_RADIUS_PASSWORD';
+CREATE USER 'radius_user'@'localhost' IDENTIFIED BY 'onlifi@rad26';
 GRANT SELECT ON onlifi_central.tenants TO 'radius_user'@'localhost';
 GRANT SELECT ON onlifi_central.nas TO 'radius_user'@'localhost';
 GRANT SELECT ON onlifi_central.sites TO 'radius_user'@'localhost';
@@ -116,13 +116,13 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=onlifi_central
 DB_USERNAME=onlifi_user
-DB_PASSWORD=CHANGE_THIS_STRONG_PASSWORD
+DB_PASSWORD="##Onlus@Tech2026&&Onlifi##"
 
 CENTRAL_DB_HOST=127.0.0.1
 CENTRAL_DB_PORT=3306
 CENTRAL_DB_DATABASE=onlifi_central
 CENTRAL_DB_USERNAME=onlifi_user
-CENTRAL_DB_PASSWORD=CHANGE_THIS_STRONG_PASSWORD
+CENTRAL_DB_PASSWORD="##Onlus@Tech2026&&Onlifi##"
 
 SESSION_DRIVER=database
 QUEUE_CONNECTION=database
@@ -135,6 +135,7 @@ REDIS_CACHE_DB=1
 
 FILESYSTEM_DISK=public
 CORS_ALLOWED_ORIGINS=https://onlifi.net,https://api.onlifi.net
+CORS_ALLOWED_ORIGIN_PATTERNS=#^https://([a-z0-9-]+\.)?onlifi\.net$#
 
 MAIL_MAILER=smtp
 MAIL_HOST=YOUR_SMTP_HOST
@@ -153,12 +154,12 @@ SMS_PROVIDER=comms
 SMS_API_KEY=YOUR_SMS_API_KEY
 SMS_SENDER_ID=OnLiFi
 
-RADIUS_SERVER_IP=YOUR_FREERADIUS_REACHABLE_IP
+RADIUS_SERVER_IP=89.167.42.53
 RADIUS_AUTH_PORT=1812
 RADIUS_ACCT_PORT=1813
-RADIUS_SHARED_SECRET=CHANGE_THIS_GLOBAL_RADIUS_SECRET
+RADIUS_SHARED_SECRET=Onlifi@@rad_Secret$Xb@@26
 RADIUS_DB_USER=radius_user
-RADIUS_DB_PASSWORD=CHANGE_THIS_RADIUS_PASSWORD
+RADIUS_DB_PASSWORD=onlifi@rad26
 ```
 
 Important:
@@ -185,9 +186,216 @@ npm ci
 npm run build
 ```
 
-Your existing Nginx frontend host should serve `frontend/dist`.
+## 8. Nginx And Backend Runtime
 
-## 8. Run Migrations And Seed Required Data
+Laravel does not need `php artisan serve` in production. The backend runs through Nginx and PHP-FPM:
+
+- Nginx receives `https://api.onlifi.net`.
+- Nginx serves `/var/www/onlifi/backend/public`.
+- PHP-FPM executes Laravel PHP requests.
+- Queue and scheduler run as separate systemd services.
+
+Create the API host:
+
+```bash
+sudo nano /etc/nginx/sites-available/api.onlifi.net
+```
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.onlifi.net;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name api.onlifi.net;
+
+    ssl_certificate /etc/letsencrypt/live/api.onlifi.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.onlifi.net/privkey.pem;
+
+    root /var/www/onlifi/backend/public;
+    index index.php index.html;
+
+    client_max_body_size 50M;
+
+    access_log /var/log/nginx/api.onlifi.net.access.log;
+    error_log /var/log/nginx/api.onlifi.net.error.log;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+```
+
+Create the dashboard host:
+
+```bash
+sudo nano /etc/nginx/sites-available/onlifi.net
+```
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name onlifi.net www.onlifi.net;
+    return 301 https://onlifi.net$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name onlifi.net www.onlifi.net;
+
+    ssl_certificate /etc/letsencrypt/live/onlifi.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/onlifi.net/privkey.pem;
+
+    root /var/www/onlifi/frontend/dist;
+    index index.html;
+
+    access_log /var/log/nginx/onlifi.net.access.log;
+    error_log /var/log/nginx/onlifi.net.error.log;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+```
+
+If you manually host `pay.onlifi.net` files on the same server, create its web root and host:
+
+```bash
+sudo mkdir -p /var/www/pay.onlifi.net
+sudo chown -R www-data:www-data /var/www/pay.onlifi.net
+sudo nano /etc/nginx/sites-available/pay.onlifi.net
+```
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name pay.onlifi.net;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name pay.onlifi.net;
+
+    ssl_certificate /etc/letsencrypt/live/pay.onlifi.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/pay.onlifi.net/privkey.pem;
+
+    root /var/www/pay.onlifi.net;
+    index index.php index.html;
+
+    access_log /var/log/nginx/pay.onlifi.net.access.log;
+    error_log /var/log/nginx/pay.onlifi.net.error.log;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        include fastcgi_params;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+```
+
+Create certificates first, then enable the final hosts:
+
+```bash
+sudo systemctl enable php8.3-fpm nginx
+sudo systemctl restart php8.3-fpm
+
+sudo systemctl stop nginx
+sudo certbot certonly --standalone -d api.onlifi.net
+sudo certbot certonly --standalone -d onlifi.net -d www.onlifi.net
+sudo certbot certonly --standalone -d pay.onlifi.net
+
+sudo ln -sf /etc/nginx/sites-available/api.onlifi.net /etc/nginx/sites-enabled/api.onlifi.net
+sudo ln -sf /etc/nginx/sites-available/onlifi.net /etc/nginx/sites-enabled/onlifi.net
+sudo ln -sf /etc/nginx/sites-available/pay.onlifi.net /etc/nginx/sites-enabled/pay.onlifi.net
+
+sudo nginx -t
+sudo systemctl start nginx
+```
+
+If using PHP 8.2, replace `php8.3-fpm` and `/run/php/php8.3-fpm.sock` with the PHP 8.2 equivalents.
+
+### CORS Recovery Check
+
+If the browser shows `No 'Access-Control-Allow-Origin' header`, first confirm the dashboard is loaded over HTTPS:
+
+```text
+https://onlifi.net
+```
+
+Then confirm `backend/.env` has:
+
+```env
+APP_URL=https://api.onlifi.net
+API_URL=https://api.onlifi.net
+FRONTEND_URL=https://onlifi.net
+CORS_ALLOWED_ORIGINS=https://onlifi.net,https://api.onlifi.net
+CORS_ALLOWED_ORIGIN_PATTERNS=#^https://([a-z0-9-]+\.)?onlifi\.net$#
+```
+
+Clear and rebuild Laravel config after changing CORS or URL values:
+
+```bash
+cd /var/www/onlifi/backend
+php artisan optimize:clear
+php artisan config:cache
+php artisan route:cache
+sudo systemctl restart php8.3-fpm
+sudo systemctl reload nginx
+```
+
+Test preflight directly from the server:
+
+```bash
+curl -i -X OPTIONS https://api.onlifi.net/api/tenant/login \
+  -H "Origin: https://onlifi.net" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type,authorization"
+```
+
+Expected headers include:
+
+```text
+access-control-allow-origin: https://onlifi.net
+access-control-allow-credentials: true
+```
+
+## 9. Run Migrations And Seed Required Data
 
 ```bash
 cd /var/www/onlifi/backend
@@ -207,54 +415,94 @@ php artisan tinker
 
 Then create the admin using the current `SuperAdmin` model fields used by the application.
 
-## 9. Queue Worker
+## 10. Queue Worker Service
 
-The app uses database queues by default. Create a Supervisor program:
+The app uses database queues by default. Create a systemd worker:
 
 ```bash
-sudo nano /etc/supervisor/conf.d/onlifi-worker.conf
+sudo nano /etc/systemd/system/onlifi-worker.service
 ```
 
 ```ini
-[program:onlifi-worker]
-process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/onlifi/backend/artisan queue:work database --sleep=3 --tries=3 --timeout=120
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-user=www-data
-numprocs=1
-redirect_stderr=true
-stdout_logfile=/var/www/onlifi/backend/storage/logs/worker.log
-stopwaitsecs=3600
+[Unit]
+Description=OnLiFi Laravel Queue Worker
+After=network.target mysql.service redis-server.service
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/var/www/onlifi/backend
+ExecStart=/usr/bin/php /var/www/onlifi/backend/artisan queue:work database --sleep=3 --tries=3 --timeout=120
+StandardOutput=append:/var/www/onlifi/backend/storage/logs/worker.log
+StandardError=append:/var/www/onlifi/backend/storage/logs/worker-error.log
+KillSignal=SIGTERM
+TimeoutStopSec=3600
+
+[Install]
+WantedBy=multi-user.target
 ```
 
-Start it:
+Enable it:
 
 ```bash
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl restart onlifi-worker:*
+sudo systemctl daemon-reload
+sudo systemctl enable --now onlifi-worker
+sudo systemctl status onlifi-worker
 ```
 
-## 10. Laravel Scheduler
+## 11. Laravel Scheduler Service
 
-Add the scheduler to cron:
+Use a systemd timer instead of manual cron:
 
 ```bash
-sudo crontab -u www-data -e
+sudo nano /etc/systemd/system/onlifi-scheduler.service
 ```
 
-Add:
+```ini
+[Unit]
+Description=Run OnLiFi Laravel Scheduler
 
-```cron
-* * * * * cd /var/www/onlifi/backend && php artisan schedule:run >> /dev/null 2>&1
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/onlifi/backend
+ExecStart=/usr/bin/php /var/www/onlifi/backend/artisan schedule:run
+```
+
+Create the timer:
+
+```bash
+sudo nano /etc/systemd/system/onlifi-scheduler.timer
+```
+
+```ini
+[Unit]
+Description=Run OnLiFi Laravel Scheduler Every Minute
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+AccuracySec=1
+Unit=onlifi-scheduler.service
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable it:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now onlifi-scheduler.timer
+sudo systemctl list-timers | grep onlifi
 ```
 
 The scheduler is required for recurring cleanup, accounting, expiry, and any queued maintenance commands that are wired into Laravel scheduling.
 
-## 11. Redis
+## 12. Redis
 
 Enable and start Redis:
 
@@ -272,7 +520,7 @@ PONG
 
 The app uses Redis for cache when `CACHE_STORE=redis`. This improves pages like Clients and other frequently read dashboard data.
 
-## 12. FreeRADIUS Setup
+## 13. FreeRADIUS Setup
 
 Copy OnLiFi FreeRADIUS files:
 
@@ -282,7 +530,8 @@ cd /etc/freeradius/3.0
 
 sudo cp /var/www/onlifi/backend/config/freeradius/clients.conf clients.conf
 sudo cp /var/www/onlifi/backend/config/freeradius/default sites-available/default
-sudo cp /var/www/onlifi/backend/config/freeradius/sql.conf mods-available/sql
+sudo cp /var/www/onlifi/backend/config/freeradius/perl mods-available/perl
+sudo ln -sf ../sites-available/default sites-enabled/default
 
 sudo mkdir -p mods-config/perl
 sudo cp /var/www/onlifi/backend/config/freeradius/multi_tenant.pl mods-config/perl/onlifi_multi_tenant.pl
@@ -292,7 +541,7 @@ sudo chmod +x mods-config/perl/onlifi_multi_tenant.pl
 Edit `/etc/freeradius/3.0/clients.conf` and set:
 
 ```text
-secret = CHANGE_THIS_GLOBAL_RADIUS_SECRET
+secret = Onlifi@@rad_Secret$Xb@@26
 ```
 
 The secret must match `RADIUS_SHARED_SECRET`.
@@ -301,9 +550,11 @@ Enable required modules:
 
 ```bash
 cd /etc/freeradius/3.0/mods-enabled
+sudo rm -f sql
 sudo ln -sf ../mods-available/perl perl
-sudo ln -sf ../mods-available/sql sql
 ```
+
+Do not enable `mods-enabled/sql` for the current OnLiFi production flow. Tenant/site routing is handled by the Perl module using `NAS-Identifier`. If SQL is enabled by mistake, FreeRADIUS can fail during startup with errors such as `Reference "${client_table}" not found` or `Reference "${ENV_RADIUS_DB_PASSWORD}" not found` before OnLiFi's Perl module runs.
 
 Edit `/etc/freeradius/3.0/mods-available/perl`:
 
@@ -313,7 +564,10 @@ perl {
     func_authorize = authorize
     func_authenticate = authenticate
     func_accounting = accounting
+    func_start_accounting = accounting
+    func_stop_accounting = accounting
     func_post_auth = post_auth
+    perl_flags = "-w"
 }
 ```
 
@@ -323,7 +577,7 @@ Edit `/etc/freeradius/3.0/mods-config/perl/onlifi_multi_tenant.pl` and set the c
 my $central_db_host = "localhost";
 my $central_db_name = "onlifi_central";
 my $central_db_user = "radius_user";
-my $central_db_pass = "CHANGE_THIS_RADIUS_PASSWORD";
+my $central_db_pass = "onlifi@rad26";
 ```
 
 Validate and start:
@@ -341,7 +595,7 @@ sudo systemctl stop freeradius
 sudo freeradius -X
 ```
 
-## 13. Firewall Ports
+## 14. Firewall Ports
 
 Open the application and RADIUS ports in your server/cloud firewall as appropriate:
 
@@ -355,7 +609,7 @@ sudo ufw allow 3799/udp
 
 Do not open MySQL publicly.
 
-## 14. Deployment Pull Command
+## 15. Deployment Pull Command
 
 Use this after Jenkins or manually after pushing to GitHub:
 
@@ -372,18 +626,23 @@ php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
-sudo chown -R www-data:www-data storage bootstrap/cache
-sudo supervisorctl restart onlifi-worker:*
-sudo systemctl restart php8.3-fpm
 
 cd /var/www/onlifi/frontend
 npm ci
 npm run build
+
+cd /var/www/onlifi/backend
+sudo chown -R www-data:www-data storage bootstrap/cache
+sudo systemctl restart php8.3-fpm
+sudo systemctl reload nginx
+sudo systemctl restart onlifi-worker
+sudo systemctl restart onlifi-scheduler.timer
+sudo systemctl restart freeradius
 ```
 
 If using PHP 8.2, restart `php8.2-fpm` instead.
 
-## 15. Post-Deployment Health Checks
+## 16. Post-Deployment Health Checks
 
 Backend:
 
@@ -395,6 +654,15 @@ php artisan onlifi:tenants:migrate
 tail -n 100 storage/logs/laravel.log
 ```
 
+Runtime services:
+
+```bash
+sudo systemctl status nginx
+sudo systemctl status php8.3-fpm
+curl -I https://api.onlifi.net/api/health
+curl -I https://onlifi.net
+```
+
 Redis:
 
 ```bash
@@ -404,8 +672,15 @@ redis-cli ping
 Queue:
 
 ```bash
-sudo supervisorctl status
+sudo systemctl status onlifi-worker
 tail -n 100 /var/www/onlifi/backend/storage/logs/worker.log
+```
+
+Scheduler:
+
+```bash
+sudo systemctl status onlifi-scheduler.timer
+sudo systemctl list-timers | grep onlifi
 ```
 
 FreeRADIUS:
@@ -419,14 +694,14 @@ Direct RADIUS auth test, using a real voucher/router:
 
 ```bash
 echo 'User-Name=VOUCHER_CODE,User-Password=VOUCHER_CODE,NAS-Identifier=SITE-ONLIFI-1' \
-  | radclient -x 127.0.0.1 auth CHANGE_THIS_GLOBAL_RADIUS_SECRET
+  | radclient -x 127.0.0.1 auth Onlifi@@rad_Secret$Xb@@26
 ```
 
 Accounting test:
 
 ```bash
 echo 'User-Name=VOUCHER_CODE,NAS-Identifier=SITE-ONLIFI-1,Acct-Status-Type=Start,Acct-Session-Id=test-1,NAS-IP-Address=127.0.0.1,Framed-IP-Address=10.10.0.253,Calling-Station-Id=AA:BB:CC:DD:EE:FF,Called-Station-Id=onlifi-hotspot,NAS-Port-Type=Wireless-802.11,NAS-Port-Id=onlifi-lan' \
-  | radclient -x 127.0.0.1 acct CHANGE_THIS_GLOBAL_RADIUS_SECRET
+  | radclient -x 127.0.0.1 acct Onlifi@@rad_Secret$Xb@@26
 ```
 
 Expected:
@@ -436,7 +711,7 @@ Received Access-Accept
 Received Accounting-Response
 ```
 
-## 16. Router Provisioning Checks
+## 17. Router Provisioning Checks
 
 After deploying, provision a test site/router and verify:
 
@@ -460,7 +735,7 @@ Expected:
 - Hotspot profile uses `login-by=http-pap`.
 - Captive files include the active `login.html`.
 
-## 17. Captive Portal Assets
+## 18. Captive Portal Assets
 
 Uploaded captive logos require:
 
@@ -476,7 +751,7 @@ The generated captive download returns:
 
 Upload both files to the same MikroTik hotspot directory when using the ZIP.
 
-## 18. Mobile Money And SMS
+## 19. Mobile Money And SMS
 
 Set these before accepting production payments:
 
@@ -504,7 +779,7 @@ https://pay.onlifi.net/{site-name}/check_status.php
 https://pay.onlifi.net/{site-name}/look/voucher-lookup.php
 ```
 
-## 19. Required Production Checklist
+## 20. Required Production Checklist
 
 - `APP_DEBUG=false`.
 - `APP_ENV=production`.
@@ -519,12 +794,12 @@ https://pay.onlifi.net/{site-name}/look/voucher-lookup.php
 - `php artisan onlifi:tenants:migrate` completed.
 - FreeRADIUS validates with `freeradius -XC`.
 - UDP `1812`, `1813`, and `3799` reachable from routers.
-- Laravel scheduler installed under `www-data`.
-- Supervisor queue worker running.
+- `onlifi-scheduler.timer` running under systemd.
+- `onlifi-worker` running under systemd.
 - Frontend build completed.
 - Nginx points to the correct API public path and frontend build path.
 
-## 20. Rollback
+## 21. Rollback
 
 If a deployment fails after pulling:
 
@@ -539,8 +814,10 @@ php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
-sudo supervisorctl restart onlifi-worker:*
 sudo systemctl restart php8.3-fpm
+sudo systemctl reload nginx
+sudo systemctl restart onlifi-worker
+sudo systemctl restart onlifi-scheduler.timer
 
 cd ../frontend
 npm ci

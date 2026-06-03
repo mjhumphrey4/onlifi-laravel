@@ -56,7 +56,8 @@ cd /etc/freeradius/3.0
 
 sudo cp /var/www/onlifi/backend/config/freeradius/clients.conf clients.conf
 sudo cp /var/www/onlifi/backend/config/freeradius/default sites-available/default
-sudo cp /var/www/onlifi/backend/config/freeradius/sql.conf mods-available/sql
+sudo cp /var/www/onlifi/backend/config/freeradius/perl mods-available/perl
+sudo ln -sf ../sites-available/default sites-enabled/default
 
 sudo mkdir -p mods-config/perl
 sudo cp /var/www/onlifi/backend/config/freeradius/multi_tenant.pl mods-config/perl/onlifi_multi_tenant.pl
@@ -75,9 +76,11 @@ Enable modules:
 
 ```bash
 cd /etc/freeradius/3.0/mods-enabled
+sudo rm -f sql
 sudo ln -sf ../mods-available/perl perl
-sudo ln -sf ../mods-available/sql sql
 ```
+
+Do not enable the SQL module for the current OnLiFi production flow. The `default` virtual server calls `perl`, and `multi_tenant.pl` chooses the correct tenant/site database from `NAS-Identifier`. Enabling `mods-enabled/sql` can stop FreeRADIUS during config parsing with errors like `Reference "${client_table}" not found` or `Reference "${ENV_RADIUS_DB_PASSWORD}" not found`.
 
 Edit `/etc/freeradius/3.0/mods-available/perl`:
 
@@ -90,6 +93,7 @@ perl {
     func_start_accounting = accounting
     func_stop_accounting = accounting
     func_post_auth = post_auth
+    perl_flags = "-w"
 }
 ```
 

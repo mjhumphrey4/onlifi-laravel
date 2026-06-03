@@ -808,139 +808,42 @@ ls -la /var/www/onlifi-laravel/frontend/dist/
 
 ## Step 9: FreeRADIUS Configuration
 
-### Configure SQL Module
+OnLiFi production RADIUS uses the Perl module, not the FreeRADIUS SQL module. The Perl handler reads `NAS-Identifier`, finds the matching site/router in `onlifi_central.nas`, and then checks the correct tenant/site database.
 
 ```bash
-sudo nano /etc/freeradius/3.0/mods-available/sql
+sudo systemctl stop freeradius
+cd /etc/freeradius/3.0
+
+sudo cp /var/www/onlifi/backend/config/freeradius/clients.conf clients.conf
+sudo cp /var/www/onlifi/backend/config/freeradius/default sites-available/default
+sudo cp /var/www/onlifi/backend/config/freeradius/perl mods-available/perl
+sudo ln -sf ../sites-available/default sites-enabled/default
+
+sudo mkdir -p mods-config/perl
+sudo cp /var/www/onlifi/backend/config/freeradius/multi_tenant.pl mods-config/perl/onlifi_multi_tenant.pl
+sudo chmod +x mods-config/perl/onlifi_multi_tenant.pl
+
+cd /etc/freeradius/3.0/mods-enabled
+sudo rm -f sql
+sudo ln -sf ../mods-available/perl perl
 ```
 
-Update the configuration:
+Do not enable `mods-enabled/sql` for this production flow. If SQL is enabled accidentally, FreeRADIUS can fail with missing `${client_table}` or `${ENV_RADIUS_DB_PASSWORD}` references before the Perl tenant router loads.
 
-```
-sql {
-    driver = "rlm_sql_mysql"
-    dialect = "mysql"
-    
-    server = "localhost"
-    port = 3306
-    login = "radius"
-    password = "RadiusStrongPassword!"
-    radius_db = "onlifi_central"
-    
-    # Connection pooling
-    pool {
-        start = ${thread[pool].start_servers}
-        min = ${thread[pool].min_spare_servers}
-        max = ${thread[pool].max_servers}
-        spare = ${thread[pool].max_spare_servers}
-        uses = 0
-        lifetime = 0
-        cleanup_interval = 30
-        idle_timeout = 60
-        retry_delay = 30
-    }
-    
-    # Table names
-    acct_table1 = "radacct"
-    acct_table2 = "radacct"
-    postauth_table = "radpostauth"
-    authcheck_table = "radcheck"
-    authreply_table = "radreply"
-    groupcheck_table = "radgroupcheck"
-    groupreply_table = "radgroupreply"
-    usergroup_table = "radusergroup"
-    
-    # Read clients from SQL (optional)
-    read_clients = yes
-    client_table = "nas"
-    
-    # Group attributes
-    group_attribute = "SQL-Group"
-    
-    # Deactivate unknown users
-    allow_vulnerable_openssl = no
-}
-```
+Edit `/etc/freeradius/3.0/mods-config/perl/onlifi_multi_tenant.pl` and set the central DB login:
 
-### Enable SQL Module
-
-```bash
-# Create symlink to enable module
-sudo ln -s /etc/freeradius/3.0/mods-available/sql /etc/freeradius/3.0/mods-enabled/
-```
-
-### Configure Sites
-
-```bash
-# Edit default site
-sudo nano /etc/freeradius/3.0/sites-available/default
-```
-
-Ensure these sections are uncommented/enabled:
-
-```
-server default {
-    listen {
-        type = auth
-        ipaddr = *
-        port = 1812
-    }
-    
-    listen {
-        ipaddr = *
-        port = 1813
-        type = acct
-    }
-    
-    authorize {
-        preprocess
-        filter_username
-        suffix
-        sql
-        if (!ok) {
-            reject
-        }
-        expiration
-        logintime
-    }
-    
-    authenticate {
-        Auth-Type PAP {
-            pap
-        }
-    }
-    
-    post-auth {
-        sql
-        if (session-state:User-Name && reply:Session-Timeout) {
-            update reply {
-                Session-Timeout := "%{reply:Session-Timeout}"
-            }
-        }
-    }
-    
-    preacct {
-        preprocess
-        acct_unique
-        suffix
-        sql
-    }
-    
-    accounting {
-        sql
-    }
-    
-    session {
-        sql
-    }
-}
+```perl
+my $central_db_host = "localhost";
+my $central_db_name = "onlifi_central";
+my $central_db_user = "radius_user";
+my $central_db_pass = "onlifi@rad26";
 ```
 
 ### Start FreeRADIUS
 
 ```bash
 # Test configuration
-sudo freeradius -C
+sudo freeradius -XC
 
 # If no errors, start service
 sudo systemctl start freeradius

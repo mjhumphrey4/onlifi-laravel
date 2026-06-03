@@ -18,8 +18,11 @@ Current setup guide: [ONLIFI_RADIUS_RUNBOOK.md](ONLIFI_RADIUS_RUNBOOK.md).
 | --- | --- |
 | `clients.conf` | Defines the shared dynamic MikroTik client. |
 | `default` | FreeRADIUS virtual server using Perl for auth/accounting. |
+| `perl` | FreeRADIUS Perl module config that loads `multi_tenant.pl`. |
 | `multi_tenant.pl` | Routes requests to the correct tenant/site database. |
-| `sql.conf` | SQL module config, retained for support use; client loading is disabled for dynamic routers. |
+| `sql.conf` | Optional support/debug config only. Do not enable it for the current production flow. |
 | `ONLIFI_RADIUS_RUNBOOK.md` | Practical server setup and troubleshooting steps. |
 
 Per-router RADIUS secrets should only be enabled later when routers have stable VPN private source IPs.
+
+For production, make sure `/etc/freeradius/3.0/mods-enabled/sql` is removed. The active OnLiFi flow uses `mods-enabled/perl`; enabling SQL can cause FreeRADIUS parse errors before tenant routing starts.
