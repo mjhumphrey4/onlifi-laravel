@@ -23,11 +23,18 @@ class EmailNotificationService
         Config::set('mail.from.name', $fromName);
 
         if ($mailer === 'smtp') {
+            $scheme = (string) SystemSetting::get('smtp_encryption', config('mail.mailers.smtp.scheme', 'smtp'));
+            $scheme = match ($scheme) {
+                'tls' => 'smtp',
+                'ssl' => 'smtps',
+                default => $scheme,
+            };
+
             Config::set('mail.mailers.smtp.host', (string) SystemSetting::get('smtp_host', config('mail.mailers.smtp.host')));
             Config::set('mail.mailers.smtp.port', (int) SystemSetting::get('smtp_port', config('mail.mailers.smtp.port', 587)));
             Config::set('mail.mailers.smtp.username', (string) SystemSetting::get('smtp_username', config('mail.mailers.smtp.username')));
             Config::set('mail.mailers.smtp.password', (string) SystemSetting::get('smtp_password', config('mail.mailers.smtp.password')));
-            Config::set('mail.mailers.smtp.scheme', (string) SystemSetting::get('smtp_encryption', config('mail.mailers.smtp.scheme', 'tls')) ?: null);
+            Config::set('mail.mailers.smtp.scheme', $scheme ?: null);
         }
     }
 

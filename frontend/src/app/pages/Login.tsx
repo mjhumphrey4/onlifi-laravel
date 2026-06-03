@@ -6,7 +6,7 @@ import { Zap, Eye, EyeOff, UserPlus } from 'lucide-react';
 export function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState('');
@@ -19,7 +19,7 @@ export function Login() {
     setError('');
     setLoading(true);
     try {
-      const result = await login(email.trim(), password, twoFactorCode || undefined, twoFactorToken || undefined);
+      const result = await login(identifier.trim(), password, twoFactorCode || undefined, twoFactorToken || undefined);
       if (result?.requires_2fa) {
         setTwoFactorToken(result.two_factor_token);
         setTwoFactorCode('');
@@ -31,7 +31,7 @@ export function Login() {
       if (adminToken) {
         navigate('/admin/dashboard');
       } else {
-        navigate('/'); // Tenant dashboard
+        navigate('/dashboard'); // Tenant dashboard
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -64,14 +64,14 @@ export function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm text-card-foreground mb-2">Email</label>
+              <label className="block text-sm text-card-foreground mb-2">Username or Email</label>
               <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
-                autoComplete="email"
-                placeholder="Enter your email"
+                autoComplete="username"
+                placeholder="Enter your username or email"
                 className="w-full px-4 py-3 bg-input-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
               />
             </div>

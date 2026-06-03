@@ -10,7 +10,7 @@ import { adminLogin } from '../../utils/api';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export default function AdminLogin() {
     setError('');
 
     try {
-      const data = await adminLogin(email, password, twoFactorCode || undefined, twoFactorToken || undefined);
+      const data = await adminLogin(identifier.trim(), password, twoFactorCode || undefined, twoFactorToken || undefined);
 
       if (data.requires_2fa) {
         setTwoFactorToken(data.two_factor_token);
@@ -67,13 +67,13 @@ export default function AdminLogin() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="login">Username or Email</Label>
               <Input
-                id="email"
-                type="email"
+                id="login"
+                type="text"
                 placeholder="admin@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 required
                 disabled={loading}
               />

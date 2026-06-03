@@ -44,12 +44,14 @@ import PlatformFees from './pages/admin/PlatformFees';
 import AdminSupportTickets from './pages/admin/SupportTickets';
 
 export const router = createBrowserRouter([
+  { path: '/', Component: Landing },
+
   // Tenant Dashboard Routes
   {
     path: '/',
     Component: Layout,
     children: [
-      { index: true, Component: Dashboard },
+      { path: 'dashboard', Component: Dashboard },
       { path: 'transactions', Component: Transactions },
       { path: 'withdrawals', Component: Withdrawals },
       { path: 'performance', Component: AnalyzePerformance },

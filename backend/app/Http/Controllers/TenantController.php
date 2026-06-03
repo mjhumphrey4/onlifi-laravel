@@ -7,6 +7,7 @@ use App\Services\TenantService;
 use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class TenantController extends Controller
 {
@@ -63,8 +64,8 @@ class TenantController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'domain' => 'nullable|string|unique:tenants,domain',
-            'admin_email' => 'required|email|unique:tenant_users,email',
+            'domain' => ['nullable', 'string', Rule::unique('central.tenants', 'domain')],
+            'admin_email' => ['required', 'email', Rule::unique('central.tenant_users', 'email')],
             'admin_name' => 'required|string',
             'admin_password' => 'required|string|min:8',
             'site_name' => 'required|string|max:100',
@@ -73,6 +74,13 @@ class TenantController extends Controller
             'router_types.*' => 'string|in:mikrotik,omada',
             'settings' => 'nullable|array',
         ]);
+
+        $validator->after(function ($validator) use ($request) {
+            $slug = \Illuminate\Support\Str::slug((string) $request->input('name'));
+            if ($slug && Tenant::where('slug', $slug)->exists()) {
+                $validator->errors()->add('name', 'This username is already taken.');
+            }
+        });
 
         if ($validator->fails()) {
             return response()->json([

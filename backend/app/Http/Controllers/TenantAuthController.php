@@ -19,7 +19,8 @@ class TenantAuthController extends Controller
     public function login(Request $request, TwoFactorService $twoFactor)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+            'login' => 'nullable|string',
+            'email' => 'nullable|string',
             'password' => 'required|string',
             'two_factor_code' => 'nullable|string',
             'two_factor_token' => 'nullable|string',
@@ -32,7 +33,20 @@ class TenantAuthController extends Controller
             ], 422);
         }
 
-        $user = TenantUser::where('email', $request->email)->first();
+        $identifier = trim((string) ($request->input('login') ?: $request->input('email')));
+        if ($identifier === '') {
+            return response()->json([
+                'error' => 'Validation failed',
+                'message' => 'Username or email is required',
+                'errors' => ['login' => ['Username or email is required']],
+            ], 422);
+        }
+
+        $user = str_contains($identifier, '@')
+            ? TenantUser::where('email', $identifier)->first()
+            : Tenant::where('slug', \Illuminate\Support\Str::slug($identifier))
+                ->orWhere('name', $identifier)
+                ->first()?->users()->where('role', 'admin')->orderBy('id')->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([

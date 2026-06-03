@@ -15,7 +15,8 @@ class SuperAdminAuthController extends Controller
     public function login(Request $request, TwoFactorService $twoFactor)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+            'login' => 'nullable|string',
+            'email' => 'nullable|string',
             'password' => 'required|string',
             'two_factor_code' => 'nullable|string',
             'two_factor_token' => 'nullable|string',
@@ -28,7 +29,18 @@ class SuperAdminAuthController extends Controller
             ], 422);
         }
 
-        $admin = SuperAdmin::where('email', $request->email)->first();
+        $identifier = trim((string) ($request->input('login') ?: $request->input('email')));
+        if ($identifier === '') {
+            return response()->json([
+                'error' => 'Validation failed',
+                'message' => 'Username or email is required',
+                'errors' => ['login' => ['Username or email is required']],
+            ], 422);
+        }
+
+        $admin = SuperAdmin::where('email', $identifier)
+            ->orWhere('name', $identifier)
+            ->first();
 
         if (!$admin || !Hash::check($request->password, $admin->password)) {
             return response()->json([

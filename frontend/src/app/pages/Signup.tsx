@@ -131,7 +131,6 @@ export function Signup() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.username,
-          domain: `${formData.username}.onlifi.local`,
           site_name: formData.site_name,
           mobile_money_provider: formData.mobile_money_provider,
           router_types: formData.router_types,
@@ -154,7 +153,10 @@ export function Signup() {
           navigate('/login');
         }, 2000);
       } else {
-        setApiError(data.message || data.error || 'Failed to create account');
+        const validationErrors = data.errors
+          ? Object.values(data.errors).flat().join(' ')
+          : '';
+        setApiError(validationErrors || data.message || data.error || 'Failed to create account');
       }
     } catch (error) {
       console.error('Signup error:', error);
