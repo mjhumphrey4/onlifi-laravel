@@ -43,7 +43,7 @@ export function Landing() {
             </p>
             <div className="flex flex-wrap gap-3 mt-8">
               <Link to="/signup" className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-cyan-400 text-slate-950 font-semibold hover:bg-cyan-300">
-                Start setup <ArrowRight className="w-4 h-4" />
+                Get Started <ArrowRight className="w-4 h-4" />
               </Link>
               <Link to="/login" className="inline-flex items-center gap-2 px-5 py-3 rounded-lg border border-white/15 text-white hover:bg-white/10">
                 Open dashboard
