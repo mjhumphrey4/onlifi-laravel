@@ -104,7 +104,7 @@ class TenantService
             'api_token' => Str::random(64),
             'vpn_username' => $slug,
             'vpn_password' => Str::random(24),
-            'vpn_public_host' => 'vpn.onlifi.net',
+            'vpn_public_host' => '89.167.42.53',
             'vpn_public_port' => Site::defaultVpnPublicPort(),
             'vpn_status' => 'active',
         ]);

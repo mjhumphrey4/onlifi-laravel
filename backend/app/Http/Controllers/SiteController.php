@@ -97,7 +97,7 @@ class SiteController extends Controller
             'is_active' => true,
             'vpn_username' => Str::slug($request->name),
             'vpn_password' => Str::random(24),
-            'vpn_public_host' => 'vpn.onlifi.net',
+            'vpn_public_host' => '89.167.42.53',
             'vpn_public_port' => Site::defaultVpnPublicPort(),
             'vpn_status' => 'active',
         ]);
@@ -281,7 +281,7 @@ class SiteController extends Controller
         $updates = [];
 
         if (!$site->vpn_public_host) {
-            $updates['vpn_public_host'] = 'vpn.onlifi.net';
+            $updates['vpn_public_host'] = '89.167.42.53';
         }
         if (!$site->vpn_public_port) {
             $updates['vpn_public_port'] = Site::defaultVpnPublicPort();

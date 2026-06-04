@@ -30,7 +30,7 @@ return new class extends Migration
                 $query->whereNull('vpn_public_host')
                     ->orWhere('vpn_public_host', '');
             })
-            ->update(['vpn_public_host' => 'vpn.onlifi.net']);
+            ->update(['vpn_public_host' => '89.167.42.53']);
 
         DB::connection('central')
             ->table('sites')

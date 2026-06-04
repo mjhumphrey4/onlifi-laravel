@@ -2,14 +2,14 @@
 
 This is the single production checklist for installing the required OnLiFi application components and deploying by pulling the GitHub repository into the server destination directory.
 
-This guide intentionally does not include SoftEther/SSTP installation. SoftEther is assumed to already be installed and managed separately.
+This guide intentionally does not include Nginx certificate tuning beyond the hosts needed for OnLiFi. WireGuard is included because routers use it for remote management and RouterOS API access.
 
 ## 1. Server Assumptions
 
 - Ubuntu/Debian server with shell access.
 - Nginx points the API host to `backend/public`.
 - Nginx points the dashboard host to the built frontend output, usually `frontend/dist`.
-- SoftEther is already installed.
+- WireGuard remote access runs on this server at `89.167.42.53:51820/udp`.
 - Repository destination: `/var/www/onlifi`.
 - API domain: `https://api.onlifi.net`.
 - Dashboard domain: `https://onlifi.net`.
@@ -23,7 +23,7 @@ Adjust paths and domains where needed.
 ```bash
 sudo apt update
 sudo apt install -y \
-  git curl unzip zip redis-server mysql-server mysql-client nginx certbot python3-certbot-nginx \
+  git curl unzip zip redis-server mysql-server mysql-client nginx certbot python3-certbot-nginx wireguard-tools \
   php8.3-cli php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl \
   php8.3-zip php8.3-bcmath php8.3-gd php8.3-intl php8.3-redis \
   freeradius freeradius-mysql freeradius-utils libdbi-perl libdbd-mysql-perl
@@ -167,6 +167,7 @@ Important:
 - `FILESYSTEM_DISK=public` is needed for uploaded captive logos and downloadable assets.
 - `APP_URL` must be the API host, not `localhost`, otherwise generated logo/download URLs can be wrong.
 - Keep `RADIUS_SHARED_SECRET` exactly the same in Laravel system settings, MikroTik provisioning, and FreeRADIUS `clients.conf`.
+- WireGuard endpoint settings are stored in the admin system settings. For production use `wireguard_endpoint_host=89.167.42.53`, `wireguard_endpoint_port=51820`, and paste the server public key into `wireguard_server_public_key`.
 
 ## 6. Install Backend Dependencies
 
@@ -570,7 +571,66 @@ PONG
 
 The app uses Redis for cache when `CACHE_STORE=redis`. This improves pages like Clients and other frequently read dashboard data.
 
-## 13. FreeRADIUS Setup
+## 13. WireGuard Remote Access
+
+Create the WireGuard server interface on the production server. This is the endpoint every provisioned MikroTik will connect to:
+
+```bash
+sudo mkdir -p /etc/wireguard
+sudo chmod 700 /etc/wireguard
+umask 077
+wg genkey | sudo tee /etc/wireguard/onlifi-server.key | wg pubkey | sudo tee /etc/wireguard/onlifi-server.pub
+sudo cat /etc/wireguard/onlifi-server.key
+sudo cat /etc/wireguard/onlifi-server.pub
+```
+
+Create `/etc/wireguard/wg0.conf`:
+
+```bash
+sudo nano /etc/wireguard/wg0.conf
+```
+
+```ini
+[Interface]
+Address = 10.10.1.1/24
+ListenPort = 51820
+PrivateKey = paste the value from /etc/wireguard/onlifi-server.key
+SaveConfig = false
+```
+
+Start the tunnel:
+
+```bash
+sudo systemctl enable --now wg-quick@wg0
+sudo wg show
+```
+
+In the OnLiFi admin system settings, set:
+
+```text
+wireguard_endpoint_host = 89.167.42.53
+wireguard_endpoint_port = 51820
+wireguard_server_public_key = contents of /etc/wireguard/onlifi-server.pub
+wireguard_allowed_address = 10.10.1.0/24
+```
+
+For each approved site, assign a unique WireGuard private IP such as `10.10.1.10/32` in Admin Remote Access. The admin panel shows the router public key and a ready server peer block. Add that peer to the Linux server:
+
+```bash
+sudo wg set wg0 peer ROUTER_PUBLIC_KEY allowed-ips 10.10.1.10/32
+sudo wg show
+```
+
+To persist peers across reboot, add each `[Peer]` block shown by OnLiFi to `/etc/wireguard/wg0.conf`, then restart:
+
+```bash
+sudo systemctl restart wg-quick@wg0
+sudo wg show
+```
+
+Once a router is provisioned, it should bring up `onlifi-wg`, assign its admin-selected `10.10.1.x/32` address, and create a peer pointed at `89.167.42.53:51820`. Traffic starts flowing as soon as the router has the server public key and the Linux server has the router public key as a peer.
+
+## 14. FreeRADIUS Setup
 
 Copy OnLiFi FreeRADIUS files:
 
@@ -645,9 +705,9 @@ sudo systemctl stop freeradius
 sudo freeradius -X
 ```
 
-## 14. Firewall Ports
+## 15. Firewall Ports
 
-Open the application and RADIUS ports in your server/cloud firewall as appropriate:
+Open the application, RADIUS, and WireGuard ports in your server/cloud firewall as appropriate:
 
 ```bash
 sudo ufw allow 80/tcp
@@ -655,11 +715,12 @@ sudo ufw allow 443/tcp
 sudo ufw allow 1812/udp
 sudo ufw allow 1813/udp
 sudo ufw allow 3799/udp
+sudo ufw allow 51820/udp
 ```
 
 Do not open MySQL publicly.
 
-## 15. Deployment Pull Command
+## 16. Deployment Pull Command
 
 Use this after Jenkins or manually after pushing to GitHub:
 
@@ -694,7 +755,7 @@ sudo systemctl restart freeradius
 
 If using PHP 8.2, restart `php8.2-fpm` instead.
 
-## 16. Post-Deployment Health Checks
+## 17. Post-Deployment Health Checks
 
 Backend:
 
@@ -742,6 +803,14 @@ sudo systemctl status freeradius
 sudo ss -lunp | grep -E ':1812|:1813|:3799'
 ```
 
+WireGuard:
+
+```bash
+sudo systemctl status wg-quick@wg0
+sudo wg show
+sudo ss -lunp | grep ':51820'
+```
+
 Direct RADIUS auth test, using a real voucher/router:
 
 ```bash
@@ -763,7 +832,7 @@ Received Access-Accept
 Received Accounting-Response
 ```
 
-## 17. Router Provisioning Checks
+## 18. Router Provisioning Checks
 
 After deploying, provision a test site/router and verify:
 
@@ -772,6 +841,9 @@ After deploying, provision a test site/router and verify:
 /radius print detail
 /ip hotspot profile print detail
 /ip hotspot print detail
+/interface wireguard print detail
+/interface wireguard peers print detail
+/ip address print where interface=onlifi-wg
 /log print where message~"radius"
 ```
 
@@ -785,9 +857,12 @@ Expected:
 - Hotspot profile uses `use-radius=yes`.
 - Hotspot profile uses `radius-accounting=yes`.
 - Hotspot profile uses `login-by=http-pap`.
+- WireGuard interface `onlifi-wg` exists.
+- WireGuard peer endpoint is `89.167.42.53:51820`.
+- WireGuard address matches the admin-assigned site private IP, for example `10.10.1.10/32`.
 - Captive files include the active `login.html`.
 
-## 18. Captive Portal Assets
+## 19. Captive Portal Assets
 
 Uploaded captive logos require:
 
@@ -803,7 +878,7 @@ The generated captive download returns:
 
 Upload both files to the same MikroTik hotspot directory when using the ZIP.
 
-## 19. Mobile Money And SMS
+## 20. Mobile Money And SMS
 
 Set these before accepting production payments:
 
@@ -831,7 +906,7 @@ https://pay.onlifi.net/{site-name}/check_status.php
 https://pay.onlifi.net/{site-name}/look/voucher-lookup.php
 ```
 
-## 20. Required Production Checklist
+## 21. Required Production Checklist
 
 - `APP_DEBUG=false`.
 - `APP_ENV=production`.
@@ -847,12 +922,15 @@ https://pay.onlifi.net/{site-name}/look/voucher-lookup.php
 - `php artisan onlifi:tenants:migrate` completed.
 - FreeRADIUS validates with `freeradius -XC`.
 - UDP `1812`, `1813`, and `3799` reachable from routers.
+- WireGuard `wg0` is running and listening on UDP `51820`.
+- UDP `51820` is reachable from routers.
+- `wireguard_endpoint_host=89.167.42.53`, `wireguard_endpoint_port=51820`, and `wireguard_server_public_key` are set in admin system settings.
 - `onlifi-scheduler.timer` running under systemd.
 - `onlifi-worker` running under systemd.
 - Frontend build completed.
 - Nginx points to the correct API public path and frontend build path.
 
-## 21. Rollback
+## 22. Rollback
 
 If a deployment fails after pulling:
 

@@ -29,7 +29,7 @@ class RemoteAccessController extends Controller
             ->map(fn (Site $site) => $this->formatSite($this->ensureVpnDefaults($site)));
 
         return response()->json([
-            'vpn_host' => 'vpn.onlifi.net',
+            'vpn_host' => '89.167.42.53',
             'mobile_app_url' => SystemSetting::get('remote_access_mobile_app_url', 'https://onlifi.net/downloads/onlifi-mobile.apk'),
             'web_login_url' => SystemSetting::get('remote_access_web_login_url', 'https://vpn.onlifi.net'),
             'sites' => $sites->map(fn (array $site) => [
@@ -101,7 +101,7 @@ class RemoteAccessController extends Controller
             'remote_access_notes',
         ]);
         $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
-        $updates['vpn_public_host'] = $updates['vpn_public_host'] ?? 'vpn.onlifi.net';
+        $updates['vpn_public_host'] = $updates['vpn_public_host'] ?? '89.167.42.53';
 
         $site->update($updates);
 
@@ -172,7 +172,7 @@ class RemoteAccessController extends Controller
             'vpn_private_ip' => $site->vpn_private_ip,
             'vpn_username' => $site->vpn_username ?: $this->defaultVpnUsername($site),
             'vpn_password' => $site->vpn_password,
-            'vpn_public_host' => $site->vpn_public_host ?: 'vpn.onlifi.net',
+            'vpn_public_host' => $site->vpn_public_host ?: '89.167.42.53',
             'vpn_public_port' => Site::defaultVpnPublicPort(),
             'vpn_public_endpoint' => $this->publicEndpoint($site),
             'wireguard_public_key' => $site->wireguard_public_key,
@@ -221,7 +221,7 @@ class RemoteAccessController extends Controller
             $updates['vpn_password'] = Str::random(24);
         }
         if (!$site->vpn_public_host) {
-            $updates['vpn_public_host'] = 'vpn.onlifi.net';
+            $updates['vpn_public_host'] = '89.167.42.53';
         }
         if ((int) $site->vpn_public_port !== Site::defaultVpnPublicPort()) {
             $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
@@ -245,8 +245,8 @@ class RemoteAccessController extends Controller
 
     private function wireGuardEndpoint(): string
     {
-        $host = SystemSetting::get('wireguard_endpoint_host', 'vpn.onlifi.net');
-        $host = preg_replace('/:\d+$/', '', trim((string) $host)) ?: 'vpn.onlifi.net';
+        $host = SystemSetting::get('wireguard_endpoint_host', '89.167.42.53');
+        $host = preg_replace('/:\d+$/', '', trim((string) $host)) ?: '89.167.42.53';
 
         return $host . ':' . Site::defaultVpnPublicPort();
     }

@@ -459,7 +459,7 @@ class NasController extends Controller
         $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
         $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
         $vpnClientName = 'onlifi-wg';
-        $vpnHost = preg_replace('/:\d+$/', '', trim((string) SystemSetting::get('wireguard_endpoint_host', $site?->vpn_public_host ?: 'vpn.onlifi.net'))) ?: 'vpn.onlifi.net';
+        $vpnHost = preg_replace('/:\d+$/', '', trim((string) SystemSetting::get('wireguard_endpoint_host', '89.167.42.53'))) ?: '89.167.42.53';
         $vpnPort = (int) SystemSetting::get('wireguard_endpoint_port', Site::defaultVpnPublicPort());
         $wireguardServerPublicKey = (string) SystemSetting::get('wireguard_server_public_key', '');
         $wireguardAllowedAddress = (string) SystemSetting::get('wireguard_allowed_address', SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24'));
@@ -974,7 +974,7 @@ RSC;
                 'is_active' => true,
                 'vpn_username' => Str::slug($name),
                 'vpn_password' => Str::random(24),
-                'vpn_public_host' => 'vpn.onlifi.net',
+                'vpn_public_host' => '89.167.42.53',
                 'vpn_public_port' => Site::defaultVpnPublicPort(),
                 'vpn_status' => 'active',
             ]);
@@ -994,7 +994,7 @@ RSC;
             $updates['vpn_password'] = Str::random(24);
         }
         if (!$site->vpn_public_host) {
-            $updates['vpn_public_host'] = 'vpn.onlifi.net';
+            $updates['vpn_public_host'] = '89.167.42.53';
         }
         if (!$site->vpn_public_port) {
             $updates['vpn_public_port'] = Site::defaultVpnPublicPort();

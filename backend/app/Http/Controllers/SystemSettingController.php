@@ -253,7 +253,7 @@ class SystemSettingController extends Controller
             'radius_auth_port' => ['integer', 'radius', 'RADIUS authentication UDP port', false],
             'radius_acct_port' => ['integer', 'radius', 'RADIUS accounting UDP port', false],
             'radius_shared_secret' => ['string', 'radius', 'Shared secret used by dynamic MikroTik routers', false],
-            'wireguard_endpoint_host' => ['string', 'router', 'WireGuard server hostname used by router provisioning', false],
+            'wireguard_endpoint_host' => ['string', 'router', 'WireGuard server host or IP used by router provisioning', false],
             'wireguard_endpoint_port' => ['integer', 'router', 'WireGuard server UDP port', false],
             'wireguard_server_public_key' => ['string', 'router', 'WireGuard server public key used in router peers', false],
             'wireguard_allowed_address' => ['string', 'router', 'WireGuard routes allowed through the server peer', false],

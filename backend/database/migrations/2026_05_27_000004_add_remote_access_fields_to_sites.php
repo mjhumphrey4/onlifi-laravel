@@ -23,7 +23,7 @@ return new class extends Migration
                 $table->string('vpn_password', 255)->nullable()->after('vpn_username');
             }
             if (!Schema::connection('central')->hasColumn('sites', 'vpn_public_host')) {
-                $table->string('vpn_public_host', 100)->default('vpn.onlifi.net')->after('vpn_password');
+                $table->string('vpn_public_host', 100)->default('89.167.42.53')->after('vpn_password');
             }
             if (!Schema::connection('central')->hasColumn('sites', 'vpn_public_port')) {
                 $table->integer('vpn_public_port')->nullable()->after('vpn_public_host');

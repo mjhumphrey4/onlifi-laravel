@@ -71,7 +71,7 @@ class Site extends Model
                 $site->vpn_password = Str::random(24);
             }
             if (empty($site->vpn_public_host)) {
-                $site->vpn_public_host = 'vpn.onlifi.net';
+                $site->vpn_public_host = '89.167.42.53';
             }
             if (empty($site->vpn_public_port)) {
                 $site->vpn_public_port = self::defaultVpnPublicPort();

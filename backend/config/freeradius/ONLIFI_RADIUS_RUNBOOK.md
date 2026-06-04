@@ -18,7 +18,7 @@ Use this production path:
 - When the voucher reaches `expires_at`, it is flagged `used`, removed from RADIUS, and kicked/disconnected where router API access is available.
 - Accounting updates usage/reporting data. Expiry cleanup still works from `expires_at` even if accounting is temporarily unavailable.
 
-Per-site RADIUS secrets are only practical after every router has a stable source IP, such as an SSTP VPN private IP. Then `nasname` can be the router VPN IP and FreeRADIUS can load unique clients safely.
+Per-site RADIUS secrets are only practical after every router has a stable source IP, such as a WireGuard private IP. Then `nasname` can be the router VPN IP and FreeRADIUS can load unique clients safely.
 
 ## Laravel Values That Must Match
 
