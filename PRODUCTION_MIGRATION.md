@@ -373,6 +373,7 @@ Clear and rebuild Laravel config after changing CORS or URL values:
 
 ```bash
 cd /var/www/onlifi/backend
+composer dump-autoload -o
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
@@ -398,6 +399,15 @@ access-control-allow-credentials: true
 ```
 
 `HTTP/2 200` is also acceptable. Any `301`, `401`, `403`, `404`, `405`, or `500` on the `OPTIONS` response means the preflight is being intercepted before Laravel's CORS response succeeds. Re-run `php artisan optimize:clear`, `php artisan config:cache`, and restart PHP-FPM/Nginx after deploying CORS-related changes.
+
+The application also includes an early `/api/*` preflight guard in `backend/public/index.php`. If the test still returns `500`, confirm production has the current file and inspect the server logs:
+
+```bash
+cd /var/www/onlifi/backend
+grep -n "Access-Control-Allow-Origin" public/index.php
+tail -n 80 storage/logs/laravel.log
+sudo tail -n 80 /var/log/nginx/api.onlifi.net.error.log
+```
 
 ### Login 500 Recovery Check
 
