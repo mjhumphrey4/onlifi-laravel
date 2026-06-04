@@ -94,8 +94,32 @@ class RouterSnapshotService
     {
         $this->ensureHotspotUsersTable();
         $users = $this->mikrotikService->getActiveUsers($router);
+        $seenMacs = collect($users)
+            ->map(fn ($user) => strtoupper((string) ($user['mac_address'] ?? '')))
+            ->filter()
+            ->all();
+
+        foreach ($this->mikrotikService->getDhcpLeases($router) as $lease) {
+            $mac = strtoupper((string) ($lease['mac_address'] ?? ''));
+            if ($mac === '' || in_array($mac, $seenMacs, true)) {
+                continue;
+            }
+
+            $users[] = [
+                'username' => null,
+                'mac_address' => $mac,
+                'ip_address' => $lease['ip_address'] ?? null,
+                'uptime' => '0s',
+                'bytes_in' => 0,
+                'bytes_out' => 0,
+                'device_type' => $lease['hostname'] ?: ($lease['device_type'] ?? 'DHCP Lease'),
+            ];
+            $seenMacs[] = $mac;
+        }
+
         $now = now();
         $count = 0;
+        $hasSiteId = Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id');
 
         foreach ($users as $user) {
             $mac = strtoupper((string) ($user['mac_address'] ?? ''));
@@ -108,28 +132,35 @@ class RouterSnapshotService
                 ? DB::connection('tenant')->table('vouchers')->where('voucher_code', $username)->first()
                 : null;
 
+            $match = ['mac_address' => $mac];
+            if ($hasSiteId) {
+                $match['site_id'] = $site->id;
+            }
+
+            $values = [
+                'ip_address' => $user['ip_address'] ?: null,
+                'username' => $username,
+                'device_type' => $user['device_type'] ?? 'HotSpot Client',
+                'uptime_seconds' => $this->parseRouterDuration((string) ($user['uptime'] ?? '0s')),
+                'data_uploaded_mb' => round(((float) ($user['bytes_in'] ?? 0)) / 1048576, 2),
+                'data_downloaded_mb' => round(((float) ($user['bytes_out'] ?? 0)) / 1048576, 2),
+                'signal_strength' => null,
+                'last_seen' => $now,
+                'router_name' => $router->name ?: $site->name,
+                'router_identity' => $router->name ?: $site->name,
+                'voucher_code' => $voucher?->voucher_code,
+                'profile_name' => $voucher?->profile_name,
+                'expires_at' => $voucher?->expires_at,
+                'updated_at' => $now,
+                'created_at' => $now,
+            ];
+            if ($hasSiteId) {
+                $values['site_id'] = $site->id;
+            }
+
             DB::connection('tenant')->table('hotspot_users')->updateOrInsert(
-                [
-                    'site_id' => $site->id,
-                    'mac_address' => $mac,
-                ],
-                [
-                    'ip_address' => $user['ip_address'] ?: null,
-                    'username' => $username,
-                    'device_type' => 'HotSpot Client',
-                    'uptime_seconds' => $this->parseRouterDuration((string) ($user['uptime'] ?? '0s')),
-                    'data_uploaded_mb' => round(((float) ($user['bytes_in'] ?? 0)) / 1048576, 2),
-                    'data_downloaded_mb' => round(((float) ($user['bytes_out'] ?? 0)) / 1048576, 2),
-                    'signal_strength' => null,
-                    'last_seen' => $now,
-                    'router_name' => $router->name ?: $site->name,
-                    'router_identity' => $router->name ?: $site->name,
-                    'voucher_code' => $voucher?->voucher_code,
-                    'profile_name' => $voucher?->profile_name,
-                    'expires_at' => $voucher?->expires_at,
-                    'updated_at' => $now,
-                    'created_at' => $now,
-                ]
+                $match,
+                $values
             );
             $count++;
         }

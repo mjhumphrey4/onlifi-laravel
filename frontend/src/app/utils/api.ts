@@ -255,6 +255,8 @@ export const testRouterConnection = (id: number) => post(`/routers/${id}/test-co
 export const getRouterActiveUsers = (id: number) => get(`/routers/${id}/active-users`);
 export const getRouterIpBindings = (refresh = false) => get(`/routers/ip-bindings${refresh ? '?refresh=1' : ''}`);
 export const createRouterIpBinding = (data: Record<string, unknown>) => post('/routers/ip-bindings', data);
+export const getRouterDhcpLeases = (refresh = false) => get(`/routers/dhcp/leases${refresh ? '?refresh=1' : ''}`);
+export const getRouterDhcpPools = (refresh = false) => get(`/routers/dhcp/pools${refresh ? '?refresh=1' : ''}`);
 export const getRouterSystemUsers = (refresh = false) => get(`/routers/system-users${refresh ? '?refresh=1' : ''}`);
 export const createRouterSystemUser = (data: Record<string, unknown>) => post('/routers/system-users', data);
 export const updateRouterSystemUserStatus = (data: Record<string, unknown>) => post('/routers/system-users/status', data);

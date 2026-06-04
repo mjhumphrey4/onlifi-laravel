@@ -188,23 +188,56 @@ class MikrotikAPI {
             return [];
         }
 
-        $response = $this->communicate(['/ip/dhcp-server/lease/print', '=.proplist=mac-address,address,host-name,last-seen,status']);
+        $response = $this->communicate([
+            '/ip/dhcp-server/lease/print',
+            '=.proplist=.id,mac-address,address,host-name,last-seen,status,server,dynamic,comment',
+        ]);
         $clients = $this->parseResponse($response);
 
         $result = [];
         foreach ($clients as $client) {
             if (isset($client['status']) && $client['status'] === 'bound') {
                 $result[] = [
+                    'id' => $client['.id'] ?? '',
                     'mac_address' => $client['mac-address'] ?? '',
                     'ip_address' => $client['address'] ?? '',
                     'hostname' => $client['host-name'] ?? 'Unknown',
                     'last_seen' => $client['last-seen'] ?? '',
+                    'status' => $client['status'] ?? '',
+                    'server' => $client['server'] ?? '',
+                    'dynamic' => filter_var($client['dynamic'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    'comment' => $client['comment'] ?? '',
                     'device_type' => $this->detectDeviceType($client['mac-address'] ?? ''),
                 ];
             }
         }
 
         return $result;
+    }
+
+    /**
+     * Get configured IP pools.
+     */
+    public function getIpPools() {
+        if (!$this->connect()) {
+            return [];
+        }
+
+        $response = $this->communicate([
+            '/ip/pool/print',
+            '=.proplist=.id,name,ranges,next-pool,comment',
+        ]);
+        $pools = $this->parseResponse($response);
+
+        return array_map(function ($pool) {
+            return [
+                'id' => $pool['.id'] ?? '',
+                'name' => $pool['name'] ?? '',
+                'ranges' => $pool['ranges'] ?? '',
+                'next_pool' => $pool['next-pool'] ?? '',
+                'comment' => $pool['comment'] ?? '',
+            ];
+        }, $pools);
     }
 
     /**

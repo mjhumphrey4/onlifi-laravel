@@ -94,9 +94,9 @@ export function Clients() {
   };
 
   useEffect(() => {
-    loadClients();
+    loadClients(false, true);
     loadRouters();
-    const interval = setInterval(() => loadClients(true), 300000);
+    const interval = setInterval(() => loadClients(true, true), 300000);
     return () => clearInterval(interval);
   }, [selectedSite?.id]);
 

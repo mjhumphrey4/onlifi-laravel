@@ -46,7 +46,7 @@ export function RouterUsers() {
   };
 
   useEffect(() => {
-    load();
+    load(true);
   }, [selectedSite?.id]);
 
   const submit = async (event: FormEvent) => {

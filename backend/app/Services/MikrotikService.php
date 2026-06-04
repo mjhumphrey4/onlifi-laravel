@@ -401,6 +401,46 @@ class MikrotikService
         }
     }
 
+    public function getDhcpLeases(MikrotikRouter $router): array
+    {
+        if (!$this->connect($router)) {
+            return [];
+        }
+
+        try {
+            $leases = $this->api->getActiveClients();
+            $this->disconnect();
+            return $leases;
+        } catch (\Exception $e) {
+            Log::error("Failed to get DHCP leases from MikroTik", [
+                'router' => $router->ip_address,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return [];
+        }
+    }
+
+    public function getDhcpPools(MikrotikRouter $router): array
+    {
+        if (!$this->connect($router)) {
+            return [];
+        }
+
+        try {
+            $pools = $this->api->getIpPools();
+            $this->disconnect();
+            return $pools;
+        } catch (\Exception $e) {
+            Log::error("Failed to get DHCP pools from MikroTik", [
+                'router' => $router->ip_address,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return [];
+        }
+    }
+
     public function addSystemUser(MikrotikRouter $router, array $user): bool
     {
         if (!$this->connect($router)) {

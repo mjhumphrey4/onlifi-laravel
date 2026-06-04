@@ -485,6 +485,74 @@ class MikrotikController extends Controller
         ]);
     }
 
+    public function getDhcpLeases(Request $request)
+    {
+        if (!$request->boolean('refresh')) {
+            $site = SiteScope::selectedOrDefaultSite($request);
+            $cached = $site ? $this->snapshots->cachedRouterList($site, 'dhcp_leases') : null;
+            if ($cached && count($cached['data']) > 0) {
+                return response()->json([
+                    'leases' => $cached['data'],
+                    'cached' => true,
+                    'last_synced_at' => $cached['last_synced_at'],
+                ]);
+            }
+        }
+
+        $router = $this->resolveSiteRouter($request);
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$router || !$site) {
+            return response()->json([
+                'leases' => [],
+                'message' => 'Router remote access details are not configured for this site.',
+            ]);
+        }
+
+        $leases = $this->mikrotikService->getDhcpLeases($router);
+        $this->snapshots->storeRouterListCache($site, 'dhcp_leases', $leases);
+
+        return response()->json([
+            'leases' => $leases,
+            'cached' => false,
+            'last_synced_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    public function getDhcpPools(Request $request)
+    {
+        if (!$request->boolean('refresh')) {
+            $site = SiteScope::selectedOrDefaultSite($request);
+            $cached = $site ? $this->snapshots->cachedRouterList($site, 'dhcp_pools') : null;
+            if ($cached && count($cached['data']) > 0) {
+                return response()->json([
+                    'pools' => $cached['data'],
+                    'cached' => true,
+                    'last_synced_at' => $cached['last_synced_at'],
+                ]);
+            }
+        }
+
+        $router = $this->resolveSiteRouter($request);
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$router || !$site) {
+            return response()->json([
+                'pools' => [],
+                'message' => 'Router remote access details are not configured for this site.',
+            ]);
+        }
+
+        $pools = $this->mikrotikService->getDhcpPools($router);
+        $this->snapshots->storeRouterListCache($site, 'dhcp_pools', $pools);
+
+        return response()->json([
+            'pools' => $pools,
+            'cached' => false,
+            'last_synced_at' => now()->toIso8601String(),
+        ]);
+    }
+
     public function addSystemUser(Request $request)
     {
         $validator = Validator::make($request->all(), [

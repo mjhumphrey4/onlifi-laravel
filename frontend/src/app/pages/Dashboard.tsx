@@ -215,30 +215,29 @@ export function Dashboard() {
       }, {});
       setSites(Object.keys(groupedSites).length ? groupedSites : (statsRes.sites ?? {}));
 
-      // Fetch active clients from radacct (active hotspot users)
+      // Fetch active clients from the router snapshot path.
       let activeClientCount = 0;
       try {
         if (!canViewClients) {
           setClients([]);
         } else {
-          const clientsRes = await fetch(`${API_BASE}/radius/active-users`, { headers });
+          const clientsRes = await fetch(`${API_BASE}/clients?refresh=1&limit=10`, { headers });
         
           if (clientsRes.ok) {
             const clientsData = await clientsRes.json();
-          
-            // Map radacct data to client format
-            const activeClients = (clientsData.active_users || []).map((user: any) => ({
-              id: user.session_id,
+
+            const activeClients = (clientsData.clients || clientsData.data || []).map((user: any) => ({
+              id: user.id,
               mac_address: user.mac_address,
               username: user.username,
               ip_address: user.ip_address,
-              total_sessions: 1,
-              total_spent: 0,
-              last_seen: user.connected_at,
-              status: 'active'
+              total_sessions: user.total_sessions || 0,
+              total_spent: user.total_spent || 0,
+              last_seen: user.last_seen,
+              status: user.status || 'active'
             }));
           
-            activeClientCount = activeClients.length;
+            activeClientCount = Number(clientsData.total ?? activeClients.length);
             setClients(activeClients);
           } else {
             setClients([]);

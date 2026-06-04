@@ -253,6 +253,8 @@ Route::middleware(['tenant'])->group(function () {
         Route::post('/', [MikrotikController::class, 'store']);
         Route::get('/ip-bindings', [MikrotikController::class, 'getIpBindings']);
         Route::post('/ip-bindings', [MikrotikController::class, 'addIpBinding']);
+        Route::get('/dhcp/leases', [MikrotikController::class, 'getDhcpLeases']);
+        Route::get('/dhcp/pools', [MikrotikController::class, 'getDhcpPools']);
         Route::get('/system-users', [MikrotikController::class, 'getSystemUsers']);
         Route::post('/system-users', [MikrotikController::class, 'addSystemUser']);
         Route::post('/system-users/status', [MikrotikController::class, 'updateSystemUserStatus']);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, CheckCircle, Clock, Cpu, Database, Gauge, Globe, MapPin, RefreshCw, Server, Wifi, XCircle } from 'lucide-react';
+import { Activity, CheckCircle, Clock, Cpu, Database, Gauge, Globe, MapPin, RefreshCw, Server, SlidersHorizontal, Wifi, XCircle } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
 import { API_BASE, getTelemetryUsage } from '../utils/api';
 
@@ -255,22 +255,31 @@ export function Devices() {
                 <h2 className="font-semibold text-card-foreground">Total Data Usage</h2>
                 <p className="text-sm text-muted-foreground">WAN traffic only. Uses MikroTik WAN interface list, with ether1 as fallback.</p>
               </div>
-              <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
-                {[
-                  ['today', 'Today'],
-                  ['week', 'This Week'],
-                  ['month', 'This Month'],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    onClick={() => setUsagePeriod(value as UsageStats['period'])}
-                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                      usagePeriod === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-card-foreground transition-colors hover:bg-muted"
+                >
+                  <SlidersHorizontal className="w-4 h-4 text-primary" />
+                  Configure Load Balancing
+                </button>
+                <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1">
+                  {[
+                    ['today', 'Today'],
+                    ['week', 'This Week'],
+                    ['month', 'This Month'],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setUsagePeriod(value as UsageStats['period'])}
+                      className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                        usagePeriod === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

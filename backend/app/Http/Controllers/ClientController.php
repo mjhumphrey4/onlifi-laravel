@@ -9,7 +9,9 @@ use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Carbon;
 
 class ClientController extends Controller
 {
@@ -34,6 +36,8 @@ class ClientController extends Controller
         }
 
         try {
+            $this->snapshots->ensureHotspotUsersTable();
+
             if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
                 return response()->json([
                     'clients' => [],
@@ -94,10 +98,15 @@ class ClientController extends Controller
 
             return response()->json($payload);
         } catch (\Exception $e) {
+            Log::warning('Failed to load active hotspot clients', [
+                'site_id' => $site?->id,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'clients' => [],
                 'total' => 0,
-                'message' => 'No client data available',
+                'message' => 'No client data available. Check the router VPN/API path and server logs.',
             ]);
         }
     }
@@ -144,7 +153,10 @@ class ClientController extends Controller
     private function refreshFromRouter(Request $request, bool $force): void
     {
         if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
-            return;
+            $this->snapshots->ensureHotspotUsersTable();
+            if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
+                return;
+            }
         }
 
         $site = SiteScope::selectedOrDefaultSite($request);
@@ -162,7 +174,7 @@ class ClientController extends Controller
 
             $latestSeen = $latestSeenQuery->max('last_seen');
 
-            if ($latestSeen && now()->diffInMinutes($latestSeen) < 5) {
+            if ($latestSeen && now()->diffInMinutes(Carbon::parse($latestSeen)) < 5) {
                 return;
             }
         }
@@ -173,6 +185,29 @@ class ClientController extends Controller
         }
 
         $users = $this->mikrotikService->getActiveUsers($router);
+        $seenMacs = collect($users)
+            ->map(fn ($user) => strtoupper((string) ($user['mac_address'] ?? '')))
+            ->filter()
+            ->all();
+
+        foreach ($this->mikrotikService->getDhcpLeases($router) as $lease) {
+            $mac = strtoupper((string) ($lease['mac_address'] ?? ''));
+            if ($mac === '' || in_array($mac, $seenMacs, true)) {
+                continue;
+            }
+
+            $users[] = [
+                'username' => null,
+                'mac_address' => $mac,
+                'ip_address' => $lease['ip_address'] ?? null,
+                'uptime' => '0s',
+                'bytes_in' => 0,
+                'bytes_out' => 0,
+                'device_type' => $lease['hostname'] ?: ($lease['device_type'] ?? 'DHCP Lease'),
+            ];
+            $seenMacs[] = $mac;
+        }
+
         $now = now();
         $routerName = $router->name ?: $site->name;
         $hasSiteId = Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id');
@@ -196,7 +231,7 @@ class ClientController extends Controller
             $values = [
                 'ip_address' => $user['ip_address'] ?: null,
                 'username' => $username,
-                'device_type' => 'HotSpot Client',
+                'device_type' => $user['device_type'] ?? 'HotSpot Client',
                 'uptime_seconds' => $this->parseMikrotikDuration((string) ($user['uptime'] ?? '0s')),
                 'data_uploaded_mb' => round(((float) ($user['bytes_in'] ?? 0)) / 1048576, 2),
                 'data_downloaded_mb' => round(((float) ($user['bytes_out'] ?? 0)) / 1048576, 2),

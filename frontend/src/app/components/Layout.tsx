@@ -497,15 +497,15 @@ export function Layout() {
         {/* Desktop top bar */}
         <div className="hidden lg:flex sticky top-0 z-30 h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur">
           <div className="flex min-w-0 items-center gap-4">
+            <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">
+              <User className="h-4 w-4 shrink-0 text-primary" />
+              <span className="max-w-[220px] truncate font-medium">{user?.name || user?.email || 'User'}</span>
+            </div>
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active Site</p>
               <p className="truncate text-sm font-semibold text-foreground">
                 {selectedSite?.name || 'Default Site'}
               </p>
-            </div>
-            <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">
-              <User className="h-4 w-4 shrink-0 text-primary" />
-              <span className="max-w-[220px] truncate font-medium">{user?.name || user?.email || 'User'}</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
