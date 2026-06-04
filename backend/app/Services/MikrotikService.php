@@ -11,10 +11,12 @@ use Illuminate\Support\Facades\DB;
 class MikrotikService
 {
     private $api;
+    private ?string $lastError = null;
 
     public function connect(MikrotikRouter $router): bool
     {
         require_once base_path('app/Services/MikrotikAPI.php');
+        $this->lastError = null;
         
         $this->api = new \MikrotikAPI(
             $router->ip_address,
@@ -24,6 +26,10 @@ class MikrotikService
         );
 
         $connected = $this->api->connect();
+        if (!$connected) {
+            $this->lastError = $this->api->getLastError()
+                ?: "Could not connect to {$router->ip_address}:{$router->api_port}. Check WireGuard reachability, RouterOS API service, firewall, and credentials.";
+        }
 
         if ($connected && $router->exists) {
             $router->update(['last_seen' => now()]);
@@ -37,6 +43,11 @@ class MikrotikService
         if ($this->api) {
             $this->api->disconnect();
         }
+    }
+
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
     }
 
     public function addVoucherUser(MikrotikRouter $router, array $voucherData): bool
@@ -56,6 +67,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to add voucher user to MikroTik", [
                 'router' => $router->ip_address,
                 'error' => $e->getMessage(),
@@ -73,9 +85,15 @@ class MikrotikService
 
         try {
             $users = $this->api->getHotspotUsers();
+            if ($error = $this->api->getLastError()) {
+                $this->lastError = $error;
+                $this->disconnect();
+                return [];
+            }
             $this->disconnect();
             return $users;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to get active users from MikroTik", [
                 'router' => $router->ip_address,
                 'error' => $e->getMessage(),
@@ -186,6 +204,7 @@ class MikrotikService
                 'recorded_at' => now()->toIso8601String(),
             ];
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to collect telemetry from MikroTik", [
                 'router' => $router->ip_address,
                 'error' => $e->getMessage(),
@@ -225,6 +244,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to remove user from MikroTik", [
                 'router' => $router->ip_address,
                 'username' => $username,
@@ -246,6 +266,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to remove active HotSpot user from MikroTik", [
                 'router' => $router->ip_address,
                 'username' => $username,
@@ -264,9 +285,15 @@ class MikrotikService
 
         try {
             $bindings = $this->api->getHotspotIpBindings();
+            if ($error = $this->api->getLastError()) {
+                $this->lastError = $error;
+                $this->disconnect();
+                return [];
+            }
             $this->disconnect();
             return $bindings;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to get HotSpot IP bindings from MikroTik", [
                 'router' => $router->ip_address,
                 'error' => $e->getMessage(),
@@ -287,6 +314,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to add HotSpot IP binding to MikroTik", [
                 'router' => $router->ip_address,
                 'binding' => $binding,
@@ -305,9 +333,15 @@ class MikrotikService
 
         try {
             $secrets = $this->api->getPppoeSecrets();
+            if ($error = $this->api->getLastError()) {
+                $this->lastError = $error;
+                $this->disconnect();
+                return [];
+            }
             $this->disconnect();
             return $secrets;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to get PPPoE secrets from MikroTik", [
                 'router' => $router->ip_address,
                 'error' => $e->getMessage(),
@@ -328,6 +362,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to add PPPoE secret to MikroTik", [
                 'router' => $router->ip_address,
                 'client' => $client['username'] ?? null,
@@ -349,6 +384,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to update PPPoE secret status", [
                 'router' => $router->ip_address,
                 'id' => $id,
@@ -371,6 +407,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to remove PPPoE secret", [
                 'router' => $router->ip_address,
                 'id' => $id,
@@ -389,9 +426,15 @@ class MikrotikService
 
         try {
             $users = $this->api->getSystemUsers();
+            if ($error = $this->api->getLastError()) {
+                $this->lastError = $error;
+                $this->disconnect();
+                return [];
+            }
             $this->disconnect();
             return $users;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to get RouterOS system users", [
                 'router' => $router->ip_address,
                 'error' => $e->getMessage(),
@@ -409,9 +452,15 @@ class MikrotikService
 
         try {
             $leases = $this->api->getActiveClients();
+            if ($error = $this->api->getLastError()) {
+                $this->lastError = $error;
+                $this->disconnect();
+                return [];
+            }
             $this->disconnect();
             return $leases;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to get DHCP leases from MikroTik", [
                 'router' => $router->ip_address,
                 'error' => $e->getMessage(),
@@ -429,9 +478,15 @@ class MikrotikService
 
         try {
             $pools = $this->api->getIpPools();
+            if ($error = $this->api->getLastError()) {
+                $this->lastError = $error;
+                $this->disconnect();
+                return [];
+            }
             $this->disconnect();
             return $pools;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to get DHCP pools from MikroTik", [
                 'router' => $router->ip_address,
                 'error' => $e->getMessage(),
@@ -452,6 +507,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to add RouterOS system user", [
                 'router' => $router->ip_address,
                 'user' => $user['name'] ?? null,
@@ -473,6 +529,7 @@ class MikrotikService
             $this->disconnect();
             return $result;
         } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
             Log::error("Failed to update RouterOS system user status", [
                 'router' => $router->ip_address,
                 'id' => $id,

@@ -54,6 +54,7 @@ export function Clients() {
       if (response.ok) {
         const data = await response.json();
         setClients(data.clients || data.data || []);
+        setTelemetryMessage(data.router_error || data.message || '');
         setLastUpdated(new Date());
       }
     } catch (error) {

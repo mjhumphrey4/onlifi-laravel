@@ -24,9 +24,10 @@ class ClientController extends Controller
         $limit = $request->input('limit', 100);
         $site = SiteScope::selectedOrDefaultSite($request);
         $cacheKey = $this->clientsCacheKey($site?->id, (int) $limit);
+        $refreshResult = null;
 
         if ($request->boolean('refresh')) {
-            $this->refreshFromRouter($request, true);
+            $refreshResult = $this->refreshFromRouter($request, true);
             Cache::forget($cacheKey);
         } elseif ($cached = Cache::get($cacheKey)) {
             if (($cached['total'] ?? 0) > 0) {
@@ -47,7 +48,7 @@ class ClientController extends Controller
             }
 
             if ($site) {
-                $this->refreshFromRouter($request, false);
+                $refreshResult = $refreshResult ?: $this->refreshFromRouter($request, false);
             }
 
             $query = DB::connection('tenant')
@@ -93,6 +94,10 @@ class ClientController extends Controller
                     'ttl_seconds' => 300,
                 ],
             ];
+            if ($refreshResult && !$refreshResult['ok']) {
+                $payload['message'] = $refreshResult['message'];
+                $payload['router_error'] = $refreshResult['message'];
+            }
 
             Cache::put($cacheKey, $payload, now()->addMinutes(5));
 
@@ -150,18 +155,18 @@ class ClientController extends Controller
         return "tenant:{$tenantId}:site:" . ($siteId ?: 'default') . ":clients:limit:{$limit}";
     }
 
-    private function refreshFromRouter(Request $request, bool $force): void
+    private function refreshFromRouter(Request $request, bool $force): array
     {
         if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
             $this->snapshots->ensureHotspotUsersTable();
             if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
-                return;
+                return ['ok' => false, 'message' => 'The hotspot_users table is not available for this tenant.'];
             }
         }
 
         $site = SiteScope::selectedOrDefaultSite($request);
         if (!$site) {
-            return;
+            return ['ok' => false, 'message' => 'No active site is selected.'];
         }
 
         if (!$force) {
@@ -175,22 +180,33 @@ class ClientController extends Controller
             $latestSeen = $latestSeenQuery->max('last_seen');
 
             if ($latestSeen && now()->diffInMinutes(Carbon::parse($latestSeen)) < 5) {
-                return;
+                return ['ok' => true, 'message' => 'Using recent cached client data.'];
             }
         }
 
         $router = $this->resolveSiteRouter($site);
         if (!$router) {
-            return;
+            return ['ok' => false, 'message' => 'Router remote access details are not configured for this site.'];
         }
 
         $users = $this->mikrotikService->getActiveUsers($router);
+        $activeError = $this->mikrotikService->getLastError();
         $seenMacs = collect($users)
             ->map(fn ($user) => strtoupper((string) ($user['mac_address'] ?? '')))
             ->filter()
             ->all();
 
-        foreach ($this->mikrotikService->getDhcpLeases($router) as $lease) {
+        $leases = $this->mikrotikService->getDhcpLeases($router);
+        $leaseError = $this->mikrotikService->getLastError();
+
+        if (empty($users) && empty($leases) && ($activeError || $leaseError)) {
+            return [
+                'ok' => false,
+                'message' => $activeError ?: $leaseError ?: 'Router pull failed.',
+            ];
+        }
+
+        foreach ($leases as $lease) {
             $mac = strtoupper((string) ($lease['mac_address'] ?? ''));
             if ($mac === '' || in_array($mac, $seenMacs, true)) {
                 continue;
@@ -254,6 +270,12 @@ class ClientController extends Controller
                 $values
             );
         }
+
+        return [
+            'ok' => true,
+            'message' => 'Router clients refreshed.',
+            'count' => count($users),
+        ];
     }
 
     private function resolveSiteRouter($site): ?MikrotikRouter

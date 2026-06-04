@@ -8,6 +8,7 @@ use App\Models\SystemSetting;
 use App\Models\Tenant;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -53,7 +54,7 @@ class RouterSnapshotService
             return ['ok' => false, 'message' => 'Router remote access details are not configured.'];
         }
 
-        $types = $only ?: ['hotspot_users', 'ip_bindings', 'system_users', 'pppoe_clients'];
+        $types = $only ?: ['hotspot_users', 'ip_bindings', 'system_users', 'dhcp_leases', 'dhcp_pools', 'pppoe_clients'];
         $result = ['ok' => true, 'router' => $router->ip_address, 'synced' => []];
 
         if (in_array('hotspot_users', $types, true)) {
@@ -64,6 +65,12 @@ class RouterSnapshotService
         }
         if (in_array('system_users', $types, true)) {
             $result['synced']['system_users'] = $this->syncSystemUsers($site, $router);
+        }
+        if (in_array('dhcp_leases', $types, true)) {
+            $result['synced']['dhcp_leases'] = $this->syncDhcpLeases($site, $router);
+        }
+        if (in_array('dhcp_pools', $types, true)) {
+            $result['synced']['dhcp_pools'] = $this->syncDhcpPools($site, $router);
         }
         if (in_array('pppoe_clients', $types, true)) {
             $result['synced']['pppoe_clients'] = $this->syncPppoeClients($site, $router);
@@ -171,6 +178,9 @@ class RouterSnapshotService
     public function syncIpBindings(Site $site, MikrotikRouter $router): int
     {
         $bindings = $this->mikrotikService->getIpBindings($router);
+        if (empty($bindings) && $this->mikrotikService->getLastError()) {
+            return 0;
+        }
         $this->storeRouterListCache($site, 'ip_bindings', $bindings);
         return count($bindings);
     }
@@ -178,8 +188,31 @@ class RouterSnapshotService
     public function syncSystemUsers(Site $site, MikrotikRouter $router): int
     {
         $users = $this->mikrotikService->getSystemUsers($router);
+        if (empty($users) && $this->mikrotikService->getLastError()) {
+            return 0;
+        }
         $this->storeRouterListCache($site, 'system_users', $users);
         return count($users);
+    }
+
+    public function syncDhcpLeases(Site $site, MikrotikRouter $router): int
+    {
+        $leases = $this->mikrotikService->getDhcpLeases($router);
+        if (empty($leases) && $this->mikrotikService->getLastError()) {
+            return 0;
+        }
+        $this->storeRouterListCache($site, 'dhcp_leases', $leases);
+        return count($leases);
+    }
+
+    public function syncDhcpPools(Site $site, MikrotikRouter $router): int
+    {
+        $pools = $this->mikrotikService->getDhcpPools($router);
+        if (empty($pools) && $this->mikrotikService->getLastError()) {
+            return 0;
+        }
+        $this->storeRouterListCache($site, 'dhcp_pools', $pools);
+        return count($pools);
     }
 
     public function syncPppoeClients(Site $site, MikrotikRouter $router): int
@@ -220,6 +253,12 @@ class RouterSnapshotService
 
     public function cachedRouterList(Site $site, string $type): ?array
     {
+        $cacheKey = $this->routerCacheKey($site, $type);
+        if ($cached = Cache::get($cacheKey)) {
+            $cached['source'] = 'redis';
+            return $cached;
+        }
+
         $this->ensureRouterCacheTable();
 
         $row = DB::connection('tenant')->table('router_cached_lists')
@@ -231,14 +270,27 @@ class RouterSnapshotService
             return null;
         }
 
-        return [
+        $payload = [
             'data' => json_decode($row->payload ?: '[]', true) ?: [],
             'last_synced_at' => $row->last_synced_at,
+            'source' => 'database',
         ];
+
+        Cache::put($cacheKey, $payload, now()->addMinutes(10));
+
+        return $payload;
     }
 
     public function storeRouterListCache(Site $site, string $type, array $payload): void
     {
+        $cachePayload = [
+            'data' => $payload,
+            'last_synced_at' => now()->toIso8601String(),
+            'source' => 'router',
+        ];
+
+        Cache::put($this->routerCacheKey($site, $type), $cachePayload, now()->addMinutes(10));
+
         $this->ensureRouterCacheTable();
 
         DB::connection('tenant')->table('router_cached_lists')->updateOrInsert(
@@ -253,6 +305,11 @@ class RouterSnapshotService
                 'created_at' => now(),
             ]
         );
+    }
+
+    private function routerCacheKey(Site $site, string $type): string
+    {
+        return "tenant:{$site->tenant_id}:site:{$site->id}:router:list:{$type}";
     }
 
     public function ensureRouterCacheTable(): void

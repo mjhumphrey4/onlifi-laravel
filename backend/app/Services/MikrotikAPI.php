@@ -11,6 +11,7 @@ class MikrotikAPI {
     private $password;
     private $connected = false;
     private $timeout = 5;
+    private $lastError = null;
 
     public function __construct($host, $username, $password, $port = 8728) {
         $this->host = $host;
@@ -30,19 +31,26 @@ class MikrotikAPI {
         $this->socket = @fsockopen($this->host, $this->port, $errno, $errstr, $this->timeout);
         
         if (!$this->socket) {
-            error_log("MikroTik connection failed: $errstr ($errno)");
+            $this->lastError = "MikroTik connection failed: {$errstr} ({$errno})";
+            error_log($this->lastError);
             return false;
         }
 
         stream_set_timeout($this->socket, $this->timeout);
         
         if (!$this->login()) {
+            $this->lastError = $this->lastError ?: 'MikroTik login failed. Check RouterOS API credentials and permissions.';
             $this->disconnect();
             return false;
         }
 
         $this->connected = true;
+        $this->lastError = null;
         return true;
+    }
+
+    public function getLastError() {
+        return $this->lastError;
     }
 
     /**
@@ -107,11 +115,14 @@ class MikrotikAPI {
         $response = [];
         while (true) {
             $line = $this->readLine();
-            if ($line === false || $line === '') {
+            if ($line === false) {
                 break;
             }
+            if ($line === '') {
+                continue;
+            }
             $response[] = $line;
-            if ($line === '!done') {
+            if ($line === '!done' || $line === '!fatal') {
                 break;
             }
         }
@@ -123,12 +134,19 @@ class MikrotikAPI {
      */
     private function readLine() {
         $len = $this->readLen();
-        if ($len === false || $len === 0) {
+        if ($len === false) {
+            return false;
+        }
+        if ($len === 0) {
             return '';
         }
         $line = '';
         while (strlen($line) < $len) {
-            $line .= fread($this->socket, $len - strlen($line));
+            $chunk = fread($this->socket, $len - strlen($line));
+            if ($chunk === false || $chunk === '') {
+                return false;
+            }
+            $line .= $chunk;
         }
         return $line;
     }
@@ -137,16 +155,37 @@ class MikrotikAPI {
      * Read length prefix
      */
     private function readLen() {
-        $byte = ord(fread($this->socket, 1));
+        $raw = fread($this->socket, 1);
+        if ($raw === false || $raw === '') {
+            return false;
+        }
+
+        $byte = ord($raw);
         if ($byte & 0x80) {
             if (($byte & 0xC0) === 0x80) {
-                return (($byte & ~0xC0) << 8) + ord(fread($this->socket, 1));
+                $next = fread($this->socket, 1);
+                return $next === false || $next === '' ? false : (($byte & ~0xC0) << 8) + ord($next);
             } elseif (($byte & 0xE0) === 0xC0) {
-                return (($byte & ~0xE0) << 16) + (ord(fread($this->socket, 1)) << 8) + ord(fread($this->socket, 1));
+                $b1 = fread($this->socket, 1);
+                $b2 = fread($this->socket, 1);
+                return ($b1 === false || $b1 === '' || $b2 === false || $b2 === '')
+                    ? false
+                    : (($byte & ~0xE0) << 16) + (ord($b1) << 8) + ord($b2);
             } elseif (($byte & 0xF0) === 0xE0) {
-                return (($byte & ~0xF0) << 24) + (ord(fread($this->socket, 1)) << 16) + (ord(fread($this->socket, 1)) << 8) + ord(fread($this->socket, 1));
+                $b1 = fread($this->socket, 1);
+                $b2 = fread($this->socket, 1);
+                $b3 = fread($this->socket, 1);
+                return ($b1 === false || $b1 === '' || $b2 === false || $b2 === '' || $b3 === false || $b3 === '')
+                    ? false
+                    : (($byte & ~0xF0) << 24) + (ord($b1) << 16) + (ord($b2) << 8) + ord($b3);
             } elseif (($byte & 0xF8) === 0xF0) {
-                return (ord(fread($this->socket, 1)) << 24) + (ord(fread($this->socket, 1)) << 16) + (ord(fread($this->socket, 1)) << 8) + ord(fread($this->socket, 1));
+                $b1 = fread($this->socket, 1);
+                $b2 = fread($this->socket, 1);
+                $b3 = fread($this->socket, 1);
+                $b4 = fread($this->socket, 1);
+                return ($b1 === false || $b1 === '' || $b2 === false || $b2 === '' || $b3 === false || $b3 === '' || $b4 === false || $b4 === '')
+                    ? false
+                    : (ord($b1) << 24) + (ord($b2) << 16) + (ord($b3) << 8) + ord($b4);
             }
         }
         return $byte;
@@ -156,11 +195,22 @@ class MikrotikAPI {
      * Parse response into associative array
      */
     private function parseResponse($response) {
+        if ($response === false) {
+            return [];
+        }
+
         $parsed = [];
         $current = [];
+        $trap = false;
         
         foreach ($response as $line) {
-            if ($line === '!done' || $line === '!trap') {
+            if ($line === '!trap' || $line === '!fatal') {
+                $trap = true;
+                if (!empty($current)) {
+                    $parsed[] = $current;
+                    $current = [];
+                }
+            } elseif ($line === '!done' || $line === '!re') {
                 if (!empty($current)) {
                     $parsed[] = $current;
                     $current = [];
@@ -175,6 +225,11 @@ class MikrotikAPI {
         
         if (!empty($current)) {
             $parsed[] = $current;
+        }
+
+        if ($trap) {
+            $messages = array_values(array_filter(array_map(fn ($row) => $row['message'] ?? null, $parsed)));
+            $this->lastError = $messages ? implode('; ', $messages) : 'RouterOS API returned a trap/fatal response.';
         }
         
         return $parsed;

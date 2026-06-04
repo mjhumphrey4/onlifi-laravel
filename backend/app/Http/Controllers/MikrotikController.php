@@ -365,6 +365,63 @@ class MikrotikController extends Controller
         ]);
     }
 
+    public function diagnostics(Request $request)
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+        $router = $this->resolveSiteRouter($request);
+
+        if (!$site || !$router) {
+            return response()->json([
+                'ok' => false,
+                'site' => $site ? ['id' => $site->id, 'name' => $site->name] : null,
+                'message' => 'Router remote access details are not configured for this site.',
+            ]);
+        }
+
+        $connected = $this->mikrotikService->connect($router);
+        $connectionError = $this->mikrotikService->getLastError();
+        if ($connected) {
+            $this->mikrotikService->disconnect();
+        }
+
+        $checks = [];
+        foreach ([
+            'hotspot_active' => fn () => $this->mikrotikService->getActiveUsers($router),
+            'dhcp_leases' => fn () => $this->mikrotikService->getDhcpLeases($router),
+            'dhcp_pools' => fn () => $this->mikrotikService->getDhcpPools($router),
+            'system_users' => fn () => $this->mikrotikService->getSystemUsers($router),
+            'ip_bindings' => fn () => $this->mikrotikService->getIpBindings($router),
+        ] as $name => $callback) {
+            $items = $connected ? $callback() : [];
+            $checks[$name] = [
+                'count' => count($items),
+                'ok' => $connected && !$this->mikrotikService->getLastError(),
+                'error' => $this->mikrotikService->getLastError(),
+            ];
+        }
+
+        return response()->json([
+            'ok' => $connected,
+            'site' => [
+                'id' => $site->id,
+                'name' => $site->name,
+                'vpn_private_ip' => $site->vpn_private_ip,
+                'router_api_port' => $site->router_api_port ?: 8728,
+            ],
+            'router' => [
+                'host' => $router->ip_address,
+                'api_port' => $router->api_port,
+                'username' => $router->username,
+            ],
+            'connection' => [
+                'ok' => $connected,
+                'error' => $connectionError,
+            ],
+            'checks' => $checks,
+            'generated_at' => now()->toIso8601String(),
+        ]);
+    }
+
     public function getIpBindings(Request $request)
     {
         if (!$request->boolean('refresh')) {
@@ -390,13 +447,20 @@ class MikrotikController extends Controller
         }
 
         $bindings = $this->mikrotikService->getIpBindings($router);
-        $this->snapshots->storeRouterListCache($site, 'ip_bindings', $bindings);
 
-        return response()->json([
+        $payload = [
             'bindings' => $bindings,
             'cached' => false,
             'last_synced_at' => now()->toIso8601String(),
-        ]);
+        ];
+        if (empty($bindings) && ($error = $this->mikrotikService->getLastError())) {
+            $payload['message'] = $error;
+            $payload['router_error'] = $error;
+        } else {
+            $this->snapshots->storeRouterListCache($site, 'ip_bindings', $bindings);
+        }
+
+        return response()->json($payload);
     }
 
     public function addIpBinding(Request $request)
@@ -476,13 +540,20 @@ class MikrotikController extends Controller
         }
 
         $users = $this->mikrotikService->getSystemUsers($router);
-        $this->snapshots->storeRouterListCache($site, 'system_users', $users);
 
-        return response()->json([
+        $payload = [
             'users' => $users,
             'cached' => false,
             'last_synced_at' => now()->toIso8601String(),
-        ]);
+        ];
+        if (empty($users) && ($error = $this->mikrotikService->getLastError())) {
+            $payload['message'] = $error;
+            $payload['router_error'] = $error;
+        } else {
+            $this->snapshots->storeRouterListCache($site, 'system_users', $users);
+        }
+
+        return response()->json($payload);
     }
 
     public function getDhcpLeases(Request $request)
@@ -510,13 +581,20 @@ class MikrotikController extends Controller
         }
 
         $leases = $this->mikrotikService->getDhcpLeases($router);
-        $this->snapshots->storeRouterListCache($site, 'dhcp_leases', $leases);
 
-        return response()->json([
+        $payload = [
             'leases' => $leases,
             'cached' => false,
             'last_synced_at' => now()->toIso8601String(),
-        ]);
+        ];
+        if (empty($leases) && ($error = $this->mikrotikService->getLastError())) {
+            $payload['message'] = $error;
+            $payload['router_error'] = $error;
+        } else {
+            $this->snapshots->storeRouterListCache($site, 'dhcp_leases', $leases);
+        }
+
+        return response()->json($payload);
     }
 
     public function getDhcpPools(Request $request)
@@ -544,13 +622,20 @@ class MikrotikController extends Controller
         }
 
         $pools = $this->mikrotikService->getDhcpPools($router);
-        $this->snapshots->storeRouterListCache($site, 'dhcp_pools', $pools);
 
-        return response()->json([
+        $payload = [
             'pools' => $pools,
             'cached' => false,
             'last_synced_at' => now()->toIso8601String(),
-        ]);
+        ];
+        if (empty($pools) && ($error = $this->mikrotikService->getLastError())) {
+            $payload['message'] = $error;
+            $payload['router_error'] = $error;
+        } else {
+            $this->snapshots->storeRouterListCache($site, 'dhcp_pools', $pools);
+        }
+
+        return response()->json($payload);
     }
 
     public function addSystemUser(Request $request)
