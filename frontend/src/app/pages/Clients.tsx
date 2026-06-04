@@ -21,6 +21,25 @@ interface Client {
   expires_at: string | null;
 }
 
+function toNumber(value: number | string | null | undefined): number {
+  const numeric = typeof value === 'number' ? value : Number(value ?? 0);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizeClient(client: any): Client {
+  return {
+    ...client,
+    id: Number(client.id || 0),
+    uptime_seconds: toNumber(client.uptime_seconds),
+    data_uploaded_mb: toNumber(client.data_uploaded_mb),
+    data_downloaded_mb: toNumber(client.data_downloaded_mb),
+    total_data_mb: toNumber(client.total_data_mb),
+    signal_strength: client.signal_strength === null || client.signal_strength === undefined
+      ? null
+      : toNumber(client.signal_strength),
+  };
+}
+
 export function Clients() {
   const { selectedSite } = useSite();
   const [clients, setClients] = useState<Client[]>([]);
@@ -53,7 +72,7 @@ export function Clients() {
       
       if (response.ok) {
         const data = await response.json();
-        setClients(data.clients || data.data || []);
+        setClients((data.clients || data.data || []).map(normalizeClient));
         setTelemetryMessage(data.router_error || data.message || '');
         setLastUpdated(new Date());
       }
@@ -101,14 +120,16 @@ export function Clients() {
     return () => clearInterval(interval);
   }, [selectedSite?.id]);
 
-  const formatUptime = (seconds: number) => {
+  const formatUptime = (value: number | string | null | undefined) => {
+    const seconds = toNumber(value);
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     if (hours > 0) return `${hours}h ${minutes}m`;
     return `${minutes}m`;
   };
 
-  const formatBytes = (mb: number) => {
+  const formatBytes = (value: number | string | null | undefined) => {
+    const mb = toNumber(value);
     if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
     return `${mb.toFixed(2)} MB`;
   };
