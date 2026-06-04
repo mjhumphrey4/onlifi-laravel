@@ -278,6 +278,10 @@ class CaptivePortalService
             return $this->loginHtml($config);
         }
 
+        if ($file === 'alogin.html') {
+            return $this->simpleHtml($config, 'Login Successful', 'Your voucher is active. You can start browsing.');
+        }
+
         $staticFiles = $this->staticHotspotFiles();
         if (array_key_exists($file, $staticFiles)) {
             return $staticFiles[$file];
@@ -285,7 +289,6 @@ class CaptivePortalService
 
         return match ($file) {
             'status.html' => $this->simpleHtml($config, 'Connected', 'You are connected to OnLiFi WiFi.'),
-            'alogin.html' => $this->simpleHtml($config, 'Login Successful', 'Your voucher is active. You can start browsing.'),
             'md5.js' => $this->mikrotikMd5Js(),
             default => null,
         };
@@ -309,6 +312,14 @@ class CaptivePortalService
     {
         $files = $this->staticHotspotFiles();
         $files['login.html'] = $this->downloadLoginHtml($tenant, $site, $template);
+        $files['alogin.html'] = $this->simpleHtml([
+            'tenant' => [
+                'name' => $tenant->name,
+            ],
+            'manual_payment' => [
+                'site_name' => $site?->name ?: $tenant->name,
+            ],
+        ], 'Login Successful', 'Your voucher is active. You can start browsing.');
 
         if (!array_key_exists('md5.js', $files)) {
             $files['md5.js'] = $this->mikrotikMd5Js();
@@ -365,7 +376,7 @@ class CaptivePortalService
             return $this->renderManualLoginTemplate($template, $config);
         }
 
-        return $this->missingTemplateHtml($config);
+        return $this->defaultManualLoginHtml($config);
     }
 
     private function defaultManualLoginHtml(array $config): string
@@ -463,14 +474,11 @@ HTML;
     private function loadManualLoginTemplate(): ?string
     {
         $paths = [
-            $this->hotspotTemplateRoot() ? $this->hotspotTemplateRoot() . DIRECTORY_SEPARATOR . 'login.html' : null,
-            base_path('../Voucher Templates/hotspot-dir/hotspot/login.html'),
-            base_path('Voucher Templates/hotspot-dir/hotspot/login.html'),
+            resource_path('hotspot/login-manual.html'),
+            resource_path('hotspot/login.html'),
             base_path('../OLD-Flow/login.html'),
             base_path('OLD-Flow/login.html'),
             base_path('EgoSMS Flow/login.html'),
-            resource_path('hotspot/login-manual.html'),
-            resource_path('hotspot/login.html'),
         ];
 
         foreach ($paths as $path) {
@@ -557,8 +565,13 @@ HTML;
         $html = $this->applyThemeVariant($html, $theme, $design);
 
         $html = str_replace(
-            ['STK WIFI POINT', 'STK WIFI'],
-            [htmlspecialchars($displayName, ENT_QUOTES), htmlspecialchars($siteName, ENT_QUOTES)],
+            ['STK WIFI POINT', 'STK WIFI', 'Ranken WIFI Spot', 'Ranken WIFI'],
+            [
+                htmlspecialchars($displayName, ENT_QUOTES),
+                htmlspecialchars($siteName, ENT_QUOTES),
+                htmlspecialchars($displayName, ENT_QUOTES),
+                htmlspecialchars($siteName, ENT_QUOTES),
+            ],
             $html
         );
 
@@ -1008,6 +1021,9 @@ JS;
             $relative = str_replace('\\', '/', substr($path, strlen($root) + 1));
             $relative = $this->normalizeHotspotFile($relative);
             if ($relative === null) {
+                continue;
+            }
+            if (in_array($relative, ['login.html', 'alogin.html'], true)) {
                 continue;
             }
 

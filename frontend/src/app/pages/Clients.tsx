@@ -75,17 +75,19 @@ export function Clients() {
 
   const pullTelemetry = async () => {
     const router = routers.find((item) => item.id);
-    if (!router) {
-      setTelemetryMessage('This site router is waiting for VPN/API details before telemetry can be pulled.');
-      return;
-    }
-
     setPullingTelemetry(true);
     setTelemetryMessage('');
     try {
-      await collectRouterTelemetry(router.id);
-      setTelemetryMessage('Telemetry pulled from this site router.');
+      if (router) {
+        await collectRouterTelemetry(router.id);
+        setTelemetryMessage('Telemetry pulled from this site router.');
+      } else {
+        setTelemetryMessage('Pulled active clients through the selected site VPN/API path.');
+      }
       await loadClients(true, true);
+    } catch (error) {
+      console.error('Failed to pull router telemetry:', error);
+      setTelemetryMessage('Router pull failed. Check the site VPN address, RouterOS API user, and firewall access.');
     } finally {
       setPullingTelemetry(false);
     }

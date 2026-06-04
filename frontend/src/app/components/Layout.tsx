@@ -5,7 +5,6 @@ import {
   ArrowLeftRight,
   Wallet,
   TrendingUp,
-  Package,
   Upload,
   User,
   Menu,
@@ -68,7 +67,6 @@ const menuItems: MenuItem[] = [
       { path: '/vouchers',       label: 'Vouchers',           icon: Ticket, adminOnly: false },
       { path: '/voucher-types',  label: 'Voucher Types',      icon: Clock, adminOnly: false },
       { path: '/voucher-templates', label: 'Templates', icon: Ticket, adminOnly: false },
-      { path: '/voucher-stock',  label: 'Stock',      icon: Package, adminOnly: false },
       { path: '/import-vouchers', label: 'Import',    icon: Upload, adminOnly: false },
     ]
   },
@@ -91,6 +89,8 @@ const menuItems: MenuItem[] = [
       { path: '/pppoe', label: 'PPPoE', icon: Network, adminOnly: false },
       { path: '/ip-bindings', label: 'IP Bindings', icon: ShieldCheck, adminOnly: false },
       { path: '/remote-access', label: 'Remote Access', icon: Network, adminOnly: false },
+      { path: '/captive-portal', label: 'Captive Page', icon: Paintbrush, adminOnly: false },
+      { path: '/provisioning', label: 'Provisioning', icon: Router, adminOnly: false },
     ],
   },
   {
@@ -102,8 +102,6 @@ const menuItems: MenuItem[] = [
     children: [
       { path: '/settings', label: 'General Settings', icon: SettingsIcon, adminOnly: false },
       { path: '/account-users', label: 'Account Users', icon: UserCog, adminOnly: false },
-      { path: '/captive-portal', label: 'Captive Page', icon: Paintbrush, adminOnly: false },
-      { path: '/provisioning', label: 'Provisioning', icon: Router, adminOnly: false },
     ],
   },
 ];
@@ -498,11 +496,17 @@ export function Layout() {
 
         {/* Desktop top bar */}
         <div className="hidden lg:flex sticky top-0 z-30 h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur">
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active Site</p>
-            <p className="truncate text-sm font-semibold text-foreground">
-              {selectedSite?.name || 'Default Site'}
-            </p>
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active Site</p>
+              <p className="truncate text-sm font-semibold text-foreground">
+                {selectedSite?.name || 'Default Site'}
+              </p>
+            </div>
+            <div className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm">
+              <User className="h-4 w-4 shrink-0 text-primary" />
+              <span className="max-w-[220px] truncate font-medium">{user?.name || user?.email || 'User'}</span>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex min-w-[190px] items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground shadow-sm">

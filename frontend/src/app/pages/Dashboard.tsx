@@ -300,10 +300,7 @@ export function Dashboard() {
     <div className="p-4 sm:p-6 lg:p-8">
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl sm:text-3xl text-foreground mb-1">Welcome back, {user?.name}!</h1>
-          <p className="text-sm text-muted-foreground">
-            {selectedSite ? `Managing ${selectedSite.name}` : "Here's what's happening with your WIFI Network."}
-          </p>
+          <h1 className="text-2xl sm:text-3xl text-foreground mb-1">Dashboard</h1>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RefreshCw className="w-3 h-3" />

@@ -27,8 +27,10 @@ class ClientController extends Controller
             $this->refreshFromRouter($request, true);
             Cache::forget($cacheKey);
         } elseif ($cached = Cache::get($cacheKey)) {
-            $cached['cache']['source'] = 'cache';
-            return response()->json($cached);
+            if (($cached['total'] ?? 0) > 0) {
+                $cached['cache']['source'] = 'cache';
+                return response()->json($cached);
+            }
         }
 
         try {
@@ -38,6 +40,10 @@ class ClientController extends Controller
                     'total' => 0,
                     'message' => 'Run tenant migrations to enable client telemetry storage.',
                 ]);
+            }
+
+            if ($site) {
+                $this->refreshFromRouter($request, false);
             }
 
             $query = DB::connection('tenant')
@@ -147,10 +153,14 @@ class ClientController extends Controller
         }
 
         if (!$force) {
-            $latestSeen = DB::connection('tenant')
-                ->table('hotspot_users')
-                ->where('site_id', $site->id)
-                ->max('last_seen');
+            $latestSeenQuery = DB::connection('tenant')->table('hotspot_users');
+            if (Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
+                $latestSeenQuery->where('site_id', $site->id);
+            } elseif (Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+                $latestSeenQuery->where('router_name', $site->name);
+            }
+
+            $latestSeen = $latestSeenQuery->max('last_seen');
 
             if ($latestSeen && now()->diffInMinutes($latestSeen) < 5) {
                 return;
@@ -165,6 +175,7 @@ class ClientController extends Controller
         $users = $this->mikrotikService->getActiveUsers($router);
         $now = now();
         $routerName = $router->name ?: $site->name;
+        $hasSiteId = Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id');
 
         foreach ($users as $user) {
             $mac = strtoupper((string) ($user['mac_address'] ?? ''));
@@ -177,28 +188,35 @@ class ClientController extends Controller
                 ? DB::connection('tenant')->table('vouchers')->where('voucher_code', $username)->first()
                 : null;
 
+            $match = ['mac_address' => $mac];
+            if ($hasSiteId) {
+                $match['site_id'] = $site->id;
+            }
+
+            $values = [
+                'ip_address' => $user['ip_address'] ?: null,
+                'username' => $username,
+                'device_type' => 'HotSpot Client',
+                'uptime_seconds' => $this->parseMikrotikDuration((string) ($user['uptime'] ?? '0s')),
+                'data_uploaded_mb' => round(((float) ($user['bytes_in'] ?? 0)) / 1048576, 2),
+                'data_downloaded_mb' => round(((float) ($user['bytes_out'] ?? 0)) / 1048576, 2),
+                'signal_strength' => null,
+                'last_seen' => $now,
+                'router_name' => $routerName,
+                'router_identity' => $routerName,
+                'voucher_code' => $voucher?->voucher_code,
+                'profile_name' => $voucher?->profile_name,
+                'expires_at' => $voucher?->expires_at,
+                'updated_at' => $now,
+                'created_at' => $now,
+            ];
+            if ($hasSiteId) {
+                $values['site_id'] = $site->id;
+            }
+
             DB::connection('tenant')->table('hotspot_users')->updateOrInsert(
-                [
-                    'site_id' => $site->id,
-                    'mac_address' => $mac,
-                ],
-                [
-                    'ip_address' => $user['ip_address'] ?: null,
-                    'username' => $username,
-                    'device_type' => 'HotSpot Client',
-                    'uptime_seconds' => $this->parseMikrotikDuration((string) ($user['uptime'] ?? '0s')),
-                    'data_uploaded_mb' => round(((float) ($user['bytes_in'] ?? 0)) / 1048576, 2),
-                    'data_downloaded_mb' => round(((float) ($user['bytes_out'] ?? 0)) / 1048576, 2),
-                    'signal_strength' => null,
-                    'last_seen' => $now,
-                    'router_name' => $routerName,
-                    'router_identity' => $routerName,
-                    'voucher_code' => $voucher?->voucher_code,
-                    'profile_name' => $voucher?->profile_name,
-                    'expires_at' => $voucher?->expires_at,
-                    'updated_at' => $now,
-                    'created_at' => $now,
-                ]
+                $match,
+                $values
             );
         }
     }
