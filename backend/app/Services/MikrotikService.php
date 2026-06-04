@@ -297,6 +297,90 @@ class MikrotikService
         }
     }
 
+    public function getPppoeSecrets(MikrotikRouter $router): array
+    {
+        if (!$this->connect($router)) {
+            return [];
+        }
+
+        try {
+            $secrets = $this->api->getPppoeSecrets();
+            $this->disconnect();
+            return $secrets;
+        } catch (\Exception $e) {
+            Log::error("Failed to get PPPoE secrets from MikroTik", [
+                'router' => $router->ip_address,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return [];
+        }
+    }
+
+    public function addPppoeSecret(MikrotikRouter $router, array $client): bool
+    {
+        if (!$this->connect($router)) {
+            return false;
+        }
+
+        try {
+            $result = $this->api->addPppoeSecret($client);
+            $this->disconnect();
+            return $result;
+        } catch (\Exception $e) {
+            Log::error("Failed to add PPPoE secret to MikroTik", [
+                'router' => $router->ip_address,
+                'client' => $client['username'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return false;
+        }
+    }
+
+    public function setPppoeSecretDisabled(MikrotikRouter $router, string $id, bool $disabled): bool
+    {
+        if (!$this->connect($router)) {
+            return false;
+        }
+
+        try {
+            $result = $this->api->setPppoeSecretDisabled($id, $disabled);
+            $this->disconnect();
+            return $result;
+        } catch (\Exception $e) {
+            Log::error("Failed to update PPPoE secret status", [
+                'router' => $router->ip_address,
+                'id' => $id,
+                'disabled' => $disabled,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return false;
+        }
+    }
+
+    public function removePppoeSecret(MikrotikRouter $router, string $id): bool
+    {
+        if (!$this->connect($router)) {
+            return false;
+        }
+
+        try {
+            $result = $this->api->removePppoeSecret($id);
+            $this->disconnect();
+            return $result;
+        } catch (\Exception $e) {
+            Log::error("Failed to remove PPPoE secret", [
+                'router' => $router->ip_address,
+                'id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return false;
+        }
+    }
+
     public function getSystemUsers(MikrotikRouter $router): array
     {
         if (!$this->connect($router)) {

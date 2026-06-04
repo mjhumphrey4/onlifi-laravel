@@ -40,11 +40,11 @@ export function PppoeClients() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const load = async () => {
+  const load = async (refresh = false) => {
     setLoading(true);
     setError('');
     try {
-      const data = await getPppoeClients();
+      const data = await getPppoeClients(refresh);
       setClients(data.clients || data.data || []);
       if (data.message) setMessage(data.message);
     } catch (err: any) {
@@ -74,7 +74,7 @@ export function PppoeClients() {
       });
       setForm({ ...emptyForm });
       setMessage('PPPoE client created.');
-      await load();
+      await load(true);
     } catch (err: any) {
       setError(err.message || 'Failed to create PPPoE client.');
     } finally {
@@ -90,7 +90,7 @@ export function PppoeClients() {
       } else {
         await enablePppoeClient(client.id);
       }
-      await load();
+      await load(true);
     } catch (err: any) {
       setError(err.message || 'Failed to update PPPoE client.');
     }
@@ -101,7 +101,7 @@ export function PppoeClients() {
     setError('');
     try {
       await deletePppoeClient(client.id);
-      await load();
+      await load(true);
     } catch (err: any) {
       setError(err.message || 'Failed to delete PPPoE client.');
     }
@@ -121,7 +121,7 @@ export function PppoeClients() {
           </h1>
           <p className="text-muted-foreground mt-1">Manage PPPoE clients for {selectedSite?.name || 'the active site'}.</p>
         </div>
-        <button onClick={load} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted">
+        <button onClick={() => load(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
@@ -186,7 +186,7 @@ export function PppoeClients() {
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="p-5 border-b border-border">
           <h2 className="font-semibold text-card-foreground">PPPoE Clients</h2>
-          <p className="text-sm text-muted-foreground mt-1">Activate or disable access without deleting the client record.</p>
+          <p className="text-sm text-muted-foreground mt-1">Stored router snapshot. Use Refresh to pull latest RouterOS PPP secrets.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

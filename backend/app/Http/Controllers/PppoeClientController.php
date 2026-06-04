@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\RouterSnapshotService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Database\Schema\Blueprint;
@@ -12,6 +13,10 @@ use Illuminate\Validation\Rule;
 
 class PppoeClientController extends Controller
 {
+    public function __construct(private RouterSnapshotService $snapshots)
+    {
+    }
+
     public function index(Request $request)
     {
         $this->ensureTable();
@@ -25,6 +30,10 @@ class PppoeClientController extends Controller
             ]);
         }
 
+        if ($request->boolean('refresh')) {
+            $this->snapshots->syncSite($site, ['pppoe_clients']);
+        }
+
         $clients = DB::connection('tenant')->table('pppoe_clients')
             ->where('site_id', $site->id)
             ->orderByDesc('id')
@@ -33,6 +42,7 @@ class PppoeClientController extends Controller
         return response()->json([
             'clients' => $clients,
             'site' => $site ? ['id' => $site->id, 'name' => $site->name] : null,
+            'source' => 'database',
         ]);
     }
 
@@ -66,7 +76,38 @@ class PppoeClientController extends Controller
             return response()->json(['error' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
 
-        $id = DB::connection('tenant')->table('pppoe_clients')->insertGetId([
+        $router = $this->snapshots->routerForSite($site);
+        if (!$router) {
+            return response()->json([
+                'message' => 'Router remote access details are not configured for this site.',
+            ], 422);
+        }
+
+        $created = app(\App\Services\MikrotikService::class)->addPppoeSecret($router, [
+            'username' => $request->username,
+            'password' => $request->password ?: '',
+            'profile' => $request->profile,
+            'service' => $request->service ?: 'pppoe',
+            'remote_address' => $request->remote_address,
+            'comment' => $request->notes,
+            'disabled' => !$request->boolean('is_active', true),
+        ]);
+
+        if (!$created) {
+            return response()->json([
+                'message' => 'Could not connect to the router or RouterOS rejected the PPPoE client.',
+            ], 500);
+        }
+
+        $this->snapshots->syncSite($site, ['pppoe_clients']);
+
+        $existing = DB::connection('tenant')->table('pppoe_clients')
+            ->where('site_id', $site->id)
+            ->where('username', $request->username)
+            ->first();
+
+        if (!$existing) {
+            DB::connection('tenant')->table('pppoe_clients')->insert([
             'site_id' => $site?->id,
             'name' => $request->name,
             'username' => $request->username,
@@ -79,11 +120,15 @@ class PppoeClientController extends Controller
             'is_active' => $request->boolean('is_active', true),
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+            ]);
+        }
 
         return response()->json([
-            'message' => 'PPPoE client created',
-            'client' => DB::connection('tenant')->table('pppoe_clients')->where('id', $id)->first(),
+            'message' => 'PPPoE client created on router',
+            'client' => DB::connection('tenant')->table('pppoe_clients')
+                ->where('site_id', $site->id)
+                ->where('username', $request->username)
+                ->first(),
         ], 201);
     }
 
@@ -158,11 +203,25 @@ class PppoeClientController extends Controller
             return response()->json(['message' => 'Select a site before deleting PPPoE clients.'], 422);
         }
 
-        $deleted = $this->clientQuery($site?->id)->where('id', $id)->delete();
+        $client = $this->clientQuery($site?->id)->where('id', $id)->first();
+        if (!$client) {
+            return response()->json(['message' => 'PPPoE client not found'], 404);
+        }
 
-        return $deleted
-            ? response()->json(['message' => 'PPPoE client deleted'])
-            : response()->json(['message' => 'PPPoE client not found'], 404);
+        $router = $this->snapshots->routerForSite($site);
+        if (!$router || !$client->router_id) {
+            return response()->json(['message' => 'Router PPPoE client ID is not available. Refresh router data first.'], 422);
+        }
+
+        $deleted = app(\App\Services\MikrotikService::class)->removePppoeSecret($router, $client->router_id);
+        if (!$deleted) {
+            return response()->json(['message' => 'Could not delete PPPoE client on the router.'], 500);
+        }
+
+        $this->clientQuery($site?->id)->where('id', $id)->delete();
+        $this->snapshots->syncSite($site, ['pppoe_clients']);
+
+        return response()->json(['message' => 'PPPoE client deleted on router']);
     }
 
     private function setActive(Request $request, int $id, bool $active)
@@ -174,14 +233,28 @@ class PppoeClientController extends Controller
             return response()->json(['message' => 'Select a site before changing PPPoE client status.'], 422);
         }
 
-        $updated = $this->clientQuery($site?->id)->where('id', $id)->update([
+        $client = $this->clientQuery($site?->id)->where('id', $id)->first();
+        if (!$client) {
+            return response()->json(['message' => 'PPPoE client not found'], 404);
+        }
+
+        $router = $this->snapshots->routerForSite($site);
+        if (!$router || !$client->router_id) {
+            return response()->json(['message' => 'Router PPPoE client ID is not available. Refresh router data first.'], 422);
+        }
+
+        $updated = app(\App\Services\MikrotikService::class)->setPppoeSecretDisabled($router, $client->router_id, !$active);
+        if (!$updated) {
+            return response()->json(['message' => 'Could not update PPPoE client on the router.'], 500);
+        }
+
+        $this->clientQuery($site?->id)->where('id', $id)->update([
             'is_active' => $active,
             'updated_at' => now(),
         ]);
+        $this->snapshots->syncSite($site, ['pppoe_clients']);
 
-        return $updated
-            ? response()->json(['message' => $active ? 'PPPoE client enabled' : 'PPPoE client disabled'])
-            : response()->json(['message' => 'PPPoE client not found'], 404);
+        return response()->json(['message' => $active ? 'PPPoE client enabled on router' : 'PPPoE client disabled on router']);
     }
 
     private function clientQuery(?int $siteId)
@@ -193,12 +266,18 @@ class PppoeClientController extends Controller
     private function ensureTable(): void
     {
         if (Schema::connection('tenant')->hasTable('pppoe_clients')) {
+            if (!Schema::connection('tenant')->hasColumn('pppoe_clients', 'router_id')) {
+                Schema::connection('tenant')->table('pppoe_clients', function (Blueprint $table) {
+                    $table->string('router_id', 64)->nullable()->after('site_id');
+                });
+            }
             return;
         }
 
         Schema::connection('tenant')->create('pppoe_clients', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('site_id')->nullable()->index();
+            $table->string('router_id', 64)->nullable();
             $table->string('name', 100);
             $table->string('username', 100);
             $table->string('password')->nullable();

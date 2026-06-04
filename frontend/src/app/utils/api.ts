@@ -260,7 +260,7 @@ export const createRouterSystemUser = (data: Record<string, unknown>) => post('/
 export const updateRouterSystemUserStatus = (data: Record<string, unknown>) => post('/routers/system-users/status', data);
 
 // ============ PPPOE CLIENTS (Tenant) ============
-export const getPppoeClients = () => get('/pppoe/clients');
+export const getPppoeClients = (refresh = false) => get(`/pppoe/clients${refresh ? '?refresh=1' : ''}`);
 export const createPppoeClient = (data: Record<string, unknown>) => post('/pppoe/clients', data);
 export const updatePppoeClient = (id: number, data: Record<string, unknown>) => put(`/pppoe/clients/${id}`, data);
 export const enablePppoeClient = (id: number) => post(`/pppoe/clients/${id}/enable`);

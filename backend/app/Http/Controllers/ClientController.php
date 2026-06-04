@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\MikrotikRouter;
-use App\Models\SystemSetting;
 use App\Services\MikrotikService;
+use App\Services\RouterSnapshotService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
 
 class ClientController extends Controller
 {
-    public function __construct(private MikrotikService $mikrotikService)
+    public function __construct(private MikrotikService $mikrotikService, private RouterSnapshotService $snapshots)
     {
     }
 
@@ -205,27 +205,7 @@ class ClientController extends Controller
 
     private function resolveSiteRouter($site): ?MikrotikRouter
     {
-        $query = MikrotikRouter::query();
-        if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
-            $query->where('site_id', $site->id);
-        }
-
-        $existing = $query->where('is_active', true)->latest()->first();
-
-        if ($site->vpn_private_ip) {
-            return new MikrotikRouter([
-                'name' => $site->name,
-                'site_id' => $site->id,
-                'ip_address' => $site->vpn_private_ip,
-                'api_port' => $site->router_api_port ?: 8728,
-                'username' => SystemSetting::get('router_admin_username', 'onlifi'),
-                'password' => SystemSetting::get('router_admin_password', ''),
-                'is_active' => true,
-                'location' => $site->name,
-            ]);
-        }
-
-        return $existing;
+        return $this->snapshots->routerForSite($site);
     }
 
     private function parseMikrotikDuration(string $duration): int

@@ -8,6 +8,7 @@ use App\Models\RouterTelemetry;
 use App\Models\Site;
 use App\Models\SystemSetting;
 use App\Services\MikrotikService;
+use App\Services\RouterSnapshotService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -19,7 +20,7 @@ class MikrotikController extends Controller
 {
     private $mikrotikService;
 
-    public function __construct(MikrotikService $mikrotikService)
+    public function __construct(MikrotikService $mikrotikService, private RouterSnapshotService $snapshots)
     {
         $this->mikrotikService = $mikrotikService;
     }
@@ -367,7 +368,8 @@ class MikrotikController extends Controller
     public function getIpBindings(Request $request)
     {
         if (!$request->boolean('refresh')) {
-            $cached = $this->cachedRouterList($request, 'ip_bindings');
+            $site = SiteScope::selectedOrDefaultSite($request);
+            $cached = $site ? $this->snapshots->cachedRouterList($site, 'ip_bindings') : null;
             if ($cached) {
                 return response()->json([
                     'bindings' => $cached['data'],
@@ -378,8 +380,9 @@ class MikrotikController extends Controller
         }
 
         $router = $this->resolveSiteRouter($request);
+        $site = SiteScope::selectedOrDefaultSite($request);
 
-        if (!$router) {
+        if (!$router || !$site) {
             return response()->json([
                 'bindings' => [],
                 'message' => 'Router remote access details are not configured for this site.',
@@ -387,7 +390,7 @@ class MikrotikController extends Controller
         }
 
         $bindings = $this->mikrotikService->getIpBindings($router);
-        $this->storeRouterListCache($request, 'ip_bindings', $bindings);
+        $this->snapshots->storeRouterListCache($site, 'ip_bindings', $bindings);
 
         return response()->json([
             'bindings' => $bindings,
@@ -439,7 +442,9 @@ class MikrotikController extends Controller
             ], 500);
         }
 
-        $this->storeRouterListCache($request, 'ip_bindings', $this->mikrotikService->getIpBindings($router));
+        if ($site = SiteScope::selectedOrDefaultSite($request)) {
+            $this->snapshots->storeRouterListCache($site, 'ip_bindings', $this->mikrotikService->getIpBindings($router));
+        }
 
         return response()->json([
             'message' => 'IP binding added successfully.',
@@ -449,7 +454,8 @@ class MikrotikController extends Controller
     public function getSystemUsers(Request $request)
     {
         if (!$request->boolean('refresh')) {
-            $cached = $this->cachedRouterList($request, 'system_users');
+            $site = SiteScope::selectedOrDefaultSite($request);
+            $cached = $site ? $this->snapshots->cachedRouterList($site, 'system_users') : null;
             if ($cached) {
                 return response()->json([
                     'users' => $cached['data'],
@@ -460,8 +466,9 @@ class MikrotikController extends Controller
         }
 
         $router = $this->resolveSiteRouter($request);
+        $site = SiteScope::selectedOrDefaultSite($request);
 
-        if (!$router) {
+        if (!$router || !$site) {
             return response()->json([
                 'users' => [],
                 'message' => 'Router remote access details are not configured for this site.',
@@ -469,7 +476,7 @@ class MikrotikController extends Controller
         }
 
         $users = $this->mikrotikService->getSystemUsers($router);
-        $this->storeRouterListCache($request, 'system_users', $users);
+        $this->snapshots->storeRouterListCache($site, 'system_users', $users);
 
         return response()->json([
             'users' => $users,
@@ -517,7 +524,9 @@ class MikrotikController extends Controller
             ], 500);
         }
 
-        $this->storeRouterListCache($request, 'system_users', $this->mikrotikService->getSystemUsers($router));
+        if ($site = SiteScope::selectedOrDefaultSite($request)) {
+            $this->snapshots->storeRouterListCache($site, 'system_users', $this->mikrotikService->getSystemUsers($router));
+        }
 
         return response()->json([
             'message' => 'Router user added successfully.',
@@ -556,7 +565,9 @@ class MikrotikController extends Controller
             ], 500);
         }
 
-        $this->storeRouterListCache($request, 'system_users', $this->mikrotikService->getSystemUsers($router));
+        if ($site = SiteScope::selectedOrDefaultSite($request)) {
+            $this->snapshots->storeRouterListCache($site, 'system_users', $this->mikrotikService->getSystemUsers($router));
+        }
 
         return response()->json([
             'message' => 'Router user updated successfully.',
@@ -571,94 +582,6 @@ class MikrotikController extends Controller
             return null;
         }
 
-        $query = MikrotikRouter::query();
-        if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
-            $query->where('site_id', $site->id);
-        } else {
-            $query->where('name', $site->name);
-        }
-
-        $router = $query->orderBy('id')->first();
-        if ($router) {
-            return $router;
-        }
-
-        if (!$site->vpn_private_ip) {
-            return null;
-        }
-
-        return new MikrotikRouter([
-            'name' => $site->name,
-            'site_id' => $site->id,
-            'ip_address' => $site->vpn_private_ip,
-            'api_port' => $site->router_api_port ?: 8728,
-            'username' => SystemSetting::get('router_admin_username', 'onlifi'),
-            'password' => SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me'),
-            'is_active' => true,
-        ]);
-    }
-
-    private function cachedRouterList(Request $request, string $type): ?array
-    {
-        $this->ensureRouterCacheTable();
-        $site = SiteScope::selectedOrDefaultSite($request);
-
-        if (!$site) {
-            return null;
-        }
-
-        $row = DB::connection('tenant')->table('router_cached_lists')
-            ->where('site_id', $site->id)
-            ->where('type', $type)
-            ->first();
-
-        if (!$row) {
-            return null;
-        }
-
-        return [
-            'data' => json_decode($row->payload ?: '[]', true) ?: [],
-            'last_synced_at' => $row->last_synced_at,
-        ];
-    }
-
-    private function storeRouterListCache(Request $request, string $type, array $payload): void
-    {
-        $this->ensureRouterCacheTable();
-        $site = SiteScope::selectedOrDefaultSite($request);
-
-        if (!$site) {
-            return;
-        }
-
-        DB::connection('tenant')->table('router_cached_lists')->updateOrInsert(
-            [
-                'site_id' => $site->id,
-                'type' => $type,
-            ],
-            [
-                'payload' => json_encode($payload),
-                'last_synced_at' => now(),
-                'updated_at' => now(),
-                'created_at' => now(),
-            ]
-        );
-    }
-
-    private function ensureRouterCacheTable(): void
-    {
-        if (Schema::connection('tenant')->hasTable('router_cached_lists')) {
-            return;
-        }
-
-        Schema::connection('tenant')->create('router_cached_lists', function ($table) {
-            $table->id();
-            $table->unsignedBigInteger('site_id')->index();
-            $table->string('type', 64);
-            $table->longText('payload')->nullable();
-            $table->timestamp('last_synced_at')->nullable();
-            $table->timestamps();
-            $table->unique(['site_id', 'type']);
-        });
+        return $this->snapshots->routerForSite($site);
     }
 }

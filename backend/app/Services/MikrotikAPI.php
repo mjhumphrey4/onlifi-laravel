@@ -402,6 +402,84 @@ class MikrotikAPI {
         return isset($response[0]) && $response[0] === '!done';
     }
 
+    public function getPppoeSecrets() {
+        if (!$this->connect()) {
+            return [];
+        }
+
+        $response = $this->communicate(['/ppp/secret/print']);
+        $secrets = $this->parseResponse($response);
+
+        return array_map(function ($secret) {
+            return [
+                'id' => $secret['.id'] ?? '',
+                'name' => $secret['name'] ?? '',
+                'username' => $secret['name'] ?? '',
+                'password' => $secret['password'] ?? '',
+                'profile' => $secret['profile'] ?? '',
+                'service' => $secret['service'] ?? '',
+                'remote_address' => $secret['remote-address'] ?? '',
+                'comment' => $secret['comment'] ?? '',
+                'disabled' => ($secret['disabled'] ?? 'false') === 'true',
+                'last_logged_out' => $secret['last-logged-out'] ?? '',
+            ];
+        }, $secrets);
+    }
+
+    public function addPppoeSecret(array $client) {
+        if (!$this->connect()) {
+            return false;
+        }
+
+        $command = [
+            '/ppp/secret/add',
+            '=name=' . ($client['username'] ?? $client['name'] ?? ''),
+            '=password=' . ($client['password'] ?? ''),
+            '=service=' . ($client['service'] ?? 'pppoe'),
+            '=disabled=' . (!empty($client['disabled']) ? 'yes' : 'no'),
+        ];
+
+        foreach ([
+            'profile' => 'profile',
+            'remote_address' => 'remote-address',
+            'comment' => 'comment',
+        ] as $inputKey => $routerKey) {
+            if (!empty($client[$inputKey])) {
+                $command[] = '=' . $routerKey . '=' . $client[$inputKey];
+            }
+        }
+
+        $response = $this->communicate($command);
+        return isset($response[0]) && $response[0] === '!done';
+    }
+
+    public function setPppoeSecretDisabled(string $id, bool $disabled) {
+        if (!$this->connect()) {
+            return false;
+        }
+
+        $response = $this->communicate([
+            '/ppp/secret/set',
+            '=.id=' . $id,
+            '=disabled=' . ($disabled ? 'yes' : 'no'),
+        ]);
+
+        return isset($response[0]) && $response[0] === '!done';
+    }
+
+    public function removePppoeSecret(string $id) {
+        if (!$this->connect()) {
+            return false;
+        }
+
+        $response = $this->communicate([
+            '/ppp/secret/remove',
+            '=.id=' . $id,
+        ]);
+
+        return isset($response[0]) && $response[0] === '!done';
+    }
+
     /**
      * Get RouterOS system users.
      */
