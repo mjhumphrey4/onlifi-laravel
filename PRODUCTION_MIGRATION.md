@@ -392,9 +392,12 @@ curl -i -X OPTIONS https://api.onlifi.net/api/tenant/login \
 Expected headers include:
 
 ```text
+HTTP/2 204
 access-control-allow-origin: https://onlifi.net
 access-control-allow-credentials: true
 ```
+
+`HTTP/2 200` is also acceptable. Any `301`, `401`, `403`, `404`, `405`, or `500` on the `OPTIONS` response means the preflight is being intercepted before Laravel's CORS response succeeds. Re-run `php artisan optimize:clear`, `php artisan config:cache`, and restart PHP-FPM/Nginx after deploying CORS-related changes.
 
 ### Login 500 Recovery Check
 
