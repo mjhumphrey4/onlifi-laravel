@@ -187,7 +187,7 @@ export function CaptivePortal() {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
-        Accept: 'text/html',
+        Accept: 'application/zip, application/octet-stream',
         'Content-Type': 'application/json',
         ...(siteId ? { 'X-Site-ID': siteId } : {}),
       },
@@ -254,7 +254,7 @@ export function CaptivePortal() {
           </div>
           <button onClick={downloadGenerated} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90">
             <Download className="w-4 h-4" />
-            Download login.html
+            Download hotspot.zip
           </button>
         </div>
       </div>

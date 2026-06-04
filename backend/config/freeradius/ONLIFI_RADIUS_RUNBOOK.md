@@ -202,7 +202,7 @@ php artisan onlifi:radius:sync-active --router=main-router22-ONLIFI-1
 php artisan onlifi:radius:sync-active --router=main-router22-ONLIFI-1 --voucher=4RPYDL --backfill-site
 ```
 
-If logs show `Empty User-Password received`, the MikroTik page submitted the voucher as username but did not populate the hidden password field. Re-download/provision `login.html` after deploying the latest backend so the PAP password sync script is included.
+If logs show `Empty User-Password received`, the MikroTik page submitted the voucher as username but did not populate the hidden password field. Re-download/re-provision the full hotspot directory after deploying the latest backend so the PAP password sync script is included.
 
 Confirm FreeRADIUS is running the latest Perl module. If `freeradius -X` does not show `PERL DIAG` or `Empty User-Password received` lines on failures, the deployed Perl file is stale or the module path is wrong:
 

@@ -605,7 +605,7 @@ sudo systemctl enable --now wg-quick@wg0
 sudo wg show
 ```
 
-In the OnLiFi admin system settings, set:
+In the OnLiFi admin dashboard, open `System Settings > WireGuard` and set:
 
 ```text
 wireguard_endpoint_host = 89.167.42.53
@@ -860,7 +860,7 @@ Expected:
 - WireGuard interface `onlifi-wg` exists.
 - WireGuard peer endpoint is `89.167.42.53:51820`.
 - WireGuard address matches the admin-assigned site private IP, for example `10.10.1.10/32`.
-- Captive files include the active `login.html`.
+- Captive files include the full `hotspot` directory and the active `login.html`.
 
 ## 19. Captive Portal Assets
 
@@ -871,12 +871,9 @@ cd /var/www/onlifi/backend
 php artisan storage:link
 ```
 
-The generated captive download returns:
+The generated captive download returns a ZIP containing the complete MikroTik `hotspot/` directory, including `login.html`, status/error/logout pages, `md5.js`, CSS, images, XML helpers, and an uploaded logo when configured.
 
-- `login.html` when no uploaded logo is used.
-- A ZIP containing `login.html` and `logo.*` when a logo is used.
-
-Upload both files to the same MikroTik hotspot directory when using the ZIP.
+Extract the ZIP and upload the complete `hotspot` directory to the MikroTik files area. Router provisioning also fetches this same file tree automatically.
 
 ## 20. Mobile Money And SMS
 

@@ -9,7 +9,7 @@ import {
   DollarSign,
   Shield,
   Bell,
-  Database,
+  Network,
   Server,
   ChevronRight,
 } from 'lucide-react';
@@ -42,6 +42,7 @@ export default function SystemSettings() {
     { id: 'general', name: 'General', icon: <Globe className="w-5 h-5" /> },
     { id: 'payment', name: 'Payment', icon: <DollarSign className="w-5 h-5" /> },
     { id: 'radius', name: 'RADIUS', icon: <Server className="w-5 h-5" /> },
+    { id: 'router', name: 'WireGuard', icon: <Network className="w-5 h-5" /> },
     { id: 'email', name: 'Email', icon: <Mail className="w-5 h-5" /> },
     { id: 'security', name: 'Security', icon: <Shield className="w-5 h-5" /> },
     { id: 'notifications', name: 'Notifications', icon: <Bell className="w-5 h-5" /> },
@@ -125,7 +126,7 @@ export default function SystemSettings() {
   const getSettingValue = (key: string) => {
     if (editedSettings[key] !== undefined) return editedSettings[key];
     const setting = settings.find((s) => s.key === key);
-    return setting?.value || '';
+    return setting?.value || defaultSettingValues[key] || '';
   };
 
   const groupedSettings = settings.reduce((acc, setting) => {
@@ -152,6 +153,13 @@ export default function SystemSettings() {
       { key: 'radius_acct_port', label: 'Accounting Port', type: 'number', description: 'RADIUS accounting UDP port' },
       { key: 'radius_shared_secret', label: 'Shared Secret', type: 'string', description: 'Fallback shared secret for router authentication' },
     ],
+    router: [
+      { key: 'wireguard_endpoint_host', label: 'WireGuard Endpoint Host', type: 'string', description: 'Public IP or hostname routers connect to. Production default: 89.167.42.53' },
+      { key: 'wireguard_endpoint_port', label: 'WireGuard UDP Port', type: 'number', description: 'WireGuard server listen port. Production default: 51820' },
+      { key: 'wireguard_server_public_key', label: 'Server Public Key', type: 'string', description: 'Public key from /etc/wireguard/onlifi-server.pub' },
+      { key: 'wireguard_allowed_address', label: 'Allowed Address Range', type: 'string', description: 'Routes allowed through the router peer, usually 10.10.1.0/24' },
+      { key: 'wireguard_client_dns', label: 'Client DNS', type: 'string', description: 'Optional DNS pushed into generated WireGuard client configs' },
+    ],
     email: [
       { key: 'smtp_host', label: 'SMTP Host', type: 'string', description: 'SMTP server hostname' },
       { key: 'smtp_port', label: 'SMTP Port', type: 'number', description: 'SMTP server port' },
@@ -173,6 +181,13 @@ export default function SystemSettings() {
       { key: 'notify_password_reset_email', label: 'Password Reset Email', type: 'boolean', description: 'Email tenant after password reset' },
       { key: 'notify_announcement_email', label: 'Announcement Email', type: 'boolean', description: 'Allow announcements to be emailed' },
     ],
+  };
+
+  const defaultSettingValues: Record<string, string> = {
+    wireguard_endpoint_host: '89.167.42.53',
+    wireguard_endpoint_port: '51820',
+    wireguard_allowed_address: '10.10.1.0/24',
+    wireguard_client_dns: '',
   };
 
   const currentSettings = defaultSettings[activeGroup] || [];
@@ -263,6 +278,14 @@ export default function SystemSettings() {
                         />
                         <div className="w-11 h-6 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                       </label>
+                    ) : setting.key === 'wireguard_server_public_key' ? (
+                      <textarea
+                        value={getSettingValue(setting.key)}
+                        onChange={(e) => handleSettingChange(setting.key, e.target.value)}
+                        rows={4}
+                        className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm"
+                        placeholder="Paste the server public key from /etc/wireguard/onlifi-server.pub"
+                      />
                     ) : (
                       <input
                         type={setting.type === 'number' ? 'number' : 'text'}

@@ -118,25 +118,33 @@ class CaptivePortalController extends Controller
         $siteSlug = $site?->slug ?: \Illuminate\Support\Str::slug($site?->name ?: $tenant->name);
         $logoAsset = $this->uploadedLogoAsset($template['design']['logo_url'] ?? null);
 
-        if ($logoAsset && class_exists(ZipArchive::class)) {
-            $logoName = 'logo.' . pathinfo($logoAsset['path'], PATHINFO_EXTENSION);
-            $template['design']['logo_url'] = $logoName;
-            $html = $portal->downloadLoginHtml($tenant, $site, $template);
-            $zipPath = storage_path('app/' . Str::random(32) . '-captive-page.zip');
-            $zip = new ZipArchive();
-
-            if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true) {
-                $zip->addFromString('login.html', $html);
-                $zip->addFromString($logoName, $logoAsset['contents']);
-                $zip->close();
-
-                return response()->download($zipPath, ($siteSlug ?: 'site') . '-hotspot.zip')->deleteFileAfterSend(true);
-            }
+        if (!class_exists(ZipArchive::class)) {
+            return response()->json(['error' => 'ZIP support is not installed on the server'], 500);
         }
 
-        return response($portal->downloadLoginHtml($tenant, $site, $template))
-            ->header('Content-Type', 'text/html')
-            ->header('Content-Disposition', 'attachment; filename="' . ($siteSlug ?: 'site') . '-login.html"');
+        if ($logoAsset) {
+            $logoName = 'img/logo.' . pathinfo($logoAsset['path'], PATHINFO_EXTENSION);
+            $template['design']['logo_url'] = $logoName;
+        }
+
+        $files = $portal->downloadHotspotFiles($tenant, $site, $template);
+        if ($logoAsset) {
+            $files[$logoName] = $logoAsset['contents'];
+        }
+
+        $zipPath = storage_path('app/' . Str::random(32) . '-hotspot.zip');
+        $zip = new ZipArchive();
+
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            return response()->json(['error' => 'Failed to create hotspot ZIP'], 500);
+        }
+
+        foreach ($files as $path => $contents) {
+            $zip->addFromString('hotspot/' . ltrim(str_replace('\\', '/', $path), '/'), $contents);
+        }
+        $zip->close();
+
+        return response()->download($zipPath, ($siteSlug ?: 'site') . '-hotspot.zip')->deleteFileAfterSend(true);
     }
 
     public function uploadLogo(Request $request)
@@ -218,11 +226,25 @@ class CaptivePortalController extends Controller
     public function hotspotFile(string $token, string $file, CaptivePortalService $portal)
     {
         $contents = $portal->hotspotFile($token, $file);
-        $contentType = $file === 'md5.js' ? 'application/javascript' : 'text/html';
+        $contentType = $this->hotspotContentType($file);
 
         return $contents
             ? response($contents)->header('Content-Type', $contentType)
             : response('Not found', 404);
+    }
+
+    private function hotspotContentType(string $file): string
+    {
+        return match (strtolower(pathinfo($file, PATHINFO_EXTENSION))) {
+            'js' => 'application/javascript',
+            'css' => 'text/css',
+            'svg' => 'image/svg+xml',
+            'ico' => 'image/x-icon',
+            'json' => 'application/json',
+            'txt' => 'text/plain',
+            'xsd', 'xml' => 'application/xml',
+            default => 'text/html',
+        };
     }
 
     public function pay(Request $request, CaptivePaymentService $payments)

@@ -264,18 +264,57 @@ class CaptivePortalService
 
     public function hotspotFile(string $token, string $file): ?string
     {
+        $file = $this->normalizeHotspotFile($file);
+        if ($file === null) {
+            return null;
+        }
+
         $config = $this->configForToken($token);
         if (!$config) {
             return null;
         }
 
+        if ($file === 'login.html') {
+            return $this->loginHtml($config);
+        }
+
+        $staticFiles = $this->staticHotspotFiles();
+        if (array_key_exists($file, $staticFiles)) {
+            return $staticFiles[$file];
+        }
+
         return match ($file) {
-            'login.html' => $this->loginHtml($config),
             'status.html' => $this->simpleHtml($config, 'Connected', 'You are connected to OnLiFi WiFi.'),
             'alogin.html' => $this->simpleHtml($config, 'Login Successful', 'Your voucher is active. You can start browsing.'),
             'md5.js' => $this->mikrotikMd5Js(),
             default => null,
         };
+    }
+
+    public function hotspotTemplateFiles(): array
+    {
+        $files = array_keys($this->staticHotspotFiles());
+        foreach (['login.html', 'status.html', 'alogin.html', 'md5.js'] as $required) {
+            if (!in_array($required, $files, true)) {
+                $files[] = $required;
+            }
+        }
+
+        sort($files);
+
+        return $files;
+    }
+
+    public function downloadHotspotFiles(Tenant $tenant, ?Site $site, ?array $template = null): array
+    {
+        $files = $this->staticHotspotFiles();
+        $files['login.html'] = $this->downloadLoginHtml($tenant, $site, $template);
+
+        if (!array_key_exists('md5.js', $files)) {
+            $files['md5.js'] = $this->mikrotikMd5Js();
+        }
+
+        return $files;
     }
 
     public function previewLoginHtml(Tenant $tenant, ?Site $site, ?array $template = null): string
@@ -424,6 +463,9 @@ HTML;
     private function loadManualLoginTemplate(): ?string
     {
         $paths = [
+            $this->hotspotTemplateRoot() ? $this->hotspotTemplateRoot() . DIRECTORY_SEPARATOR . 'login.html' : null,
+            base_path('../Voucher Templates/hotspot-dir/hotspot/login.html'),
+            base_path('Voucher Templates/hotspot-dir/hotspot/login.html'),
             base_path('../OLD-Flow/login.html'),
             base_path('OLD-Flow/login.html'),
             base_path('EgoSMS Flow/login.html'),
@@ -432,6 +474,9 @@ HTML;
         ];
 
         foreach ($paths as $path) {
+            if (!$path) {
+                continue;
+            }
             if (is_file($path)) {
                 $contents = file_get_contents($path);
                 if ($contents !== false) {
@@ -476,12 +521,16 @@ HTML;
 
         $legacyReplacements = [
             "const CURRENT_ORIGIN_SITE = 'STK WIFI';" => 'const CURRENT_ORIGIN_SITE = ' . json_encode($siteName) . ';',
+            'src="/md5.js"' => 'src="md5.js"',
             'https://pay.onlustech.com/yo/initiate.php' => $config['manual_payment']['initiate_url'],
             'https://pay.onlustech.com/yo/initiate.php' => $config['manual_payment']['initiate_url'],
+            'https://bitetechsystems.com/remmy/initiate.php' => $config['manual_payment']['initiate_url'],
             'https://pay.onlustech.com/yo/check_status.php' => $config['manual_payment']['check_status_url'],
             'https://pay.onlustech.com/yo/check_status.php' => $config['manual_payment']['check_status_url'],
+            'https://bitetechsystems.com/remmy/check_status.php' => $config['manual_payment']['check_status_url'],
             'https://pay.onlustech.com/yo/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
             'https://pay.onlustech.com/yo/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
+            'https://pay.onlustech.com/remmy/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
             '<h1>STK WIFI POINT</h1>' => '<h1>' . htmlspecialchars($displayName, ENT_QUOTES) . '</h1>',
             '<p class="subtitle">Faster, Affordable Internet with a Smile</p>' => '<p class="subtitle">' . htmlspecialchars((string) $design['subtitle'], ENT_QUOTES) . '</p>',
             'Need help? Contact: <strong>0788770102 or 0704169987</strong>' => 'Need help? Contact: <strong>' . htmlspecialchars((string) $design['support_contact'], ENT_QUOTES) . '</strong>',
@@ -936,5 +985,71 @@ function md5hh(a,b,c,d,x,s,t){return md5cmn(b^c^d,a,b,x,s,t);}
 function md5ii(a,b,c,d,x,s,t){return md5cmn(c^(b|(~d)),a,b,x,s,t);}
 function binlMD5(x,len){x[len>>5]|=128<<((len)%32);x[(((len+64)>>>9)<<4)+14]=len;var i,olda,oldb,oldc,oldd,a=1732584193,b=-271733879,c=-1732584194,d=271733878;for(i=0;i<x.length;i+=16){olda=a;oldb=b;oldc=c;oldd=d;a=md5ff(a,b,c,d,x[i],7,-680876936);d=md5ff(d,a,b,c,x[i+1],12,-389564586);c=md5ff(c,d,a,b,x[i+2],17,606105819);b=md5ff(b,c,d,a,x[i+3],22,-1044525330);a=md5ff(a,b,c,d,x[i+4],7,-176418897);d=md5ff(d,a,b,c,x[i+5],12,1200080426);c=md5ff(c,d,a,b,x[i+6],17,-1473231341);b=md5ff(b,c,d,a,x[i+7],22,-45705983);a=md5ff(a,b,c,d,x[i+8],7,1770035416);d=md5ff(d,a,b,c,x[i+9],12,-1958414417);c=md5ff(c,d,a,b,x[i+10],17,-42063);b=md5ff(b,c,d,a,x[i+11],22,-1990404162);a=md5ff(a,b,c,d,x[i+12],7,1804603682);d=md5ff(d,a,b,c,x[i+13],12,-40341101);c=md5ff(c,d,a,b,x[i+14],17,-1502002290);b=md5ff(b,c,d,a,x[i+15],22,1236535329);a=md5gg(a,b,c,d,x[i+1],5,-165796510);d=md5gg(d,a,b,c,x[i+6],9,-1069501632);c=md5gg(c,d,a,b,x[i+11],14,643717713);b=md5gg(b,c,d,a,x[i],20,-373897302);a=md5gg(a,b,c,d,x[i+5],5,-701558691);d=md5gg(d,a,b,c,x[i+10],9,38016083);c=md5gg(c,d,a,b,x[i+15],14,-660478335);b=md5gg(b,c,d,a,x[i+4],20,-405537848);a=md5gg(a,b,c,d,x[i+9],5,568446438);d=md5gg(d,a,b,c,x[i+14],9,-1019803690);c=md5gg(c,d,a,b,x[i+3],14,-187363961);b=md5gg(b,c,d,a,x[i+8],20,1163531501);a=md5gg(a,b,c,d,x[i+13],5,-1444681467);d=md5gg(d,a,b,c,x[i+2],9,-51403784);c=md5gg(c,d,a,b,x[i+7],14,1735328473);b=md5gg(b,c,d,a,x[i+12],20,-1926607734);a=md5hh(a,b,c,d,x[i+5],4,-378558);d=md5hh(d,a,b,c,x[i+8],11,-2022574463);c=md5hh(c,d,a,b,x[i+11],16,1839030562);b=md5hh(b,c,d,a,x[i+14],23,-35309556);a=md5hh(a,b,c,d,x[i+1],4,-1530992060);d=md5hh(d,a,b,c,x[i+4],11,1272893353);c=md5hh(c,d,a,b,x[i+7],16,-155497632);b=md5hh(b,c,d,a,x[i+10],23,-1094730640);a=md5hh(a,b,c,d,x[i+13],4,681279174);d=md5hh(d,a,b,c,x[i],11,-358537222);c=md5hh(c,d,a,b,x[i+3],16,-722521979);b=md5hh(b,c,d,a,x[i+6],23,76029189);a=md5hh(a,b,c,d,x[i+9],4,-640364487);d=md5hh(d,a,b,c,x[i+12],11,-421815835);c=md5hh(c,d,a,b,x[i+15],16,530742520);b=md5hh(b,c,d,a,x[i+2],23,-995338651);a=md5ii(a,b,c,d,x[i],6,-198630844);d=md5ii(d,a,b,c,x[i+7],10,1126891415);c=md5ii(c,d,a,b,x[i+14],15,-1416354905);b=md5ii(b,c,d,a,x[i+5],21,-57434055);a=md5ii(a,b,c,d,x[i+12],6,1700485571);d=md5ii(d,a,b,c,x[i+3],10,-1894986606);c=md5ii(c,d,a,b,x[i+10],15,-1051523);b=md5ii(b,c,d,a,x[i+1],21,-2054922799);a=md5ii(a,b,c,d,x[i+8],6,1873313359);d=md5ii(d,a,b,c,x[i+15],10,-30611744);c=md5ii(c,d,a,b,x[i+6],15,-1560198380);b=md5ii(b,c,d,a,x[i+13],21,1309151649);a=md5ii(a,b,c,d,x[i+4],6,-145523070);d=md5ii(d,a,b,c,x[i+11],10,-1120210379);c=md5ii(c,d,a,b,x[i+2],15,718787259);b=md5ii(b,c,d,a,x[i+9],21,-343485551);a=safeAdd(a,olda);b=safeAdd(b,oldb);c=safeAdd(c,oldc);d=safeAdd(d,oldd);}return [a,b,c,d];}
 JS;
+    }
+
+    private function staticHotspotFiles(): array
+    {
+        $root = $this->hotspotTemplateRoot();
+        if (!$root) {
+            return [];
+        }
+
+        $files = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $fileInfo) {
+            if (!$fileInfo->isFile()) {
+                continue;
+            }
+
+            $path = $fileInfo->getPathname();
+            $relative = str_replace('\\', '/', substr($path, strlen($root) + 1));
+            $relative = $this->normalizeHotspotFile($relative);
+            if ($relative === null) {
+                continue;
+            }
+
+            $contents = file_get_contents($path);
+            if ($contents !== false) {
+                $files[$relative] = $contents;
+            }
+        }
+
+        return $files;
+    }
+
+    private function hotspotTemplateRoot(): ?string
+    {
+        $paths = [
+            base_path('../Voucher Templates/hotspot-dir/hotspot'),
+            base_path('Voucher Templates/hotspot-dir/hotspot'),
+            resource_path('hotspot'),
+        ];
+
+        foreach ($paths as $path) {
+            if (is_dir($path)) {
+                return rtrim($path, DIRECTORY_SEPARATOR);
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeHotspotFile(string $file): ?string
+    {
+        $file = str_replace('\\', '/', trim($file));
+        $file = ltrim($file, '/');
+
+        if ($file === '' || str_contains($file, '..') || str_starts_with($file, '.')) {
+            return null;
+        }
+
+        if (!preg_match('/^[A-Za-z0-9._\/-]+$/', $file)) {
+            return null;
+        }
+
+        return $file;
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SystemSetting;
 use App\Models\Site;
+use App\Services\CaptivePortalService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -474,15 +475,12 @@ class NasController extends Controller
         $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
         $portalConfigUrl = $apiBaseUrl . "/api/captive/config/{$nas->provisioning_token}";
-        $loginHtmlUrl = $hotspotBaseUrl . '/login.html';
-        $md5JsUrl = $hotspotBaseUrl . '/md5.js';
-        $statusHtmlUrl = $hotspotBaseUrl . '/status.html';
-        $aloginHtmlUrl = $hotspotBaseUrl . '/alogin.html';
         $telemetryScriptUrl = $this->telemetryScriptUrl($nas->provisioning_token);
         $hotspotFetchMode = $this->fetchModeForUrl($hotspotBaseUrl);
         $telemetryFetchMode = $this->fetchModeForUrl($telemetryUrl);
         $telemetryScriptFetchMode = $this->fetchModeForUrl($telemetryScriptUrl);
         $generatedAt = now()->toIso8601String();
+        $hotspotFetchCommands = $this->hotspotFetchCommands(app(CaptivePortalService::class)->hotspotTemplateFiles());
 
         $routerIdentifier = $this->rscString($routerIdentifier);
         $secret = $this->rscString($secret);
@@ -513,10 +511,6 @@ class NasController extends Controller
         $paymentHost = $this->rscString($paymentHost);
         $hotspotBaseUrl = $this->rscString($hotspotBaseUrl);
         $portalConfigUrl = $this->rscString($portalConfigUrl);
-        $loginHtmlUrl = $this->rscString($loginHtmlUrl);
-        $md5JsUrl = $this->rscString($md5JsUrl);
-        $statusHtmlUrl = $this->rscString($statusHtmlUrl);
-        $aloginHtmlUrl = $this->rscString($aloginHtmlUrl);
         $telemetryScriptUrl = $this->rscString($telemetryScriptUrl);
         $hotspotFetchMode = $this->rscString($hotspotFetchMode);
         $telemetryFetchMode = $this->rscString($telemetryFetchMode);
@@ -572,10 +566,6 @@ class NasController extends Controller
 :local paymentHost "{$paymentHost}"
 :local hotspotBaseUrl "{$hotspotBaseUrl}"
 :local portalConfigUrl "{$portalConfigUrl}"
-:local loginHtmlUrl "{$loginHtmlUrl}"
-:local md5JsUrl "{$md5JsUrl}"
-:local statusHtmlUrl "{$statusHtmlUrl}"
-:local aloginHtmlUrl "{$aloginHtmlUrl}"
 :local hotspotFetchMode "{$hotspotFetchMode}"
 :local telemetryFetchMode "{$telemetryFetchMode}"
 :local telemetryScriptUrl "{$telemetryScriptUrl}"
@@ -586,10 +576,7 @@ class NasController extends Controller
 # Download captive portal and telemetry files before changing LAN/hotspot settings.
 # This keeps provisioning resilient if the router's active uplink changes during setup.
 :do { /file make-directory hotspot } on-error={}
-:do { /tool fetch url=\$loginHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/login.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch login.html before setup" }
-:do { /tool fetch url=\$md5JsUrl mode=\$hotspotFetchMode dst-path="hotspot/md5.js" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch md5.js before setup" }
-:do { /tool fetch url=\$statusHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/status.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch status.html before setup" }
-:do { /tool fetch url=\$aloginHtmlUrl mode=\$hotspotFetchMode dst-path="hotspot/alogin.html" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch alogin.html before setup" }
+{$hotspotFetchCommands}
 :do { /file remove [find name="onlifi-telemetry.rsc"] } on-error={}
 :do { /tool fetch url=\$telemetryScriptUrl mode=\$telemetryScriptFetchMode dst-path="onlifi-telemetry.rsc" keep-result=yes } on-error={ :log warning "OnLiFi failed to fetch telemetry installer before setup" }
 
@@ -1013,6 +1000,49 @@ RSC;
         }
 
         return $site->fresh();
+    }
+
+    private function hotspotFetchCommands(array $files): string
+    {
+        $files = array_values(array_unique(array_filter($files)));
+        sort($files);
+
+        $directories = [];
+        foreach ($files as $file) {
+            $parts = explode('/', str_replace('\\', '/', $file));
+            array_pop($parts);
+
+            $path = 'hotspot';
+            foreach ($parts as $part) {
+                if ($part === '') {
+                    continue;
+                }
+                $path .= '/' . $part;
+                $directories[$path] = true;
+            }
+        }
+
+        $lines = [];
+        foreach (array_keys($directories) as $directory) {
+            $directory = $this->rscString($directory);
+            $lines[] = ":do { /file make-directory \"{$directory}\" } on-error={}";
+        }
+
+        foreach ($files as $file) {
+            $normalized = trim(str_replace('\\', '/', $file), '/');
+            if ($normalized === '' || str_contains($normalized, '..')) {
+                continue;
+            }
+
+            $urlPath = implode('/', array_map('rawurlencode', explode('/', $normalized)));
+            $dstPath = $this->rscString('hotspot/' . $normalized);
+            $label = $this->rscString($normalized);
+            $urlPath = $this->rscString('/' . $urlPath);
+
+            $lines[] = ":do { /tool fetch url=(\$hotspotBaseUrl . \"{$urlPath}\") mode=\$hotspotFetchMode dst-path=\"{$dstPath}\" keep-result=yes } on-error={ :log warning \"OnLiFi failed to fetch {$label} before setup\" }";
+        }
+
+        return implode("\n", $lines);
     }
     
     /**
