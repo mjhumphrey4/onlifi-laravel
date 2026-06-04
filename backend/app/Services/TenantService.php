@@ -26,6 +26,9 @@ class TenantService
             $settings['mobile_money_provider'] = $data['mobile_money_provider'] ?? ($settings['mobile_money_provider'] ?? 'yo');
             $settings['router_types'] = array_values(array_unique($data['router_types'] ?? ($settings['router_types'] ?? ['mikrotik'])));
             $settings['signup_site_name'] = $data['site_name'] ?? ($settings['signup_site_name'] ?? $data['name']);
+            $smsEnabled = (bool) ($data['sms_enabled'] ?? ($settings['sms_enabled'] ?? false));
+            $settings['sms_enabled'] = $smsEnabled;
+            $settings['sms_charge_per_sms'] = 35;
 
             $tenant = Tenant::create([
                 'name' => $data['name'],
@@ -43,7 +46,7 @@ class TenantService
                 'approved_at' => $autoApprove ? now() : null,
                 'trial_ends_at' => null,
                 'subscription_ends_at' => null,
-                'sms_enabled' => true,
+                'sms_enabled' => $smsEnabled,
                 'settings' => $settings,
             ]);
 

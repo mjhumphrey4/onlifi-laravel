@@ -41,6 +41,7 @@ interface TelemetryStats {
   bandwidth_download_kbps?: number;
   bandwidth_upload_kbps?: number;
   routers: TelemetryRouter[];
+  resource_trend?: TrendSample[];
   timestamp?: string;
 }
 
@@ -122,19 +123,29 @@ export function Devices() {
         const nextStats = await statsResponse.json();
         setStats(nextStats);
         const liveRouter = (nextStats.routers || [])[0];
+        if (Array.isArray(nextStats.resource_trend) && nextStats.resource_trend.length > 0) {
+          setTrend(nextStats.resource_trend.slice(-12).map((sample: any) => ({
+            cpu: Number(sample.cpu || 0),
+            memory: Number(sample.memory || 0),
+            download: Number(sample.download || 0),
+            upload: Number(sample.upload || 0),
+          })));
+        }
         if (liveRouter) {
           const memory = liveRouter.memory_total_mb > 0
             ? (liveRouter.memory_used_mb / liveRouter.memory_total_mb) * 100
             : 0;
-          setTrend((items) => [
-            ...items.slice(-11),
-            {
-              cpu: Number(liveRouter.cpu_load || 0),
-              memory,
-              download: Number(liveRouter.bandwidth_download_kbps || 0),
-              upload: Number(liveRouter.bandwidth_upload_kbps || 0),
-            },
-          ]);
+          if (!Array.isArray(nextStats.resource_trend) || nextStats.resource_trend.length === 0) {
+            setTrend((items) => [
+              ...items.slice(-11),
+              {
+                cpu: Number(liveRouter.cpu_load || 0),
+                memory,
+                download: Number(liveRouter.bandwidth_download_kbps || 0),
+                upload: Number(liveRouter.bandwidth_upload_kbps || 0),
+              },
+            ]);
+          }
         }
       } else {
         setError(`Telemetry returned ${statsResponse.status}.`);

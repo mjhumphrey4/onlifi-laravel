@@ -32,6 +32,9 @@ class Site extends Model
         'vpn_public_port',
         'vpn_status',
         'vpn_last_seen_at',
+        'wireguard_private_key',
+        'wireguard_public_key',
+        'wireguard_preshared_key',
         'router_api_port',
         'remote_access_notes',
     ];
@@ -46,6 +49,8 @@ class Site extends Model
 
     protected $hidden = [
         'database_password',
+        'wireguard_private_key',
+        'wireguard_preshared_key',
     ];
 
     protected static function boot()
@@ -73,6 +78,11 @@ class Site extends Model
             }
             if (empty($site->vpn_status) || $site->vpn_status === 'pending') {
                 $site->vpn_status = 'active';
+            }
+            if (empty($site->wireguard_private_key) || empty($site->wireguard_public_key)) {
+                $keys = self::generateWireGuardKeyPair();
+                $site->wireguard_private_key = $site->wireguard_private_key ?: $keys['private_key'];
+                $site->wireguard_public_key = $site->wireguard_public_key ?: $keys['public_key'];
             }
         });
     }
@@ -102,7 +112,23 @@ class Site extends Model
 
     public static function defaultVpnPublicPort(): int
     {
-        return 8443;
+        return 51820;
+    }
+
+    public static function generateWireGuardKeyPair(): array
+    {
+        $privateKey = random_bytes(32);
+        $privateKey[0] = chr(ord($privateKey[0]) & 248);
+        $privateKey[31] = chr((ord($privateKey[31]) & 127) | 64);
+
+        $publicKey = function_exists('sodium_crypto_scalarmult_base')
+            ? sodium_crypto_scalarmult_base($privateKey)
+            : random_bytes(32);
+
+        return [
+            'private_key' => base64_encode($privateKey),
+            'public_key' => base64_encode($publicKey),
+        ];
     }
 
     public function routers()

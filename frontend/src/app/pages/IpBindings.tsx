@@ -33,13 +33,14 @@ export function IpBindings() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const load = async () => {
+  const load = async (refresh = false) => {
     setLoading(true);
     setError('');
     try {
-      const data = await getRouterIpBindings();
+      const data = await getRouterIpBindings(refresh);
       setBindings(data.bindings || data.data || []);
       if (data.message) setMessage(data.message);
+      else if (data.cached && data.last_synced_at) setMessage(`Showing last known router data from ${new Date(data.last_synced_at).toLocaleString()}.`);
     } catch (err: any) {
       setError(err.message || 'Failed to load IP bindings.');
     } finally {
@@ -66,7 +67,7 @@ export function IpBindings() {
       });
       setForm({ ...emptyForm });
       setMessage('IP binding added to the router.');
-      await load();
+      await load(true);
     } catch (err: any) {
       setError(err.message || 'Failed to add IP binding.');
     } finally {
@@ -88,7 +89,7 @@ export function IpBindings() {
           </h1>
           <p className="text-muted-foreground mt-1">Manage HotSpot IP bindings for {selectedSite?.name || 'the active site'}.</p>
         </div>
-        <button onClick={load} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted">
+        <button onClick={() => load(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>

@@ -861,7 +861,7 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
             vpn_username: site.vpn_username || '',
             vpn_password: site.vpn_password || '',
             vpn_public_host: site.vpn_public_host || 'vpn.onlifi.net',
-            vpn_public_port: site.vpn_public_port || 8443,
+            vpn_public_port: site.vpn_public_port || 51820,
             vpn_status: site.vpn_status || 'active',
             router_api_port: site.router_api_port || 8728,
             remote_access_notes: site.remote_access_notes || '',
@@ -909,7 +909,7 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
         <div className="p-6 border-b border-slate-700 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-white">Remote Access</h2>
-            <p className="text-sm text-slate-400 mt-1">{tenant.name} - SSTP range {data?.vpn_range || '10.10.1.0/24'}</p>
+            <p className="text-sm text-slate-400 mt-1">{tenant.name} - WireGuard range {data?.vpn_range || '10.10.1.0/24'}</p>
           </div>
           <button onClick={onClose} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-xl">Close</button>
         </div>
@@ -930,11 +930,11 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
                   <input value={forms[site.id]?.vpn_private_ip || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_private_ip: e.target.value } })} placeholder="10.10.1.10" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
                 <label className="block text-sm">
-                  <span className="text-slate-300">VPN username</span>
+                  <span className="text-slate-300">Legacy VPN username</span>
                   <input value={forms[site.id]?.vpn_username || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_username: e.target.value } })} placeholder={site.slug} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
                 <label className="block text-sm">
-                  <span className="text-slate-300">VPN password</span>
+                  <span className="text-slate-300">Legacy VPN password</span>
                   <input value={forms[site.id]?.vpn_password || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_password: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
                 <label className="block text-sm">
@@ -954,16 +954,29 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
                   <input value={forms[site.id]?.vpn_public_host || 'vpn.onlifi.net'} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_public_host: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
                 <label className="block text-sm">
-                  <span className="text-slate-300">SSTP port</span>
-                  <input type="number" value={forms[site.id]?.vpn_public_port || 8443} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_public_port: e.target.value ? Number(e.target.value) : 8443 } })} placeholder="8443" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                  <span className="text-slate-300">WireGuard port</span>
+                  <input type="number" value={forms[site.id]?.vpn_public_port || 51820} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], vpn_public_port: e.target.value ? Number(e.target.value) : 51820 } })} placeholder="51820" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
               </div>
               <div className="rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm text-slate-300">
-                SSTP setup: <span className="font-mono text-sky-300">{forms[site.id]?.vpn_public_host || 'vpn.onlifi.net'}:{forms[site.id]?.vpn_public_port || 8443}</span>
-                <span className="block mt-1">SoftEther user: <span className="font-mono text-sky-300">{forms[site.id]?.vpn_username || site.slug}</span> / <span className="font-mono text-sky-300">{forms[site.id]?.vpn_password || 'pending'}</span></span>
+                WireGuard endpoint: <span className="font-mono text-sky-300">{site.vpn_public_endpoint || data?.wireguard_endpoint || 'vpn.onlifi.net:51820'}</span>
+                <span className="block mt-1">Router public key: <span className="font-mono text-sky-300 break-all">{site.wireguard_public_key || 'pending'}</span></span>
+                {!data?.wireguard_server_public_key_configured && (
+                  <span className="block mt-2 text-amber-300">Set the platform WireGuard server public key before provisioning routers.</span>
+                )}
+              </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="rounded-lg bg-slate-950 border border-slate-700 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Server peer</p>
+                  <pre className="text-xs text-slate-200 whitespace-pre-wrap break-all">{site.wireguard_server_peer || 'Assign a private IP first.'}</pre>
+                </div>
+                <div className="rounded-lg bg-slate-950 border border-slate-700 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500 mb-2">Router client config</p>
+                  <pre className="text-xs text-slate-200 whitespace-pre-wrap break-all">{site.wireguard_config || 'Assign a private IP first.'}</pre>
+                </div>
               </div>
               <label className="block text-sm">
-                <span className="text-slate-300">SoftEther notes</span>
+                <span className="text-slate-300">Remote access notes</span>
                 <textarea value={forms[site.id]?.remote_access_notes || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], remote_access_notes: e.target.value } })} rows={2} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
               </label>
               <div className="flex justify-end">

@@ -166,6 +166,8 @@ class TelemetryController extends Controller
                     'total_rx_bytes' => $r->total_rx_bytes ?? 0,
                 ];
             })->values();
+
+            $resourceTrend = $this->resourceTrend($request);
             
             Log::info('Telemetry stats prepared', [
                 'total_routers' => $totalRouters,
@@ -182,6 +184,7 @@ class TelemetryController extends Controller
                 'bandwidth_download_kbps' => round($routerStats->sum('bandwidth_download_kbps'), 2),
                 'bandwidth_upload_kbps' => round($routerStats->sum('bandwidth_upload_kbps'), 2),
                 'routers' => $routerStats,
+                'resource_trend' => $resourceTrend,
                 'timestamp' => now()->toIso8601String(),
             ]);
         } catch (\Exception $e) {
@@ -356,7 +359,7 @@ class TelemetryController extends Controller
                 'cpu_load' => $request->input('cpu_load', 0),
                 'memory_total_mb' => $request->input('memory_total_mb', 0),
                 'memory_used_mb' => $request->input('memory_used_mb', 0),
-                'uptime_seconds' => $request->input('uptime_seconds', 0),
+                'uptime_seconds' => $this->uptimeSecondsFromRequest($request),
                 'active_connections' => $request->input('active_connections', 0),
                 'bandwidth_download_kbps' => $request->input('bandwidth_download_kbps', 0),
                 'bandwidth_upload_kbps' => $request->input('bandwidth_upload_kbps', 0),
@@ -415,6 +418,91 @@ class TelemetryController extends Controller
         }
 
         return $previousSamples;
+    }
+
+    private function resourceTrend(Request $request): array
+    {
+        if (!DB::connection('central')->getSchemaBuilder()->hasTable('router_telemetry')) {
+            return [];
+        }
+
+        $query = DB::connection('central')->table('router_telemetry')
+            ->select([
+                'cpu_load',
+                'memory_used_mb',
+                'memory_total_mb',
+                'bandwidth_download_kbps',
+                'bandwidth_upload_kbps',
+                'total_rx_bytes',
+                'total_tx_bytes',
+                'created_at',
+            ])
+            ->orderByDesc('created_at')
+            ->limit(12);
+
+        $this->applyTelemetryScope($query, $request);
+
+        return $query->get()
+            ->reverse()
+            ->map(function ($row) {
+                $memory = (float) ($row->memory_total_mb ?? 0) > 0
+                    ? ((float) ($row->memory_used_mb ?? 0) / (float) $row->memory_total_mb) * 100
+                    : 0;
+
+                return [
+                    'cpu' => round((float) ($row->cpu_load ?? 0), 2),
+                    'memory' => round($memory, 2),
+                    'download' => round((float) ($row->bandwidth_download_kbps ?? 0), 2),
+                    'upload' => round((float) ($row->bandwidth_upload_kbps ?? 0), 2),
+                    'total_rx_bytes' => (int) ($row->total_rx_bytes ?? 0),
+                    'total_tx_bytes' => (int) ($row->total_tx_bytes ?? 0),
+                    'created_at' => $row->created_at,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function uptimeSecondsFromRequest(Request $request): int
+    {
+        $explicit = (int) $request->input('uptime_seconds', 0);
+        if ($explicit > 0) {
+            return $explicit;
+        }
+
+        return $this->parseRouterOsDuration((string) $request->input('uptime', ''));
+    }
+
+    private function parseRouterOsDuration(string $duration): int
+    {
+        $duration = trim($duration);
+        if ($duration === '') {
+            return 0;
+        }
+
+        $seconds = 0;
+        if (preg_match_all('/(\d+)(w|d|h|m|s)/i', $duration, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $value = (int) $match[1];
+                $seconds += match (strtolower($match[2])) {
+                    'w' => $value * 604800,
+                    'd' => $value * 86400,
+                    'h' => $value * 3600,
+                    'm' => $value * 60,
+                    default => $value,
+                };
+            }
+        }
+
+        if ($seconds > 0) {
+            return $seconds;
+        }
+
+        if (preg_match('/^(\d+):(\d+):(\d+)$/', $duration, $match)) {
+            return ((int) $match[1] * 3600) + ((int) $match[2] * 60) + (int) $match[3];
+        }
+
+        return 0;
     }
 
     private function applyTelemetryScope($query, Request $request): void

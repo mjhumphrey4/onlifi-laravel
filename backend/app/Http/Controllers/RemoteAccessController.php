@@ -58,6 +58,8 @@ class RemoteAccessController extends Controller
                 'slug' => $tenant->slug,
             ],
             'vpn_range' => SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24'),
+            'wireguard_endpoint' => $this->wireGuardEndpoint(),
+            'wireguard_server_public_key_configured' => (bool) SystemSetting::get('wireguard_server_public_key', ''),
             'router_admin_username' => SystemSetting::get('router_admin_username', 'onlifi'),
             'sites' => $sites,
         ]);
@@ -99,6 +101,7 @@ class RemoteAccessController extends Controller
             'remote_access_notes',
         ]);
         $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
+        $updates['vpn_public_host'] = $updates['vpn_public_host'] ?? 'vpn.onlifi.net';
 
         $site->update($updates);
 
@@ -172,6 +175,10 @@ class RemoteAccessController extends Controller
             'vpn_public_host' => $site->vpn_public_host ?: 'vpn.onlifi.net',
             'vpn_public_port' => Site::defaultVpnPublicPort(),
             'vpn_public_endpoint' => $this->publicEndpoint($site),
+            'wireguard_public_key' => $site->wireguard_public_key,
+            'wireguard_private_key' => $site->wireguard_private_key,
+            'wireguard_config' => $this->wireGuardClientConfig($site),
+            'wireguard_server_peer' => $this->wireGuardServerPeerConfig($site),
             'vpn_status' => $site->vpn_status ?: 'active',
             'vpn_last_seen_at' => $site->vpn_last_seen_at?->toIso8601String(),
             'router_api_port' => $site->router_api_port ?: 8728,
@@ -181,7 +188,7 @@ class RemoteAccessController extends Controller
 
     private function publicEndpoint(Site $site): ?string
     {
-        return ($site->vpn_public_host ?: 'vpn.onlifi.net') . ':' . Site::defaultVpnPublicPort();
+        return $this->wireGuardEndpoint();
     }
 
     private function defaultVpnUsername(Site $site): string
@@ -222,6 +229,11 @@ class RemoteAccessController extends Controller
         if (!$site->vpn_status || $site->vpn_status === 'pending') {
             $updates['vpn_status'] = 'active';
         }
+        if (!$site->wireguard_private_key || !$site->wireguard_public_key) {
+            $keys = Site::generateWireGuardKeyPair();
+            $updates['wireguard_private_key'] = $site->wireguard_private_key ?: $keys['private_key'];
+            $updates['wireguard_public_key'] = $site->wireguard_public_key ?: $keys['public_key'];
+        }
 
         if ($updates) {
             $site->update($updates);
@@ -229,5 +241,36 @@ class RemoteAccessController extends Controller
         }
 
         return $site;
+    }
+
+    private function wireGuardEndpoint(): string
+    {
+        $host = SystemSetting::get('wireguard_endpoint_host', 'vpn.onlifi.net');
+        $host = preg_replace('/:\d+$/', '', trim((string) $host)) ?: 'vpn.onlifi.net';
+
+        return $host . ':' . Site::defaultVpnPublicPort();
+    }
+
+    private function wireGuardClientConfig(Site $site): string
+    {
+        $address = $site->vpn_private_ip ? $this->cidrAddress($site->vpn_private_ip) : '<ADMIN_ASSIGNED_IP>/32';
+        $serverPublicKey = SystemSetting::get('wireguard_server_public_key', '<WIREGUARD_SERVER_PUBLIC_KEY>');
+        $allowed = SystemSetting::get('wireguard_allowed_address', SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24'));
+        $dns = SystemSetting::get('wireguard_client_dns', '');
+        $dnsLine = $dns ? "\nDNS = {$dns}" : '';
+
+        return "[Interface]\nPrivateKey = {$site->wireguard_private_key}\nAddress = {$address}{$dnsLine}\n\n[Peer]\nPublicKey = {$serverPublicKey}\nEndpoint = {$this->wireGuardEndpoint()}\nAllowedIPs = {$allowed}\nPersistentKeepalive = 25";
+    }
+
+    private function wireGuardServerPeerConfig(Site $site): string
+    {
+        $address = $site->vpn_private_ip ? $this->cidrAddress($site->vpn_private_ip) : '<ADMIN_ASSIGNED_IP>/32';
+
+        return "[Peer]\n# {$site->name}\nPublicKey = {$site->wireguard_public_key}\nAllowedIPs = {$address}";
+    }
+
+    private function cidrAddress(string $address): string
+    {
+        return str_contains($address, '/') ? $address : "{$address}/32";
     }
 }

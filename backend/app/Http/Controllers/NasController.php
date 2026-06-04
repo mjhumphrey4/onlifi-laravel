@@ -458,11 +458,12 @@ class NasController extends Controller
         $hotspotDns = "{$siteSlug}.wifi";
         $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
         $remoteAdminPassword = (string) SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me');
-        $vpnClientName = 'onlifi-sstp';
-        $vpnHost = preg_replace('/:\d+$/', '', trim((string) ($site?->vpn_public_host ?: 'vpn.onlifi.net'))) ?: 'vpn.onlifi.net';
-        $vpnPort = 8443;
-        $vpnConnectTo = "{$vpnHost}:{$vpnPort}";
-        $vpnProxy = "0.0.0.0:{$vpnPort}";
+        $vpnClientName = 'onlifi-wg';
+        $vpnHost = preg_replace('/:\d+$/', '', trim((string) SystemSetting::get('wireguard_endpoint_host', $site?->vpn_public_host ?: 'vpn.onlifi.net'))) ?: 'vpn.onlifi.net';
+        $vpnPort = (int) SystemSetting::get('wireguard_endpoint_port', Site::defaultVpnPublicPort());
+        $wireguardServerPublicKey = (string) SystemSetting::get('wireguard_server_public_key', '');
+        $wireguardAllowedAddress = (string) SystemSetting::get('wireguard_allowed_address', SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24'));
+        $wireguardPrivateKey = (string) ($site?->wireguard_private_key ?: '');
         $vpnUsername = $site?->vpn_username ?: $siteSlug;
         $vpnPassword = $site?->vpn_password ?: '';
         $vpnPrivateAddress = trim((string) ($site?->vpn_private_ip ?: ''));
@@ -500,8 +501,9 @@ class NasController extends Controller
         $vpnClientName = $this->rscString($vpnClientName);
         $vpnHost = $this->rscString($vpnHost);
         $vpnPort = $this->rscString((string) $vpnPort);
-        $vpnConnectTo = $this->rscString($vpnConnectTo);
-        $vpnProxy = $this->rscString($vpnProxy);
+        $wireguardServerPublicKey = $this->rscString($wireguardServerPublicKey);
+        $wireguardAllowedAddress = $this->rscString($wireguardAllowedAddress);
+        $wireguardPrivateKey = $this->rscString($wireguardPrivateKey);
         $vpnUsername = $this->rscString($vpnUsername);
         $vpnPassword = $this->rscString($vpnPassword);
         $vpnPrivateAddress = $this->rscString($vpnPrivateAddress);
@@ -558,8 +560,9 @@ class NasController extends Controller
 :local vpnClientName "{$vpnClientName}"
 :local vpnHost "{$vpnHost}"
 :local vpnPort "{$vpnPort}"
-:local vpnConnectTo "{$vpnConnectTo}"
-:local vpnProxy "{$vpnProxy}"
+:local wireguardServerPublicKey "{$wireguardServerPublicKey}"
+:local wireguardAllowedAddress "{$wireguardAllowedAddress}"
+:local wireguardPrivateKey "{$wireguardPrivateKey}"
 :local vpnUsername "{$vpnUsername}"
 :local vpnPassword "{$vpnPassword}"
 :local vpnPrivateAddress "{$vpnPrivateAddress}"
@@ -637,25 +640,34 @@ class NasController extends Controller
 # Router management services are intentionally left unchanged.
 # Winbox/API/SSH/www ports and allowed-address settings remain under the router owner's control.
 
-# SSTP client for OnLiFi remote access.
-# The SoftEther server-side user/password must match the values shown to the administrator.
-:if ([:len \$vpnPassword] > 0) do={
-  :if ([:len [/interface sstp-client find name=\$vpnClientName]] = 0) do={
-    /interface sstp-client add name=\$vpnClientName connect-to=\$vpnConnectTo http-proxy=\$vpnProxy user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
+# WireGuard client for OnLiFi remote access.
+# The server-side peer must use the public key and allowed address shown to the administrator.
+:if ([:len \$wireguardPrivateKey] > 0) do={
+  :if ([:len [/interface wireguard find name=\$vpnClientName]] = 0) do={
+    /interface wireguard add name=\$vpnClientName private-key=\$wireguardPrivateKey mtu=1420 comment="OnLiFi WireGuard VPN"
   } else={
-    /interface sstp-client set [find name=\$vpnClientName] connect-to=\$vpnConnectTo http-proxy=\$vpnProxy user=\$vpnUsername password=\$vpnPassword profile=default-encryption disabled=no comment="OnLiFi SSTP VPN"
+    /interface wireguard set [find name=\$vpnClientName] private-key=\$wireguardPrivateKey mtu=1420 comment="OnLiFi WireGuard VPN" disabled=no
   }
   :if ([:len \$vpnPrivateAddress] > 0) do={
-    :if ([:len [/ip address find comment="OnLiFi SSTP static address"]] = 0) do={
-      /ip address add address=\$vpnPrivateAddress interface=\$vpnClientName comment="OnLiFi SSTP static address"
+    :if ([:len [/ip address find comment="OnLiFi WireGuard static address"]] = 0) do={
+      /ip address add address=\$vpnPrivateAddress interface=\$vpnClientName comment="OnLiFi WireGuard static address"
     } else={
-      /ip address set [find comment="OnLiFi SSTP static address"] address=\$vpnPrivateAddress interface=\$vpnClientName disabled=no
+      /ip address set [find comment="OnLiFi WireGuard static address"] address=\$vpnPrivateAddress interface=\$vpnClientName disabled=no
     }
   } else={
-    :log warning "OnLiFi SSTP private IP missing; skipping static SSTP address"
+    :log warning "OnLiFi WireGuard private IP missing; skipping static WireGuard address"
+  }
+  :if ([:len \$wireguardServerPublicKey] > 0) do={
+    :if ([:len [/interface wireguard peers find comment="OnLiFi WireGuard server"]] = 0) do={
+      /interface wireguard peers add interface=\$vpnClientName public-key=\$wireguardServerPublicKey endpoint-address=\$vpnHost endpoint-port=\$vpnPort allowed-address=\$wireguardAllowedAddress persistent-keepalive=25s comment="OnLiFi WireGuard server"
+    } else={
+      /interface wireguard peers set [find comment="OnLiFi WireGuard server"] interface=\$vpnClientName public-key=\$wireguardServerPublicKey endpoint-address=\$vpnHost endpoint-port=\$vpnPort allowed-address=\$wireguardAllowedAddress persistent-keepalive=25s disabled=no
+    }
+  } else={
+    :log warning "OnLiFi WireGuard server public key missing; skipping WireGuard peer setup"
   }
 } else={
-  :log warning "OnLiFi SSTP VPN password missing; skipping SSTP client setup"
+  :log warning "OnLiFi WireGuard private key missing; skipping WireGuard setup"
 }
 
 # DHCP
@@ -763,7 +775,7 @@ class NasController extends Controller
 :put "============================================"
 :put "Router Identifier: {$routerIdentifier}"
 :put "RADIUS Server: {$serverIp}:{$authPort}/{$acctPort}"
-:put "SSTP VPN: {$vpnHost}:{$vpnPort}"
+:put "WireGuard VPN: {$vpnHost}:{$vpnPort}"
 :put "LAN Gateway: {$lanGateway}"
 :put "Hotspot: on {$hotspotDns}"
 :put ""
@@ -820,6 +832,7 @@ RSC;
   :local wanCount 0
   :local routerVersion ""
   :local routerBoard ""
+  :local rawUptime "0s"
   :local currentTime ""
   :local currentDate ""
 
@@ -828,6 +841,7 @@ RSC;
   :do { :set memFree [/system resource get free-memory] } on-error={}
   :do { :set routerVersion [/system resource get version] } on-error={}
   :do { :set routerBoard [/system resource get board-name] } on-error={}
+  :do { :set rawUptime [/system resource get uptime] } on-error={}
   :do { :set activeUsers [/ip hotspot active print count-only] } on-error={}
   :do { :set currentTime [/system clock get time] } on-error={}
   :do { :set currentDate [/system clock get date] } on-error={}
@@ -867,7 +881,7 @@ RSC;
   :set postData (\$postData . "&cpu_load=" . \$cpuVal)
   :set postData (\$postData . "&memory_total_mb=" . \$memTotalMb)
   :set postData (\$postData . "&memory_used_mb=" . \$memUsedMb)
-  :set postData (\$postData . "&uptime_seconds=0")
+  :set postData (\$postData . "&uptime=" . \$rawUptime)
   :set postData (\$postData . "&active_connections=" . \$activeUsers)
   :set postData (\$postData . "&bandwidth_download_kbps=0")
   :set postData (\$postData . "&bandwidth_upload_kbps=0")
@@ -987,6 +1001,11 @@ RSC;
         }
         if (!$site->vpn_status || $site->vpn_status === 'pending') {
             $updates['vpn_status'] = 'active';
+        }
+        if (!$site->wireguard_private_key || !$site->wireguard_public_key) {
+            $keys = Site::generateWireGuardKeyPair();
+            $updates['wireguard_private_key'] = $site->wireguard_private_key ?: $keys['private_key'];
+            $updates['wireguard_public_key'] = $site->wireguard_public_key ?: $keys['public_key'];
         }
 
         if ($updates) {

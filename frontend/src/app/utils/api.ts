@@ -253,9 +253,9 @@ export const updateRouter = (id: number, data: Record<string, unknown>) => put(`
 export const deleteRouter = (id: number) => del(`/routers/${id}`);
 export const testRouterConnection = (id: number) => post(`/routers/${id}/test-connection`);
 export const getRouterActiveUsers = (id: number) => get(`/routers/${id}/active-users`);
-export const getRouterIpBindings = () => get('/routers/ip-bindings');
+export const getRouterIpBindings = (refresh = false) => get(`/routers/ip-bindings${refresh ? '?refresh=1' : ''}`);
 export const createRouterIpBinding = (data: Record<string, unknown>) => post('/routers/ip-bindings', data);
-export const getRouterSystemUsers = () => get('/routers/system-users');
+export const getRouterSystemUsers = (refresh = false) => get(`/routers/system-users${refresh ? '?refresh=1' : ''}`);
 export const createRouterSystemUser = (data: Record<string, unknown>) => post('/routers/system-users', data);
 export const updateRouterSystemUserStatus = (data: Record<string, unknown>) => post('/routers/system-users/status', data);
 

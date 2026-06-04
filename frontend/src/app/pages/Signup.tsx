@@ -13,6 +13,7 @@ interface SignupFormData {
   site_name: string;
   mobile_money_provider: 'yo' | 'iotec';
   router_types: Array<'mikrotik' | 'omada'>;
+  sms_enabled: boolean;
 }
 
 interface ValidationErrors {
@@ -37,6 +38,7 @@ export function Signup() {
     site_name: '',
     mobile_money_provider: 'yo',
     router_types: ['mikrotik'],
+    sms_enabled: false,
   });
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [loading, setLoading] = useState(false);
@@ -134,6 +136,7 @@ export function Signup() {
           site_name: formData.site_name,
           mobile_money_provider: formData.mobile_money_provider,
           router_types: formData.router_types,
+          sms_enabled: formData.sms_enabled,
           admin_email: formData.email,
           admin_name: formData.full_name,
           admin_password: formData.password,
@@ -141,6 +144,8 @@ export function Signup() {
             phone: formData.phone,
             mobile_money_provider: formData.mobile_money_provider,
             router_types: formData.router_types,
+            sms_enabled: formData.sms_enabled,
+            sms_charge_per_sms: 35,
           },
         }),
       });
@@ -391,6 +396,30 @@ export function Signup() {
               {errors.router_types && (
                 <p className="text-xs text-destructive mt-1">{errors.router_types}</p>
               )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-card-foreground mb-2">
+              Enable SMS?
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: true, label: 'Yes', note: '35/= per SMS automatically charged' },
+                { value: false, label: 'No', note: 'Keep SMS disabled for now' },
+              ].map((option) => (
+                <button
+                  type="button"
+                  key={option.label}
+                  onClick={() => setFormData((prev) => ({ ...prev, sms_enabled: option.value }))}
+                  className={`text-left rounded-lg border p-3 transition-colors ${
+                    formData.sms_enabled === option.value ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-card-foreground">{option.label}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{option.note}</p>
+                </button>
+              ))}
             </div>
           </div>
 

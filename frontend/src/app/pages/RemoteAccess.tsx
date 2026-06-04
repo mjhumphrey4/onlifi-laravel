@@ -42,7 +42,7 @@ export function RemoteAccess() {
           <Network className="w-7 h-7 text-primary" />
           Remote Access
         </h1>
-        <p className="text-muted-foreground mt-1">SSTP VPN addressing and router API access details for each site.</p>
+        <p className="text-muted-foreground mt-1">WireGuard addressing and router API access details for each site.</p>
       </div>
 
       <div className="bg-card border border-border rounded-lg p-5">

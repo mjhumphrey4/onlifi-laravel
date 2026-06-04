@@ -366,6 +366,17 @@ class MikrotikController extends Controller
 
     public function getIpBindings(Request $request)
     {
+        if (!$request->boolean('refresh')) {
+            $cached = $this->cachedRouterList($request, 'ip_bindings');
+            if ($cached) {
+                return response()->json([
+                    'bindings' => $cached['data'],
+                    'cached' => true,
+                    'last_synced_at' => $cached['last_synced_at'],
+                ]);
+            }
+        }
+
         $router = $this->resolveSiteRouter($request);
 
         if (!$router) {
@@ -375,8 +386,13 @@ class MikrotikController extends Controller
             ]);
         }
 
+        $bindings = $this->mikrotikService->getIpBindings($router);
+        $this->storeRouterListCache($request, 'ip_bindings', $bindings);
+
         return response()->json([
-            'bindings' => $this->mikrotikService->getIpBindings($router),
+            'bindings' => $bindings,
+            'cached' => false,
+            'last_synced_at' => now()->toIso8601String(),
         ]);
     }
 
@@ -423,6 +439,8 @@ class MikrotikController extends Controller
             ], 500);
         }
 
+        $this->storeRouterListCache($request, 'ip_bindings', $this->mikrotikService->getIpBindings($router));
+
         return response()->json([
             'message' => 'IP binding added successfully.',
         ], 201);
@@ -430,6 +448,17 @@ class MikrotikController extends Controller
 
     public function getSystemUsers(Request $request)
     {
+        if (!$request->boolean('refresh')) {
+            $cached = $this->cachedRouterList($request, 'system_users');
+            if ($cached) {
+                return response()->json([
+                    'users' => $cached['data'],
+                    'cached' => true,
+                    'last_synced_at' => $cached['last_synced_at'],
+                ]);
+            }
+        }
+
         $router = $this->resolveSiteRouter($request);
 
         if (!$router) {
@@ -439,8 +468,13 @@ class MikrotikController extends Controller
             ]);
         }
 
+        $users = $this->mikrotikService->getSystemUsers($router);
+        $this->storeRouterListCache($request, 'system_users', $users);
+
         return response()->json([
-            'users' => $this->mikrotikService->getSystemUsers($router),
+            'users' => $users,
+            'cached' => false,
+            'last_synced_at' => now()->toIso8601String(),
         ]);
     }
 
@@ -483,6 +517,8 @@ class MikrotikController extends Controller
             ], 500);
         }
 
+        $this->storeRouterListCache($request, 'system_users', $this->mikrotikService->getSystemUsers($router));
+
         return response()->json([
             'message' => 'Router user added successfully.',
         ], 201);
@@ -519,6 +555,8 @@ class MikrotikController extends Controller
                 'message' => 'Could not connect to the router or RouterOS rejected the update.',
             ], 500);
         }
+
+        $this->storeRouterListCache($request, 'system_users', $this->mikrotikService->getSystemUsers($router));
 
         return response()->json([
             'message' => 'Router user updated successfully.',
@@ -558,5 +596,69 @@ class MikrotikController extends Controller
             'password' => SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me'),
             'is_active' => true,
         ]);
+    }
+
+    private function cachedRouterList(Request $request, string $type): ?array
+    {
+        $this->ensureRouterCacheTable();
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$site) {
+            return null;
+        }
+
+        $row = DB::connection('tenant')->table('router_cached_lists')
+            ->where('site_id', $site->id)
+            ->where('type', $type)
+            ->first();
+
+        if (!$row) {
+            return null;
+        }
+
+        return [
+            'data' => json_decode($row->payload ?: '[]', true) ?: [],
+            'last_synced_at' => $row->last_synced_at,
+        ];
+    }
+
+    private function storeRouterListCache(Request $request, string $type, array $payload): void
+    {
+        $this->ensureRouterCacheTable();
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$site) {
+            return;
+        }
+
+        DB::connection('tenant')->table('router_cached_lists')->updateOrInsert(
+            [
+                'site_id' => $site->id,
+                'type' => $type,
+            ],
+            [
+                'payload' => json_encode($payload),
+                'last_synced_at' => now(),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+    }
+
+    private function ensureRouterCacheTable(): void
+    {
+        if (Schema::connection('tenant')->hasTable('router_cached_lists')) {
+            return;
+        }
+
+        Schema::connection('tenant')->create('router_cached_lists', function ($table) {
+            $table->id();
+            $table->unsignedBigInteger('site_id')->index();
+            $table->string('type', 64);
+            $table->longText('payload')->nullable();
+            $table->timestamp('last_synced_at')->nullable();
+            $table->timestamps();
+            $table->unique(['site_id', 'type']);
+        });
     }
 }

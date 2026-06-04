@@ -72,6 +72,7 @@ class TenantController extends Controller
             'mobile_money_provider' => 'nullable|string|in:yo,iotec',
             'router_types' => 'nullable|array|min:1',
             'router_types.*' => 'string|in:mikrotik,omada',
+            'sms_enabled' => 'nullable|boolean',
             'settings' => 'nullable|array',
         ]);
 

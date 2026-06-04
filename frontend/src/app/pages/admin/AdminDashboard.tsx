@@ -280,7 +280,7 @@ export default function AdminDashboard() {
           />
           <ActionCard
             title="VPN Setup"
-            description="View SSTP usernames, passwords, IPs, and ports"
+            description="View WireGuard keys, peer configs, IPs, and endpoints"
             icon={Network}
             onClick={() => navigate('/admin/vpn-management')}
             color="#0EA5E9"
