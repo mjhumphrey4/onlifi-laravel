@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, RefreshCw, Users, ArrowRight, Server, Activity, Cpu, HardDrive, ArrowUp, ArrowDown, CalendarDays } from 'lucide-react';
+import { DollarSign, TrendingUp, RefreshCw, Users, User, ArrowRight, Server, Activity, Cpu, HardDrive, ArrowUp, ArrowDown, CalendarDays } from 'lucide-react';
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
@@ -42,7 +42,9 @@ interface Client {
   id: number;
   mac_address: string;
   username: string;
+  hostname: string;
   ip_address: string;
+  voucher_code: string;
   total_sessions: number;
   total_spent: number;
   last_seen: string;
@@ -230,7 +232,9 @@ export function Dashboard() {
               id: user.id,
               mac_address: user.mac_address,
               username: user.username,
+              hostname: user.hostname || '',
               ip_address: user.ip_address,
+              voucher_code: user.voucher_code || user.username || '',
               total_sessions: user.total_sessions || 0,
               total_spent: user.total_spent || 0,
               last_seen: user.last_seen,
@@ -409,7 +413,7 @@ export function Dashboard() {
         <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-primary" />
+              <User className="w-5 h-5 text-primary" />
               <div>
                 <h2 className="text-lg font-semibold text-card-foreground">Active Clients ({clients.length})</h2>
                 <p className="text-xs text-muted-foreground">
@@ -422,28 +426,43 @@ export function Dashboard() {
             </Link>
           </div>
 
-          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+          <div className="max-h-[400px] overflow-y-auto">
             {clients.length === 0 ? (
               <div className="py-8 text-center">
-                <Users className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
+                <User className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">No clients yet</p>
               </div>
             ) : (
-              clients.slice(0, 10).map((client, i) => (
-                <div
-                  key={client.id || i}
-                  className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                    <Users className="w-5 h-5 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-card-foreground">{client.mac_address || 'Unknown MAC'}</p>
-                    <p className="text-xs text-muted-foreground">{client.ip_address || 'No IP address'}</p>
-                    <p className="truncate text-xs text-primary">{client.voucher_code || client.username || 'No voucher'}</p>
-                  </div>
+              <div className="min-w-0">
+                <div className="grid grid-cols-[1.2fr_1fr_1fr] gap-3 border-b border-border px-3 pb-2 text-[11px] font-semibold uppercase text-muted-foreground">
+                  <span>Device</span>
+                  <span>Voucher</span>
+                  <span>IP Address</span>
                 </div>
-              ))
+                <div className="divide-y divide-border/60">
+                  {clients.slice(0, 10).map((client, i) => {
+                    const voucher = String(client.voucher_code || client.username || '').trim();
+
+                    return (
+                      <div
+                        key={client.id || i}
+                        className="grid grid-cols-[1.2fr_1fr_1fr] gap-3 px-3 py-3 hover:bg-muted/40 transition-colors"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <User className="w-4 h-4 text-primary" />
+                          </span>
+                          <span className="min-w-0 truncate text-sm font-medium text-card-foreground">
+                            {client.hostname || ''}
+                          </span>
+                        </div>
+                        <span className="truncate text-sm text-primary">{voucher.toLowerCase() === 'default' ? '' : voucher}</span>
+                        <span className="truncate font-mono text-xs text-muted-foreground">{client.ip_address || ''}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
         </div>

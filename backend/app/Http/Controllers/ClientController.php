@@ -51,28 +51,34 @@ class ClientController extends Controller
                 $refreshResult = $refreshResult ?: $this->refreshFromRouter($request, false);
             }
 
+            $select = [
+                'id',
+                'mac_address',
+                'ip_address',
+                'username',
+                'device_type',
+                'uptime_seconds',
+                'data_uploaded_mb',
+                'data_downloaded_mb',
+                DB::raw('(data_uploaded_mb + data_downloaded_mb) as total_data_mb'),
+                'signal_strength',
+                'last_seen',
+                'router_name',
+                'voucher_code',
+                'profile_name',
+                'expires_at',
+                DB::raw('CASE WHEN last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN "online" ELSE "offline" END as status'),
+                DB::raw('COALESCE((SELECT SUM(amount) FROM transactions WHERE transactions.msisdn = hotspot_users.username), 0) as total_spent'),
+                DB::raw('(SELECT COUNT(*) FROM radacct WHERE radacct.callingstationid = hotspot_users.mac_address) as total_sessions'),
+            ];
+
+            if (Schema::connection('tenant')->hasColumn('hotspot_users', 'hostname')) {
+                array_splice($select, 4, 0, ['hostname']);
+            }
+
             $query = DB::connection('tenant')
                 ->table('hotspot_users')
-                ->select([
-                    'id',
-                    'mac_address',
-                    'ip_address',
-                    'username',
-                    'device_type',
-                    'uptime_seconds',
-                    'data_uploaded_mb',
-                    'data_downloaded_mb',
-                    DB::raw('(data_uploaded_mb + data_downloaded_mb) as total_data_mb'),
-                    'signal_strength',
-                    'last_seen',
-                    'router_name',
-                    'voucher_code',
-                    'profile_name',
-                    'expires_at',
-                    DB::raw('CASE WHEN last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN "online" ELSE "offline" END as status'),
-                    DB::raw('COALESCE((SELECT SUM(amount) FROM transactions WHERE transactions.msisdn = hotspot_users.username), 0) as total_spent'),
-                    DB::raw('(SELECT COUNT(*) FROM radacct WHERE radacct.callingstationid = hotspot_users.mac_address) as total_sessions'),
-                ]);
+                ->select($select);
 
             if ($site && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
                 $query->where('site_id', $site->id);
@@ -191,60 +197,46 @@ class ClientController extends Controller
 
         $users = $this->mikrotikService->getActiveUsers($router);
         $activeError = $this->mikrotikService->getLastError();
-        $seenMacs = collect($users)
-            ->map(fn ($user) => strtoupper((string) ($user['mac_address'] ?? '')))
-            ->filter()
-            ->all();
-
         $leases = $this->mikrotikService->getDhcpLeases($router);
         $leaseError = $this->mikrotikService->getLastError();
 
-        if (empty($users) && empty($leases) && ($activeError || $leaseError)) {
+        if (empty($users) && ($activeError || (empty($leases) && $leaseError))) {
             return [
                 'ok' => false,
                 'message' => $activeError ?: $leaseError ?: 'Router pull failed.',
             ];
         }
 
-        foreach ($leases as $lease) {
-            $mac = strtoupper((string) ($lease['mac_address'] ?? ''));
-            if ($mac === '' || in_array($mac, $seenMacs, true)) {
-                continue;
-            }
+        $leasesByMac = collect($leases)
+            ->mapWithKeys(function ($lease) {
+                $mac = strtoupper((string) ($lease['mac_address'] ?? ''));
+                return $mac === '' ? [] : [$mac => $lease];
+            });
 
-            $users[] = [
-                'username' => null,
-                'mac_address' => $mac,
-                'ip_address' => $lease['ip_address'] ?? null,
-                'uptime' => '0s',
-                'bytes_in' => 0,
-                'bytes_out' => 0,
-                'device_type' => $lease['hostname'] ?: ($lease['device_type'] ?? 'DHCP Lease'),
-            ];
-            $seenMacs[] = $mac;
-        }
-
+        $rows = [];
         $now = now();
         $routerName = $router->name ?: $site->name;
         $hasSiteId = Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id');
+        $hasHostname = Schema::connection('tenant')->hasColumn('hotspot_users', 'hostname');
+        $hasVouchers = Schema::connection('tenant')->hasTable('vouchers');
+        $seenMacs = [];
 
         foreach ($users as $user) {
             $mac = strtoupper((string) ($user['mac_address'] ?? ''));
-            if ($mac === '') {
+            if ($mac === '' || isset($seenMacs[$mac])) {
                 continue;
             }
+            $seenMacs[$mac] = true;
+
+            $lease = $leasesByMac->get($mac, []);
 
             $username = $user['username'] ?: null;
-            $voucher = $username
+            $voucher = $username && $hasVouchers
                 ? DB::connection('tenant')->table('vouchers')->where('voucher_code', $username)->first()
                 : null;
 
-            $match = ['mac_address' => $mac];
-            if ($hasSiteId) {
-                $match['site_id'] = $site->id;
-            }
-
             $values = [
+                'mac_address' => $mac,
                 'ip_address' => $user['ip_address'] ?: null,
                 'username' => $username,
                 'device_type' => $user['device_type'] ?? 'HotSpot Client',
@@ -264,17 +256,36 @@ class ClientController extends Controller
             if ($hasSiteId) {
                 $values['site_id'] = $site->id;
             }
+            if ($hasHostname) {
+                $values['hostname'] = $lease['hostname'] ?? '';
+            }
+            if (empty($values['ip_address']) && !empty($lease['ip_address'])) {
+                $values['ip_address'] = $lease['ip_address'];
+            }
 
-            DB::connection('tenant')->table('hotspot_users')->updateOrInsert(
-                $match,
-                $values
-            );
+            $rows[] = $values;
         }
+
+        DB::connection('tenant')->transaction(function () use ($site, $routerName, $hasSiteId, $rows) {
+            $delete = DB::connection('tenant')->table('hotspot_users');
+
+            if ($hasSiteId) {
+                $delete->where('site_id', $site->id);
+            } elseif (Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+                $delete->where('router_name', $routerName);
+            }
+
+            $delete->delete();
+
+            if (!empty($rows)) {
+                DB::connection('tenant')->table('hotspot_users')->insert($rows);
+            }
+        });
 
         return [
             'ok' => true,
             'message' => 'Router clients refreshed.',
-            'count' => count($users),
+            'count' => count($rows),
         ];
     }
 

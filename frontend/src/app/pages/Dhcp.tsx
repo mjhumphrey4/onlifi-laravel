@@ -129,7 +129,7 @@ export function Dhcp() {
                   <tr key={lease.id || `${lease.mac_address}-${lease.ip_address}`} className="border-b border-border/70 last:border-0">
                     <td className="px-5 py-3 font-medium text-card-foreground">{lease.ip_address || '-'}</td>
                     <td className="px-5 py-3 font-mono text-xs">{lease.mac_address || '-'}</td>
-                    <td className="px-5 py-3">{lease.hostname || 'Unknown'}</td>
+                    <td className="px-5 py-3">{lease.hostname || ''}</td>
                     <td className="px-5 py-3 text-muted-foreground">{lease.server || '-'}</td>
                     <td className="px-5 py-3">
                       <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-xs text-emerald-600">

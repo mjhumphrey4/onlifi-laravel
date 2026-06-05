@@ -258,6 +258,8 @@ class SystemSettingController extends Controller
             'wireguard_server_public_key' => ['string', 'router', 'WireGuard server public key used in router peers', false],
             'wireguard_allowed_address' => ['string', 'router', 'WireGuard routes allowed through the server peer', false],
             'wireguard_client_dns' => ['string', 'router', 'Optional DNS server included in generated WireGuard configs', false],
+            'router_default_lan_cidr' => ['string', 'router', 'Default router LAN gateway/CIDR for provisioned hotspot clients', false],
+            'router_default_dhcp_pool' => ['string', 'router', 'Default DHCP pool range for provisioned hotspot clients', false],
             'smtp_host' => ['string', 'email', 'SMTP server hostname', false],
             'smtp_port' => ['integer', 'email', 'SMTP server port', false],
             'smtp_username' => ['string', 'email', 'SMTP authentication username', false],

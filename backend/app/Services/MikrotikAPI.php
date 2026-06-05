@@ -256,7 +256,7 @@ class MikrotikAPI {
                     'id' => $client['.id'] ?? '',
                     'mac_address' => $client['mac-address'] ?? '',
                     'ip_address' => $client['address'] ?? '',
-                    'hostname' => $client['host-name'] ?? 'Unknown',
+                    'hostname' => $client['host-name'] ?? '',
                     'last_seen' => $client['last-seen'] ?? '',
                     'status' => $client['status'] ?? '',
                     'server' => $client['server'] ?? '',

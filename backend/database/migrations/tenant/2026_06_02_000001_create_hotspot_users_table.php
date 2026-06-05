@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('mac_address', 32);
             $table->string('ip_address', 45)->nullable();
             $table->string('username', 100)->nullable();
+            $table->string('hostname', 100)->nullable();
             $table->string('device_type', 100)->nullable();
             $table->unsignedInteger('uptime_seconds')->default(0);
             $table->decimal('data_uploaded_mb', 12, 2)->default(0);

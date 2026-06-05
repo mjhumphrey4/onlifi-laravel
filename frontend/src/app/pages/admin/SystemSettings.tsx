@@ -159,6 +159,8 @@ export default function SystemSettings() {
       { key: 'wireguard_server_public_key', label: 'Server Public Key', type: 'string', description: 'Public key from /etc/wireguard/onlifi-server.pub' },
       { key: 'wireguard_allowed_address', label: 'Allowed Address Range', type: 'string', description: 'Routes allowed through the router peer, usually 10.10.1.0/24' },
       { key: 'wireguard_client_dns', label: 'Client DNS', type: 'string', description: 'Optional DNS pushed into generated WireGuard client configs' },
+      { key: 'router_default_lan_cidr', label: 'Default Client LAN CIDR', type: 'string', description: 'Provisioned router gateway/CIDR. Default: 192.168.15.1/19' },
+      { key: 'router_default_dhcp_pool', label: 'Default DHCP Pool', type: 'string', description: 'Client pool starts at 192.168.16.1, reserving 192.168.15.x for router/admin devices' },
     ],
     email: [
       { key: 'smtp_host', label: 'SMTP Host', type: 'string', description: 'SMTP server hostname' },
@@ -188,6 +190,8 @@ export default function SystemSettings() {
     wireguard_endpoint_port: '51820',
     wireguard_allowed_address: '10.10.1.0/24',
     wireguard_client_dns: '',
+    router_default_lan_cidr: '192.168.15.1/19',
+    router_default_dhcp_pool: '192.168.16.1-192.168.31.254',
   };
 
   const currentSettings = defaultSettings[activeGroup] || [];

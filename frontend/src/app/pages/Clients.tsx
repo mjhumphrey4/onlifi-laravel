@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, RefreshCw, Wifi, HardDrive, Clock, TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { Users, RefreshCw, Wifi, HardDrive, Clock, TrendingUp, TrendingDown, Activity, User } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
 import { API_BASE, collectRouterTelemetry, getRouters } from '../utils/api';
 
@@ -8,6 +8,7 @@ interface Client {
   mac_address: string;
   ip_address: string;
   username: string | null;
+  hostname: string | null;
   device_type: string | null;
   uptime_seconds: number;
   data_uploaded_mb: number;
@@ -30,6 +31,7 @@ function normalizeClient(client: any): Client {
   return {
     ...client,
     id: Number(client.id || 0),
+    hostname: client.hostname ?? '',
     uptime_seconds: toNumber(client.uptime_seconds),
     data_uploaded_mb: toNumber(client.data_uploaded_mb),
     data_downloaded_mb: toNumber(client.data_downloaded_mb),
@@ -38,6 +40,11 @@ function normalizeClient(client: any): Client {
       ? null
       : toNumber(client.signal_strength),
   };
+}
+
+function displayVoucher(client: Client): string {
+  const voucher = String(client.voucher_code || client.username || '').trim();
+  return voucher.toLowerCase() === 'default' ? '' : voucher;
 }
 
 export function Clients() {
@@ -206,7 +213,7 @@ export function Clients() {
             <div>
               <p className="text-sm text-muted-foreground">With Vouchers</p>
               <p className="text-2xl font-bold text-card-foreground">
-                {clients.filter(c => c.voucher_code).length}
+                {clients.filter(c => displayVoucher(c)).length}
               </p>
             </div>
             <HardDrive className="w-8 h-8 text-emerald-500" />
@@ -267,15 +274,12 @@ export function Clients() {
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                          <Wifi className="w-4 h-4 text-primary" />
+                          <User className="w-4 h-4 text-primary" />
                         </div>
                         <div>
                           <p className="text-sm font-medium text-card-foreground">
-                            {client.device_type || 'Unknown Device'}
+                            {client.hostname || ''}
                           </p>
-                          {client.username && (
-                            <p className="text-xs text-muted-foreground">{client.username}</p>
-                          )}
                         </div>
                       </div>
                     </td>
@@ -286,15 +290,12 @@ export function Clients() {
                       {client.mac_address}
                     </td>
                     <td className="py-3 px-4">
-                      {client.voucher_code ? (
+                      {displayVoucher(client) ? (
                         <div>
-                          <p className="text-sm font-medium text-primary">{client.voucher_code}</p>
-                          {client.profile_name && (
-                            <p className="text-xs text-muted-foreground">{client.profile_name}</p>
-                          )}
+                          <p className="text-sm font-medium text-primary">{displayVoucher(client)}</p>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </td>
                     <td className="py-3 px-4">

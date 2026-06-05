@@ -451,10 +451,10 @@ class NasController extends Controller
         $serverIp = $this->radiusServerIp();
         $authPort = $this->radiusAuthPort();
         $acctPort = $this->radiusAcctPort();
-        $lanAddress = (string) SystemSetting::get('router_default_lan_cidr', '10.10.0.1/24');
+        $lanAddress = (string) SystemSetting::get('router_default_lan_cidr', '192.168.15.1/19');
         $lanGateway = explode('/', $lanAddress)[0];
         $dhcpNetwork = $this->dhcpNetworkFromCidr($lanAddress);
-        $poolRange = (string) SystemSetting::get('router_default_dhcp_pool', '10.10.0.10-10.10.0.254');
+        $poolRange = (string) SystemSetting::get('router_default_dhcp_pool', '192.168.16.1-192.168.31.254');
         $dnsServers = (string) SystemSetting::get('router_default_dns_servers', '1.1.1.1,8.8.8.8');
         $hotspotDns = "{$siteSlug}.wifi";
         $remoteAdminUser = (string) SystemSetting::get('router_admin_username', 'onlifi');
@@ -894,16 +894,12 @@ RSC;
     {
         [$ip, $prefix] = array_pad(explode('/', $cidr, 2), 2, '24');
 
-        if ($prefix !== '24') {
-            return $cidr;
-        }
-
         $parts = explode('.', $ip);
         if (count($parts) !== 4) {
             return $cidr;
         }
 
-        return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0/24";
+        return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0/{$prefix}";
     }
 
     private function rscString(?string $value): string
