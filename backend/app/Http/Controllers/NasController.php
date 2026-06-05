@@ -405,7 +405,14 @@ class NasController extends Controller
 
     private function manualPaymentBaseUrl(): string
     {
-        return rtrim((string) SystemSetting::get('manual_payment_base_url', config('app.manual_payment_base_url')), '/');
+        $baseUrl = trim((string) SystemSetting::get('manual_payment_base_url', config('app.manual_payment_base_url')));
+        $host = parse_url($baseUrl, PHP_URL_HOST);
+
+        if (!$host || in_array(strtolower($host), ['pay.onlustech.com', 'bitetechsystems.com'], true)) {
+            $baseUrl = config('app.manual_payment_base_url', 'https://pay.onlifi.net');
+        }
+
+        return rtrim($baseUrl, '/');
     }
 
     private function fetchModeForUrl(string $url): string

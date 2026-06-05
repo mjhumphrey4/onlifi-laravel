@@ -23,7 +23,7 @@ Adjust paths and domains where needed.
 ```bash
 sudo apt update
 sudo apt install -y \
-  git curl unzip zip redis-server mysql-server mysql-client nginx certbot python3-certbot-nginx wireguard-tools \
+  git curl unzip zip redis-server mysql-server mysql-client nginx certbot python3-certbot-nginx wireguard-tools supervisor \
   php8.3-cli php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl \
   php8.3-zip php8.3-bcmath php8.3-gd php8.3-intl php8.3-redis \
   freeradius freeradius-mysql freeradius-utils libdbi-perl libdbd-mysql-perl
@@ -194,7 +194,7 @@ Laravel does not need `php artisan serve` in production. The backend runs throug
 - Nginx receives `https://api.onlifi.net`.
 - Nginx serves `/var/www/onlifi/backend/public`.
 - PHP-FPM executes Laravel PHP requests.
-- Queue and scheduler run as separate systemd services.
+- Queue and scheduler run as separate Supervisor programs.
 
 Create the API host:
 
@@ -479,89 +479,74 @@ sudo systemctl restart php8.3-fpm
 
 For SMTP, do not set `MAIL_SCHEME=tls`. Laravel expects `smtp` for port `587` or `smtps` for port `465`.
 
-## 10. Queue Worker Service
+## 10. Queue Worker Supervisor Program
 
-The app uses database queues by default. Create a systemd worker:
+The app uses database queues by default. Create a Supervisor worker:
 
 ```bash
-sudo nano /etc/systemd/system/onlifi-worker.service
+sudo nano /etc/supervisor/conf.d/onlifi-worker.conf
 ```
 
 ```ini
-[Unit]
-Description=OnLiFi Laravel Queue Worker
-After=network.target mysql.service redis-server.service
-
-[Service]
-User=www-data
-Group=www-data
-Restart=always
-RestartSec=5
-WorkingDirectory=/var/www/onlifi/backend
-ExecStart=/usr/bin/php /var/www/onlifi/backend/artisan queue:work database --sleep=3 --tries=3 --timeout=120
-StandardOutput=append:/var/www/onlifi/backend/storage/logs/worker.log
-StandardError=append:/var/www/onlifi/backend/storage/logs/worker-error.log
-KillSignal=SIGTERM
-TimeoutStopSec=3600
-
-[Install]
-WantedBy=multi-user.target
+[program:onlifi-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=/usr/bin/php /var/www/onlifi/backend/artisan queue:work database --sleep=3 --tries=3 --timeout=120
+directory=/var/www/onlifi/backend
+user=www-data
+numprocs=1
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+redirect_stderr=true
+stdout_logfile=/var/www/onlifi/backend/storage/logs/worker.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+stopwaitsecs=3600
 ```
 
 Enable it:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now onlifi-worker
-sudo systemctl status onlifi-worker
+sudo systemctl enable --now supervisor
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start onlifi-worker:*
+sudo supervisorctl status onlifi-worker:*
 ```
 
-## 11. Laravel Scheduler Service
+## 11. Laravel Scheduler Supervisor Program
 
-Use a systemd timer instead of manual cron:
+Use a long-running Supervisor program that calls Laravel's scheduler every minute:
 
 ```bash
-sudo nano /etc/systemd/system/onlifi-scheduler.service
+sudo nano /etc/supervisor/conf.d/onlifi-scheduler.conf
 ```
 
 ```ini
-[Unit]
-Description=Run OnLiFi Laravel Scheduler
-
-[Service]
-Type=oneshot
-User=www-data
-Group=www-data
-WorkingDirectory=/var/www/onlifi/backend
-ExecStart=/usr/bin/php /var/www/onlifi/backend/artisan schedule:run
-```
-
-Create the timer:
-
-```bash
-sudo nano /etc/systemd/system/onlifi-scheduler.timer
-```
-
-```ini
-[Unit]
-Description=Run OnLiFi Laravel Scheduler Every Minute
-
-[Timer]
-OnBootSec=60
-OnUnitActiveSec=60
-AccuracySec=1
-Unit=onlifi-scheduler.service
-
-[Install]
-WantedBy=timers.target
+[program:onlifi-scheduler]
+process_name=%(program_name)s
+command=/bin/bash -lc 'while true; do /usr/bin/php /var/www/onlifi/backend/artisan schedule:run --verbose --no-interaction; sleep 60; done'
+directory=/var/www/onlifi/backend
+user=www-data
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+redirect_stderr=true
+stdout_logfile=/var/www/onlifi/backend/storage/logs/scheduler.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+stopwaitsecs=60
 ```
 
 Enable it:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now onlifi-scheduler.timer
-sudo systemctl list-timers | grep onlifi
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start onlifi-scheduler
+sudo supervisorctl status onlifi-scheduler
 ```
 
 The scheduler is required for recurring cleanup, accounting, expiry, and any queued maintenance commands that are wired into Laravel scheduling.
@@ -765,8 +750,8 @@ sudo chown -R www-data:www-data storage bootstrap/cache
 sudo chmod -R ug+rwX storage bootstrap/cache
 sudo systemctl restart php8.3-fpm
 sudo systemctl reload nginx
-sudo systemctl restart onlifi-worker
-sudo systemctl restart onlifi-scheduler.timer
+sudo supervisorctl restart onlifi-worker:*
+sudo supervisorctl restart onlifi-scheduler
 sudo systemctl restart freeradius
 ```
 
@@ -802,15 +787,15 @@ redis-cli ping
 Queue:
 
 ```bash
-sudo systemctl status onlifi-worker
+sudo supervisorctl status onlifi-worker:*
 tail -n 100 /var/www/onlifi/backend/storage/logs/worker.log
 ```
 
 Scheduler:
 
 ```bash
-sudo systemctl status onlifi-scheduler.timer
-sudo systemctl list-timers | grep onlifi
+sudo supervisorctl status onlifi-scheduler
+tail -n 100 /var/www/onlifi/backend/storage/logs/scheduler.log
 cd /var/www/onlifi/backend
 php artisan onlifi:router-snapshots:sync
 ```
@@ -941,8 +926,8 @@ https://pay.onlifi.net/{site-name}/look/voucher-lookup.php
 - WireGuard `wg0` is running and listening on UDP `51820`.
 - UDP `51820` is reachable from routers.
 - `wireguard_endpoint_host=89.167.42.53`, `wireguard_endpoint_port=51820`, and `wireguard_server_public_key` are set in admin system settings.
-- `onlifi-scheduler.timer` running under systemd.
-- `onlifi-worker` running under systemd.
+- `onlifi-scheduler` running under Supervisor.
+- `onlifi-worker:*` running under Supervisor.
 - Frontend build completed.
 - Nginx points to the correct API public path and frontend build path.
 
@@ -963,8 +948,8 @@ php artisan route:cache
 php artisan view:cache
 sudo systemctl restart php8.3-fpm
 sudo systemctl reload nginx
-sudo systemctl restart onlifi-worker
-sudo systemctl restart onlifi-scheduler.timer
+sudo supervisorctl restart onlifi-worker:*
+sudo supervisorctl restart onlifi-scheduler
 
 cd ../frontend
 npm ci

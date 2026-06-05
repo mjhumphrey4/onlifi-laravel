@@ -529,16 +529,8 @@ HTML;
 
         $legacyReplacements = [
             "const CURRENT_ORIGIN_SITE = 'STK WIFI';" => 'const CURRENT_ORIGIN_SITE = ' . json_encode($siteName) . ';',
+            "const CURRENT_ORIGIN_SITE = 'remmy';" => 'const CURRENT_ORIGIN_SITE = ' . json_encode($siteName) . ';',
             'src="/md5.js"' => 'src="md5.js"',
-            'https://pay.onlustech.com/yo/initiate.php' => $config['manual_payment']['initiate_url'],
-            'https://pay.onlustech.com/yo/initiate.php' => $config['manual_payment']['initiate_url'],
-            'https://bitetechsystems.com/remmy/initiate.php' => $config['manual_payment']['initiate_url'],
-            'https://pay.onlustech.com/yo/check_status.php' => $config['manual_payment']['check_status_url'],
-            'https://pay.onlustech.com/yo/check_status.php' => $config['manual_payment']['check_status_url'],
-            'https://bitetechsystems.com/remmy/check_status.php' => $config['manual_payment']['check_status_url'],
-            'https://pay.onlustech.com/yo/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
-            'https://pay.onlustech.com/yo/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
-            'https://pay.onlustech.com/remmy/look/voucher-lookup.php' => $config['manual_payment']['voucher_lookup_url'],
             '<h1>STK WIFI POINT</h1>' => '<h1>' . htmlspecialchars($displayName, ENT_QUOTES) . '</h1>',
             '<p class="subtitle">Faster, Affordable Internet with a Smile</p>' => '<p class="subtitle">' . htmlspecialchars((string) $design['subtitle'], ENT_QUOTES) . '</p>',
             'Need help? Contact: <strong>0788770102 or 0704169987</strong>' => 'Need help? Contact: <strong>' . htmlspecialchars((string) $design['support_contact'], ENT_QUOTES) . '</strong>',
@@ -549,6 +541,7 @@ HTML;
         ];
 
         $html = str_replace(array_keys($legacyReplacements), array_values($legacyReplacements), $html);
+        $html = $this->normalizeLegacyPaymentUrls($html, $config['manual_payment']);
 
         if ($marqueeText !== '') {
             $html = preg_replace(
@@ -951,8 +944,36 @@ CSS;
 
     private function manualPaymentUrl(string $siteName, string $script = 'initiate.php'): string
     {
-        return rtrim((string) SystemSetting::get('manual_payment_base_url', config('app.manual_payment_base_url')), '/')
+        return $this->manualPaymentBaseUrl()
             . '/' . $this->paymentSiteSlug($siteName) . '/' . ltrim($script, '/');
+    }
+
+    private function manualPaymentBaseUrl(): string
+    {
+        $baseUrl = trim((string) SystemSetting::get('manual_payment_base_url', config('app.manual_payment_base_url')));
+        $host = parse_url($baseUrl, PHP_URL_HOST);
+
+        if (!$host || in_array(strtolower($host), ['pay.onlustech.com', 'bitetechsystems.com'], true)) {
+            $baseUrl = config('app.manual_payment_base_url', 'https://pay.onlifi.net');
+        }
+
+        return rtrim($baseUrl, '/');
+    }
+
+    private function normalizeLegacyPaymentUrls(string $html, array $manualPayment): string
+    {
+        $legacyBasePattern = 'https?://(?:pay\.onlustech\.com|bitetechsystems\.com)/(?:yo|remmy)/';
+        $replacements = [
+            'initiate\.php' => $manualPayment['initiate_url'],
+            'check_status\.php' => $manualPayment['check_status_url'],
+            'look/voucher-lookup\.php' => $manualPayment['voucher_lookup_url'],
+        ];
+
+        foreach ($replacements as $scriptPattern => $replacement) {
+            $html = preg_replace('#' . $legacyBasePattern . $scriptPattern . '#i', $replacement, $html) ?? $html;
+        }
+
+        return $html;
     }
 
     private function paymentSiteSlug(string $siteName): string
