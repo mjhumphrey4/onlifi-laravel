@@ -413,6 +413,25 @@ class NasController extends Controller
         return str_starts_with(strtolower($url), 'https://') ? 'https' : 'http';
     }
 
+    private function routerWireGuardAddress(string $privateAddress, string $allowedAddress): string
+    {
+        $privateAddress = trim($privateAddress);
+
+        if ($privateAddress === '' || str_contains($privateAddress, '/')) {
+            return $privateAddress;
+        }
+
+        $prefix = '32';
+        if (preg_match('#/(\d{1,2})$#', trim($allowedAddress), $matches)) {
+            $candidate = (int) $matches[1];
+            if ($candidate >= 0 && $candidate <= 32) {
+                $prefix = (string) $candidate;
+            }
+        }
+
+        return "{$privateAddress}/{$prefix}";
+    }
+
     private function radiusServerIp(): string
     {
         return (string) SystemSetting::get('radius_server_ip', config('radius.server_ip', '129.168.0.42'));
@@ -467,10 +486,7 @@ class NasController extends Controller
         $wireguardPrivateKey = (string) ($site?->wireguard_private_key ?: '');
         $vpnUsername = $site?->vpn_username ?: $siteSlug;
         $vpnPassword = $site?->vpn_password ?: '';
-        $vpnPrivateAddress = trim((string) ($site?->vpn_private_ip ?: ''));
-        if ($vpnPrivateAddress !== '' && !str_contains($vpnPrivateAddress, '/')) {
-            $vpnPrivateAddress .= '/32';
-        }
+        $vpnPrivateAddress = $this->routerWireGuardAddress((string) ($site?->vpn_private_ip ?: ''), $wireguardAllowedAddress);
         $appHost = parse_url($apiBaseUrl, PHP_URL_HOST) ?: $serverIp;
         $paymentHost = parse_url($this->manualPaymentBaseUrl(), PHP_URL_HOST) ?: 'pay.onlifi.net';
         $hotspotBaseUrl = $apiBaseUrl . "/api/captive/hotspot/{$nas->provisioning_token}";
@@ -646,6 +662,13 @@ class NasController extends Controller
       /interface wireguard peers add interface=\$vpnClientName public-key=\$wireguardServerPublicKey endpoint-address=\$vpnHost endpoint-port=\$vpnPort allowed-address=\$wireguardAllowedAddress persistent-keepalive=25s comment="OnLiFi WireGuard server"
     } else={
       /interface wireguard peers set [find comment="OnLiFi WireGuard server"] interface=\$vpnClientName public-key=\$wireguardServerPublicKey endpoint-address=\$vpnHost endpoint-port=\$vpnPort allowed-address=\$wireguardAllowedAddress persistent-keepalive=25s disabled=no
+    }
+    :if (([:len \$wireguardAllowedAddress] > 0) and (\$wireguardAllowedAddress != "0.0.0.0/0")) do={
+      :if ([:len [/ip route find comment="OnLiFi WireGuard server route"]] = 0) do={
+        /ip route add dst-address=\$wireguardAllowedAddress gateway=\$vpnClientName distance=1 comment="OnLiFi WireGuard server route"
+      } else={
+        /ip route set [find comment="OnLiFi WireGuard server route"] dst-address=\$wireguardAllowedAddress gateway=\$vpnClientName distance=1 disabled=no
+      }
     }
   } else={
     :log warning "OnLiFi WireGuard server public key missing; skipping WireGuard peer setup"
