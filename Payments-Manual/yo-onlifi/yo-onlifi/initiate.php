@@ -4,18 +4,10 @@
 // Set timezone to East Africa Time (EAT) - UTC+3
 date_default_timezone_set('Africa/Nairobi');
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
-
-// Handle preflight requests
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
-}
-
 require_once 'config.php';
 require './YoAPI.php'; // Path to the YoAPI class file
+
+handleCorsPreflight();
 
 // Set headers for JSON response
 header('Content-Type: application/json');
@@ -23,13 +15,11 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0); // Set to 1 only for debugging
 
 // Read input safely
-$input = file_get_contents('php://input');
-$data = json_decode($input, true);
-
-if (json_last_error() !== JSON_ERROR_NONE) {
-  $jsonError = json_last_error_msg();
-  error_log("JSON decode error in initiate.php: $jsonError - Input: $input");
-  echo json_encode(['error' => "Invalid JSON input: $jsonError"]);
+try {
+  $data = readRequestData();
+} catch (InvalidArgumentException $e) {
+  error_log("Request decode error in initiate.php: " . $e->getMessage());
+  echo json_encode(['error' => $e->getMessage()]);
   exit;
 }
 

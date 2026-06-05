@@ -4,21 +4,14 @@
 // Set timezone to East Africa Time (EAT) - UTC+3
 date_default_timezone_set('Africa/Nairobi');
 
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit();
-}
-
 require_once 'config.php';
 require_once 'logger.php'; // Include logger
 require './YoAPI.php';
 require_once 'payment_fallback_helper.php';
 require_once 'voucher_helper.php';
 require_once 'sms_helper.php';
+
+handleCorsPreflight();
 
 header('Content-Type: application/json');
 error_reporting(E_ALL);

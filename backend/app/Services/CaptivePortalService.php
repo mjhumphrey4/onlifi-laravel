@@ -542,6 +542,7 @@ HTML;
 
         $html = str_replace(array_keys($legacyReplacements), array_values($legacyReplacements), $html);
         $html = $this->normalizeLegacyPaymentUrls($html, $config['manual_payment']);
+        $html = $this->avoidManualPaymentPreflight($html);
 
         if ($marqueeText !== '') {
             $html = preg_replace(
@@ -974,6 +975,33 @@ CSS;
         }
 
         return $html;
+    }
+
+    private function avoidManualPaymentPreflight(string $html): string
+    {
+        $html = str_replace(
+            [
+                "headers: { 'Content-Type': 'application/json' },",
+                'headers: { "Content-Type": "application/json" },',
+            ],
+            [
+                "headers: { 'Content-Type': 'application/x-www-form-urlencoded' },",
+                'headers: { "Content-Type": "application/x-www-form-urlencoded" },',
+            ],
+            $html
+        );
+
+        return str_replace(
+            [
+                'body: JSON.stringify(paymentData)',
+                'body: JSON.stringify(data)',
+            ],
+            [
+                'body: new URLSearchParams(paymentData).toString()',
+                'body: new URLSearchParams(data).toString()',
+            ],
+            $html
+        );
     }
 
     private function paymentSiteSlug(string $siteName): string

@@ -21,9 +21,63 @@ define('YOAPI_PASSWORD', 'BUid-ZAmO-b2M0-vF6n-CzBK-PBaL-8qJK-6SOf'); // Replace 
 // Use 'sandbox' for testing, 'production' for live
 define('YOAPI_MODE', 'production'); // Change to 'production' when ready to go live
 
-// Your site URL (change to your actual domain)
-// Use HTTPS in production
-define('SITE_URL', 'https://bitetechsystems.com/yo/'); // Replace with your actual site URL
+// Public URL for callbacks. This follows the deployed folder, e.g.
+// https://pay.onlifi.net/ranken/ when the project is hosted at /ranken.
+define('SITE_URL', currentSiteUrl());
+
+function currentSiteUrl(): string {
+  $host = $_SERVER['HTTP_HOST'] ?? 'pay.onlifi.net';
+  $script = $_SERVER['SCRIPT_NAME'] ?? '/ranken/initiate.php';
+  $directory = rtrim(str_replace('\\', '/', dirname($script)), '/');
+
+  if ($directory === '' || $directory === '.') {
+    $directory = '';
+  }
+
+  return 'https://' . $host . $directory . '/';
+}
+
+function sendCorsHeaders(): void {
+  $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+  header('Access-Control-Allow-Origin: ' . ($origin ?: '*'));
+  header('Vary: Origin');
+  header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+  header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  header('Access-Control-Max-Age: 86400');
+}
+
+function handleCorsPreflight(): void {
+  sendCorsHeaders();
+
+  if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+  }
+}
+
+function readRequestData(): array {
+  $contentType = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+  $input = file_get_contents('php://input') ?: '';
+
+  if (str_contains($contentType, 'application/json')) {
+    $data = json_decode($input, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      throw new InvalidArgumentException('Invalid JSON input: ' . json_last_error_msg());
+    }
+
+    return is_array($data) ? $data : [];
+  }
+
+  if (!empty($_POST)) {
+    return $_POST;
+  }
+
+  $data = [];
+  parse_str($input, $data);
+
+  return is_array($data) ? $data : [];
+}
 
 // Database connection function
 function getDB() {
@@ -38,6 +92,8 @@ function getDB() {
         PDO::ATTR_EMULATE_PREPARES => false
       ]
     );
+    ensureManualPaymentSchema($pdo);
+
     return $pdo;
   } catch (PDOException $e) {
     error_log("Database connection failed: " . $e->getMessage());
@@ -48,13 +104,99 @@ function getDB() {
   }
 }
 
+function isValidIdentifier(string $identifier): bool {
+  return (bool) preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier);
+}
+
 function columnExists(PDO $pdo, string $table, string $column): bool {
-  $stmt = $pdo->prepare("SHOW COLUMNS FROM `$table` LIKE ?");
-  $stmt->execute([$column]);
+  if (!isValidIdentifier($table) || !isValidIdentifier($column)) {
+    return false;
+  }
+
+  $stmt = $pdo->prepare("
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = ?
+      AND column_name = ?
+    LIMIT 1
+  ");
+  $stmt->execute([$table, $column]);
   return (bool) $stmt->fetch();
 }
 
+function tableExists(PDO $pdo, string $table): bool {
+  if (!isValidIdentifier($table)) {
+    return false;
+  }
+
+  $stmt = $pdo->prepare("
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = DATABASE()
+      AND table_name = ?
+    LIMIT 1
+  ");
+  $stmt->execute([$table]);
+
+  return (bool) $stmt->fetch();
+}
+
+function ensureManualPaymentSchema(PDO $pdo): void {
+  $pdo->exec("
+    CREATE TABLE IF NOT EXISTS transactions (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      external_ref VARCHAR(100) NOT NULL,
+      transaction_ref VARCHAR(100) NULL,
+      msisdn VARCHAR(20) NOT NULL,
+      amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+      status VARCHAR(32) NOT NULL DEFAULT 'pending',
+      status_message VARCHAR(255) NULL,
+      origin_site VARCHAR(100) NULL,
+      client_mac VARCHAR(64) NULL,
+      email VARCHAR(190) NULL,
+      voucher_type VARCHAR(100) NULL,
+      voucher_code VARCHAR(64) NULL,
+      origin_url TEXT NULL,
+      network_ref VARCHAR(100) NULL,
+      site_id BIGINT UNSIGNED NULL,
+      created_at TIMESTAMP NULL,
+      updated_at TIMESTAMP NULL,
+      UNIQUE KEY transactions_external_ref_unique (external_ref),
+      KEY transactions_status_created_at_index (status, created_at),
+      KEY transactions_transaction_ref_index (transaction_ref)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  ");
+
+  $columns = [
+    'external_ref' => 'VARCHAR(100) NULL',
+    'transaction_ref' => 'VARCHAR(100) NULL',
+    'msisdn' => 'VARCHAR(20) NULL',
+    'amount' => 'DECIMAL(10,2) NOT NULL DEFAULT 0',
+    'status' => "VARCHAR(32) NOT NULL DEFAULT 'pending'",
+    'status_message' => 'VARCHAR(255) NULL',
+    'origin_site' => 'VARCHAR(100) NULL',
+    'client_mac' => 'VARCHAR(64) NULL',
+    'email' => 'VARCHAR(190) NULL',
+    'voucher_type' => 'VARCHAR(100) NULL',
+    'voucher_code' => 'VARCHAR(64) NULL',
+    'origin_url' => 'TEXT NULL',
+    'network_ref' => 'VARCHAR(100) NULL',
+    'site_id' => 'BIGINT UNSIGNED NULL',
+    'created_at' => 'TIMESTAMP NULL',
+    'updated_at' => 'TIMESTAMP NULL',
+  ];
+
+  foreach ($columns as $column => $definition) {
+    if (!columnExists($pdo, 'transactions', $column)) {
+      $pdo->exec("ALTER TABLE transactions ADD COLUMN `$column` $definition");
+    }
+  }
+}
+
 function insertTransaction(PDO $pdo, array $data): void {
+  ensureManualPaymentSchema($pdo);
+
   $columns = [];
   $placeholders = [];
   $values = [];
@@ -65,6 +207,10 @@ function insertTransaction(PDO $pdo, array $data): void {
       $placeholders[] = '?';
       $values[] = $value;
     }
+  }
+
+  if (!$columns) {
+    throw new RuntimeException('The transactions table has none of the expected manual payment columns.');
   }
 
   $stmt = $pdo->prepare("INSERT INTO transactions (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $placeholders) . ")");
@@ -92,6 +238,10 @@ function updateTransaction(PDO $pdo, string $externalRef, array $data): void {
 }
 
 function fetchTransactionBy(PDO $pdo, string $column, string $value): ?array {
+  if (!isValidIdentifier($column) || !columnExists($pdo, 'transactions', $column)) {
+    return null;
+  }
+
   $stmt = $pdo->prepare("SELECT * FROM transactions WHERE `$column` = ? LIMIT 1");
   $stmt->execute([$value]);
   $transaction = $stmt->fetch();

@@ -1531,8 +1531,8 @@
             // Call backend initiate.php
             fetch('http://pay.onlustech.com/yo/initiate.php', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(paymentData)
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams(paymentData).toString()
             })
             //.then(response => response.json())
             .then(response => {

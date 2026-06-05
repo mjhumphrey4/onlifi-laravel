@@ -184,6 +184,10 @@ function packageDefaults(string $voucherType, float $amount): array {
 }
 
 function insertRow(PDO $pdo, string $table, array $data): void {
+    if (!tableExists($pdo, $table)) {
+        throw new Exception("Required table `$table` does not exist.");
+    }
+
     $columns = [];
     $marks = [];
     $values = [];
@@ -194,6 +198,10 @@ function insertRow(PDO $pdo, string $table, array $data): void {
             $marks[] = '?';
             $values[] = $value;
         }
+    }
+
+    if (!$columns) {
+        throw new Exception("Table `$table` has none of the expected columns.");
     }
 
     $stmt = $pdo->prepare("INSERT INTO `$table` (" . implode(', ', $columns) . ") VALUES (" . implode(', ', $marks) . ")");
