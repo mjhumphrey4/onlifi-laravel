@@ -79,6 +79,20 @@ function readRequestData(): array {
   return is_array($data) ? $data : [];
 }
 
+function normalizeClientMac($value): ?string {
+  $value = trim((string) $value);
+
+  if (preg_match('/([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}/', $value, $matches)) {
+    return strtoupper(str_replace('-', ':', $matches[0]));
+  }
+
+  if ($value === '' || strpos($value, '$(') !== false) {
+    return null;
+  }
+
+  return substr($value, 0, 17);
+}
+
 // Database connection function
 function getDB() {
   try {
@@ -113,16 +127,9 @@ function columnExists(PDO $pdo, string $table, string $column): bool {
     return false;
   }
 
-  $stmt = $pdo->prepare("
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = DATABASE()
-      AND table_name = ?
-      AND column_name = ?
-    LIMIT 1
-  ");
-  $stmt->execute([$table, $column]);
-  return (bool) $stmt->fetch();
+  $columns = tableColumns($pdo, $table);
+
+  return isset($columns[$column]);
 }
 
 function tableExists(PDO $pdo, string $table): bool {
@@ -130,19 +137,45 @@ function tableExists(PDO $pdo, string $table): bool {
     return false;
   }
 
-  $stmt = $pdo->prepare("
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = DATABASE()
-      AND table_name = ?
-    LIMIT 1
-  ");
-  $stmt->execute([$table]);
+  return !empty(tableColumns($pdo, $table));
+}
 
-  return (bool) $stmt->fetch();
+function tableColumns(PDO $pdo, string $table): array {
+  static $cache = [];
+
+  if (!isValidIdentifier($table)) {
+    return [];
+  }
+
+  $key = spl_object_hash($pdo) . ':' . $table;
+
+  if (array_key_exists($key, $cache)) {
+    return $cache[$key];
+  }
+
+  try {
+    $stmt = $pdo->query("SHOW COLUMNS FROM `$table`");
+    $columns = [];
+
+    foreach ($stmt->fetchAll() as $column) {
+      $columns[$column['Field']] = $column;
+    }
+
+    $cache[$key] = $columns;
+  } catch (PDOException $e) {
+    $cache[$key] = [];
+  }
+
+  return $cache[$key];
 }
 
 function ensureManualPaymentSchema(PDO $pdo): void {
+  static $checked = false;
+
+  if ($checked) {
+    return;
+  }
+
   $pdo->exec("
     CREATE TABLE IF NOT EXISTS transactions (
       id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -192,6 +225,15 @@ function ensureManualPaymentSchema(PDO $pdo): void {
       $pdo->exec("ALTER TABLE transactions ADD COLUMN `$column` $definition");
     }
   }
+
+  try {
+    $pdo->exec("ALTER TABLE transactions MODIFY client_mac VARCHAR(64) NULL");
+  } catch (PDOException $e) {
+    // If the DB user cannot alter existing Laravel tables, normalizeClientMac()
+    // still keeps inserted values within the original 17-character column.
+  }
+
+  $checked = true;
 }
 
 function insertTransaction(PDO $pdo, array $data): void {

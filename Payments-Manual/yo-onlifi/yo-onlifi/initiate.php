@@ -36,7 +36,7 @@ if (!isset($data['amount']) || !isset($data['msisdn']) || !isset($data['origin_s
 $amount = (float) $data['amount'];
 $msisdn = $data['msisdn'];
 $originSite = trim($data['origin_site']); // Get the origin site ID from the frontend
-$clientMac = $data['client_mac']; // Get client MAC
+$clientMac = normalizeClientMac($data['client_mac']); // Store only a real MAC-sized value
 $email = $data['email'] ?? null; // Get email (optional)
 $voucherType = $data['voucher_type']; // Get voucher type
 $originUrl = $data['origin_url']; // Get origin URL
