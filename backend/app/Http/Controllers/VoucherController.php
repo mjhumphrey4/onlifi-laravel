@@ -6,10 +6,12 @@ use App\Models\Voucher;
 use App\Models\VoucherGroup;
 use App\Models\VoucherTemplate;
 use App\Models\VoucherType;
+use App\Services\FreeRadiusService;
 use App\Services\VoucherService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
@@ -161,6 +163,280 @@ class VoucherController extends Controller
                 'message' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function import(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'file' => 'required|file|mimes:pdf|max:10240',
+            'site' => 'nullable|string|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Upload a valid PDF voucher file.',
+                'errors' => $validator->errors()->all(),
+            ], 422);
+        }
+
+        $site = $this->resolveVoucherSite($request);
+        if (!$site) {
+            return response()->json([
+                'message' => 'Select a site before importing vouchers.',
+                'errors' => ['No active site selected.'],
+            ], 422);
+        }
+
+        foreach (['voucher_groups', 'vouchers'] as $table) {
+            if (!Schema::connection('tenant')->hasTable($table)) {
+                return response()->json([
+                    'message' => "The {$table} table is missing. Run tenant migrations first.",
+                    'errors' => ["Missing tenant table: {$table}."],
+                ], 500);
+            }
+        }
+
+        $file = $request->file('file');
+        $text = $this->extractVoucherPdfText($file->getRealPath());
+        $codes = $this->extractVoucherCodes($text);
+        $errors = [];
+
+        if (empty($codes)) {
+            return response()->json([
+                'imported' => 0,
+                'skipped' => 0,
+                'type_detected' => 'unknown',
+                'errors' => ['No voucher codes were found in the PDF. Install poppler-utils/pdftotext on the server if this PDF text is compressed.'],
+            ], 422);
+        }
+
+        $package = $this->detectImportedVoucherPackage($text . ' ' . $file->getClientOriginalName(), $site);
+        $existing = Voucher::query()
+            ->whereIn('voucher_code', $codes)
+            ->pluck('voucher_code')
+            ->map(fn ($code) => strtoupper((string) $code))
+            ->all();
+        $existingSet = array_fill_keys($existing, true);
+        $newCodes = [];
+
+        foreach ($codes as $code) {
+            if (isset($existingSet[$code])) {
+                $errors[] = "Skipped duplicate {$code}";
+                continue;
+            }
+            $newCodes[] = $code;
+        }
+
+        if (empty($newCodes)) {
+            return response()->json([
+                'imported' => 0,
+                'skipped' => count($codes),
+                'type_detected' => $package['key'],
+                'errors' => array_slice($errors, 0, 20),
+            ]);
+        }
+
+        $now = now();
+        $groupData = [
+            'group_name' => 'Imported ' . $package['label'] . ' ' . $now->format('Y-m-d H:i'),
+            'description' => 'Imported from ' . $file->getClientOriginalName(),
+            'profile_name' => $package['profile_name'],
+            'validity_hours' => $package['validity_hours'],
+            'validity_minutes' => $package['validity_minutes'],
+            'data_limit_mb' => null,
+            'speed_limit_kbps' => null,
+            'price' => $package['price'],
+            'site_id' => $site->id,
+            'created_by' => 'import',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+        $groupData = SiteScope::tenantCompatColumns('voucher_groups', $groupData);
+        if (!Schema::connection('tenant')->hasColumn('voucher_groups', 'site_id')) {
+            unset($groupData['site_id']);
+        }
+        if (!Schema::connection('tenant')->hasColumn('voucher_groups', 'validity_minutes')) {
+            unset($groupData['validity_minutes']);
+        }
+
+        $radiusSynced = 0;
+
+        try {
+            $group = null;
+            DB::connection('tenant')->transaction(function () use (&$group, $groupData, $newCodes, $package, $site, $now) {
+                $group = VoucherGroup::create($groupData);
+                $rows = [];
+
+                foreach ($newCodes as $code) {
+                    $row = [
+                        'voucher_code' => $code,
+                        'password' => $code,
+                        'group_id' => $group->id,
+                        'profile_name' => $group->profile_name,
+                        'validity_hours' => $group->validity_hours,
+                        'validity_minutes' => $package['validity_minutes'],
+                        'data_limit_mb' => null,
+                        'speed_limit_kbps' => null,
+                        'price' => $group->price,
+                        'sales_point_id' => null,
+                        'site_id' => $site->id,
+                        'status' => 'unused',
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                    $row = SiteScope::tenantCompatColumns('vouchers', $row);
+                    if (!Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
+                        unset($row['site_id']);
+                    }
+                    if (!Schema::connection('tenant')->hasColumn('vouchers', 'validity_minutes')) {
+                        unset($row['validity_minutes']);
+                    }
+                    $rows[] = $row;
+                }
+
+                foreach (array_chunk($rows, 250) as $chunk) {
+                    Voucher::insert($chunk);
+                }
+            });
+
+            $importedVouchers = Voucher::where('group_id', $group->id)->get();
+
+            try {
+                $sync = app(FreeRadiusService::class)->syncBatchToRadius($importedVouchers);
+                $radiusSynced = (int) ($sync['synced'] ?? 0);
+            } catch (\Throwable $e) {
+                $errors[] = 'Imported into voucher stock, but RADIUS sync failed: ' . $e->getMessage();
+                Log::warning('Imported vouchers RADIUS sync failed', ['error' => $e->getMessage()]);
+            }
+
+            return response()->json([
+                'imported' => $importedVouchers->count(),
+                'skipped' => count($codes) - count($newCodes),
+                'type_detected' => $package['key'],
+                'errors' => array_slice($errors, 0, 20),
+                'radius_synced' => $radiusSynced,
+                'group_id' => $group->id,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Voucher import failed', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'message' => 'Voucher import failed: ' . $e->getMessage(),
+                'errors' => [$e->getMessage()],
+            ], 500);
+        }
+    }
+
+    private function extractVoucherPdfText(string $path): string
+    {
+        $text = '';
+
+        if (function_exists('proc_open')) {
+            $command = ['pdftotext', '-layout', $path, '-'];
+            $descriptors = [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ];
+            $process = @proc_open($command, $descriptors, $pipes);
+
+            if (is_resource($process)) {
+                fclose($pipes[0]);
+                $text = stream_get_contents($pipes[1]) ?: '';
+                fclose($pipes[1]);
+                fclose($pipes[2]);
+                proc_close($process);
+            }
+        }
+
+        if (trim($text) !== '') {
+            return $text;
+        }
+
+        $raw = @file_get_contents($path) ?: '';
+        $decoded = $raw;
+
+        if (preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $raw, $matches)) {
+            foreach ($matches[1] as $stream) {
+                $inflated = @gzuncompress(trim($stream));
+                if ($inflated !== false) {
+                    $decoded .= "\n" . $inflated;
+                }
+            }
+        }
+
+        return $decoded;
+    }
+
+    private function extractVoucherCodes(string $text): array
+    {
+        preg_match_all('/\b[A-Z0-9]{4,12}\b/i', strtoupper($text), $matches);
+
+        $blocked = array_fill_keys([
+            'ONLIFI', 'WIFI', 'VOUCHER', 'CODE', 'PRICE', 'UGX', 'VALID', 'HOURS',
+            'HOUR', 'DAYS', 'DAY', 'MONTH', 'WEEK', 'POWERED', 'SUPPORT', 'LOGIN',
+            'PASSWORD', 'USERNAME', 'PACKAGE', 'SALES', 'POINT', 'DEFAULT',
+            '1000', '2000', '5000', '6000', '25000', '40000', '2025', '2026',
+            '1440', '10080', '43200',
+        ], true);
+
+        return collect($matches[0] ?? [])
+            ->map(fn ($code) => strtoupper(trim($code)))
+            ->filter(fn ($code) => preg_match('/\d/', $code) === 1)
+            ->reject(fn ($code) => isset($blocked[$code]))
+            ->reject(fn ($code) => preg_match('/^0+$/', $code) === 1)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function detectImportedVoucherPackage(string $text, $site): array
+    {
+        $normalized = strtolower($text);
+        $detected = match (true) {
+            str_contains($normalized, '30days') || str_contains($normalized, '30 days') || str_contains($normalized, 'monthly') => '30days',
+            str_contains($normalized, '7days') || str_contains($normalized, '7 days') || str_contains($normalized, 'week') => '7days',
+            str_contains($normalized, '24hours') || str_contains($normalized, '24 hours') || str_contains($normalized, 'daily') => '24hours',
+            str_contains($normalized, '12hours') || str_contains($normalized, '12 hours') => '12hours',
+            str_contains($normalized, '3hours') || str_contains($normalized, '3 hours') => '3hours',
+            str_contains($normalized, '2hours') || str_contains($normalized, '2 hours') => '2hours',
+            default => 'unknown',
+        };
+
+        $fallback = [
+            '2hours' => ['label' => '2 Hours', 'profile_name' => '2hours', 'validity_hours' => 2, 'validity_minutes' => 120, 'price' => 500],
+            '3hours' => ['label' => '3 Hours', 'profile_name' => '3hours', 'validity_hours' => 3, 'validity_minutes' => 180, 'price' => 1000],
+            '12hours' => ['label' => '12 Hours', 'profile_name' => '12hours', 'validity_hours' => 12, 'validity_minutes' => 720, 'price' => 1000],
+            '24hours' => ['label' => '24 Hours', 'profile_name' => 'Daily', 'validity_hours' => 24, 'validity_minutes' => 1440, 'price' => 1000],
+            '7days' => ['label' => '7 Days', 'profile_name' => 'week', 'validity_hours' => 168, 'validity_minutes' => 10080, 'price' => 6000],
+            '30days' => ['label' => '30 Days', 'profile_name' => 'Monthly', 'validity_hours' => 720, 'validity_minutes' => 43200, 'price' => 25000],
+            'unknown' => ['label' => 'Imported', 'profile_name' => 'default', 'validity_hours' => 24, 'validity_minutes' => 1440, 'price' => 0],
+        ];
+
+        $package = $fallback[$detected];
+
+        if (Schema::connection('tenant')->hasTable('voucher_types')) {
+            $typeQuery = VoucherType::query();
+            SiteScope::applyToTenantTable($typeQuery, 'voucher_types', $site);
+            $type = $typeQuery
+                ->where(function ($query) use ($package, $detected) {
+                    $query->where('type_name', 'like', '%' . $package['label'] . '%')
+                        ->orWhere('type_name', 'like', '%' . $detected . '%')
+                        ->orWhere('duration_hours', $package['validity_hours']);
+                })
+                ->orderByDesc('is_active')
+                ->first();
+
+            if ($type) {
+                $package['label'] = $type->type_name;
+                $package['profile_name'] = $type->type_name;
+                $package['validity_hours'] = (int) $type->duration_hours;
+                $package['validity_minutes'] = $type->validity_minutes ?: ((int) $type->duration_hours * 60);
+                $package['price'] = (float) $type->base_amount;
+            }
+        }
+
+        return ['key' => $detected] + $package;
     }
 
     public function validate(Request $request)

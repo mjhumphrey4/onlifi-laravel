@@ -35,10 +35,14 @@ async function request<T = any>(
   includeAuth = true
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  const isFormData = options.body instanceof FormData;
   const mergedHeaders = {
     ...buildHeaders(includeAuth, endpoint),
     ...(options.headers || {}),
   };
+  if (isFormData) {
+    delete (mergedHeaders as Record<string, string>)['Content-Type'];
+  }
   const res = await fetch(url, {
     credentials: 'include',
     ...options,
@@ -86,6 +90,17 @@ const postPublic = <T = any>(endpoint: string, body?: Record<string, unknown>) =
 const put = <T = any>(endpoint: string, body?: Record<string, unknown>) =>
   request<T>(endpoint, { method: 'PUT', body: body ? JSON.stringify(body) : undefined });
 const del = <T = any>(endpoint: string) => request<T>(endpoint, { method: 'DELETE' });
+
+const postForm = <T = any>(endpoint: string, body: FormData) => {
+  const headers = buildHeaders(true, endpoint);
+  delete (headers as Record<string, string>)['Content-Type'];
+
+  return request<T>(endpoint, {
+    method: 'POST',
+    body,
+    headers,
+  });
+};
 
 // ============ SUPER ADMIN AUTH ============
 export const adminLogin = (identifier: string, password: string, twoFactorCode?: string, twoFactorToken?: string) =>
@@ -328,11 +343,9 @@ export const apiRequestWithdrawal = async (body: { site: string; amount: number;
   return { success: false, message: 'Withdrawal feature not yet implemented' };
 };
 
-// Import vouchers - placeholder until backend endpoint is implemented
 export const apiImportVouchers = async (site: string, file: File) => {
-  // TODO: Implement backend endpoint for voucher import
   const formData = new FormData();
   formData.append('site', site);
   formData.append('file', file);
-  return { success: false, message: 'Voucher import feature not yet implemented' };
+  return postForm('/vouchers/import', formData);
 };

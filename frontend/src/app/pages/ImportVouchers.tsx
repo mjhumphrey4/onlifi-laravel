@@ -8,6 +8,8 @@ interface ImportResult {
   skipped: number;
   type_detected: string;
   errors: string[];
+  radius_synced?: number;
+  group_id?: number;
 }
 
 export function ImportVouchers() {
@@ -49,7 +51,14 @@ export function ImportVouchers() {
     setResult(null);
     try {
       const res = await apiImportVouchers(selectedSite.name, file);
-      setResult(res);
+      setResult({
+        imported: Number(res.imported ?? res.count ?? 0),
+        skipped: Number(res.skipped ?? 0),
+        type_detected: String(res.type_detected ?? 'unknown'),
+        errors: Array.isArray(res.errors) ? res.errors : [],
+        radius_synced: typeof res.radius_synced === 'number' ? res.radius_synced : undefined,
+        group_id: typeof res.group_id === 'number' ? res.group_id : undefined,
+      });
       setFile(null);
       if (inputRef.current) inputRef.current.value = '';
     } catch (e) {
@@ -152,7 +161,7 @@ export function ImportVouchers() {
             {loading ? (
               <>
                 <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                Importing…
+                Importing...
               </>
             ) : (
               <>
@@ -199,6 +208,12 @@ export function ImportVouchers() {
                   ))}
                 </ul>
               </div>
+            )}
+
+            {typeof result.radius_synced === 'number' && (
+              <p className="text-xs text-muted-foreground">
+                {result.radius_synced} imported voucher{result.radius_synced === 1 ? '' : 's'} synced to RADIUS.
+              </p>
             )}
           </div>
         )}
