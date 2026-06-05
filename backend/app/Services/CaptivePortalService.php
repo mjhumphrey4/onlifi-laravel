@@ -543,6 +543,7 @@ HTML;
         $html = str_replace(array_keys($legacyReplacements), array_values($legacyReplacements), $html);
         $html = $this->normalizeLegacyPaymentUrls($html, $config['manual_payment']);
         $html = $this->avoidManualPaymentPreflight($html);
+        $html = $this->stripCloudflareRuntimeSnippets($html);
 
         if ($marqueeText !== '') {
             $html = preg_replace(
@@ -1002,6 +1003,18 @@ CSS;
             ],
             $html
         );
+    }
+
+    private function stripCloudflareRuntimeSnippets(string $html): string
+    {
+        $patterns = [
+            '#<script\b[^>]*\bsrc=["\'][^"\']*/cdn-cgi/[^"\']*["\'][^>]*>\s*</script>#is',
+            '#<script\b[^>]*>.*?/cdn-cgi/.*?</script>#is',
+            '#<link\b[^>]*\bhref=["\'][^"\']*/cdn-cgi/[^"\']*["\'][^>]*>#is',
+            '#<img\b[^>]*\bsrc=["\'][^"\']*/cdn-cgi/[^"\']*["\'][^>]*>#is',
+        ];
+
+        return preg_replace($patterns, '', $html) ?? $html;
     }
 
     private function paymentSiteSlug(string $siteName): string

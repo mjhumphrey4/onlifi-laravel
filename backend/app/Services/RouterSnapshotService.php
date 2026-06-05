@@ -395,17 +395,8 @@ class RouterSnapshotService
             array_splice($select, 4, 0, ['hostname']);
         }
 
-        if (Schema::connection('tenant')->hasTable('transactions')) {
-            $select[] = DB::raw('COALESCE((SELECT SUM(amount) FROM transactions WHERE transactions.msisdn = hotspot_users.username), 0) as total_spent');
-        } else {
-            $select[] = DB::raw('0 as total_spent');
-        }
-
-        if (Schema::connection('tenant')->hasTable('radacct')) {
-            $select[] = DB::raw('(SELECT COUNT(*) FROM radacct WHERE radacct.callingstationid = hotspot_users.mac_address) as total_sessions');
-        } else {
-            $select[] = DB::raw('0 as total_sessions');
-        }
+        $select[] = DB::raw('0 as total_spent');
+        $select[] = DB::raw('0 as total_sessions');
 
         $query = DB::connection('tenant')
             ->table('hotspot_users')

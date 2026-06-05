@@ -62,8 +62,8 @@ class ClientController extends Controller
                 'profile_name',
                 'expires_at',
                 DB::raw('CASE WHEN last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN "online" ELSE "offline" END as status'),
-                DB::raw('COALESCE((SELECT SUM(amount) FROM transactions WHERE transactions.msisdn = hotspot_users.username), 0) as total_spent'),
-                DB::raw('(SELECT COUNT(*) FROM radacct WHERE radacct.callingstationid = hotspot_users.mac_address) as total_sessions'),
+                DB::raw('0 as total_spent'),
+                DB::raw('0 as total_sessions'),
             ];
 
             if (Schema::connection('tenant')->hasColumn('hotspot_users', 'hostname')) {

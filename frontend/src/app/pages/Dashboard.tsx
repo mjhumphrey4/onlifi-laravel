@@ -223,7 +223,7 @@ export function Dashboard() {
         if (!canViewClients) {
           setClients([]);
         } else {
-          const clientsRes = await fetch(`${API_BASE}/clients?refresh=1&limit=10`, { headers });
+          const clientsRes = await fetch(`${API_BASE}/clients?limit=10`, { headers });
         
           if (clientsRes.ok) {
             const clientsData = await clientsRes.json();

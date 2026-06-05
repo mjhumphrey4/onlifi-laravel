@@ -65,11 +65,20 @@ class TelemetryController extends Controller
     {
         try {
             $user = $request->user();
+            $siteId = $request->header('X-Site-ID') && is_numeric($request->header('X-Site-ID'))
+                ? (int) $request->header('X-Site-ID')
+                : 'default';
+            $tenantId = $user?->tenant_id ?: 'unknown';
+            $cacheKey = "tenant:{$tenantId}:site:{$siteId}:telemetry:stats";
             
-            Log::info('Fetching telemetry stats', [
-                'user_id' => $user?->id,
-                'tenant_id' => $user?->tenant_id ?? null,
-            ]);
+            if (!$request->boolean('refresh') && ($cached = Cache::get($cacheKey))) {
+                $cached['cache'] = [
+                    'source' => 'redis',
+                    'ttl_seconds' => 60,
+                ];
+
+                return response()->json($cached);
+            }
             
             // Use central database connection for telemetry
             // Filter by the authenticated user's tenant_id so users only see
@@ -96,11 +105,9 @@ class TelemetryController extends Controller
             
             $latestIds = $query->pluck('latest_id');
             
-            Log::info('Found telemetry records', ['count' => $latestIds->count(), 'ids' => $latestIds->toArray()]);
-            
             if ($latestIds->isEmpty()) {
                 // No telemetry data found - return empty but valid response
-                return response()->json([
+                $payload = [
                     'total_active_users' => 0,
                     'total_routers' => 0,
                     'online_routers' => 0,
@@ -108,8 +115,16 @@ class TelemetryController extends Controller
                     'avg_memory' => 0,
                     'routers' => [],
                     'timestamp' => now()->toIso8601String(),
-                    'debug' => 'No telemetry records found'
-                ]);
+                    'debug' => 'No telemetry records found',
+                    'cache' => [
+                        'source' => 'database',
+                        'ttl_seconds' => 60,
+                    ],
+                ];
+
+                Cache::put($cacheKey, $payload, now()->addMinute());
+
+                return response()->json($payload);
             }
             
             $routers = DB::connection('central')->table('router_telemetry')
@@ -170,13 +185,7 @@ class TelemetryController extends Controller
 
             $resourceTrend = $this->resourceTrend($request);
             
-            Log::info('Telemetry stats prepared', [
-                'total_routers' => $totalRouters,
-                'online_routers' => $onlineRouters,
-                'total_active_users' => $totalActiveUsers,
-            ]);
-            
-            return response()->json([
+            $payload = [
                 'total_active_users' => $totalActiveUsers,
                 'total_routers' => $totalRouters,
                 'online_routers' => $onlineRouters,
@@ -187,7 +196,15 @@ class TelemetryController extends Controller
                 'routers' => $routerStats,
                 'resource_trend' => $resourceTrend,
                 'timestamp' => now()->toIso8601String(),
-            ]);
+                'cache' => [
+                    'source' => 'database',
+                    'ttl_seconds' => 60,
+                ],
+            ];
+
+            Cache::put($cacheKey, $payload, now()->addMinute());
+
+            return response()->json($payload);
         } catch (\Exception $e) {
             Log::error('Failed to get telemetry stats', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return response()->json([

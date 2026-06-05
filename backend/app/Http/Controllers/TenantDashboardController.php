@@ -9,6 +9,7 @@ use App\Models\Voucher;
 use App\Services\MikrotikService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -24,6 +25,18 @@ class TenantDashboardController extends Controller
     public function getRealtimeStats(Request $request)
     {
         $site = SiteScope::selectedSite($request);
+        $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
+        $cacheKey = "tenant:{$tenantId}:site:" . ($site?->id ?: 'default') . ':dashboard:realtime-stats';
+
+        if (!$request->boolean('refresh') && ($cached = Cache::get($cacheKey))) {
+            $cached['cache'] = [
+                'source' => 'redis',
+                'ttl_seconds' => 300,
+            ];
+
+            return response()->json($cached);
+        }
+
         $routerQuery = MikrotikRouter::where('is_active', true);
         if ($site && Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
             $routerQuery->where('site_id', $site->id);
@@ -64,7 +77,7 @@ class TenantDashboardController extends Controller
         $vouchersSold = (clone $voucherQuery)->whereNotNull('first_used_at')->count();
         $voucherRevenue = (clone $voucherQuery)->whereNotNull('first_used_at')->sum('price');
 
-        return response()->json([
+        $payload = [
             'total_active_users' => $totalActiveUsers,
             'total_routers' => $routers->count(),
             'online_routers' => collect($routerStats)->where('is_online', true)->count(),
@@ -78,11 +91,32 @@ class TenantDashboardController extends Controller
             'voucher_revenue' => $voucherRevenue,
             'routers' => $routerStats,
             'timestamp' => now()->toIso8601String(),
-        ]);
+            'cache' => [
+                'source' => 'database',
+                'ttl_seconds' => 300,
+            ],
+        ];
+
+        Cache::put($cacheKey, $payload, now()->addMinutes(5));
+
+        return response()->json($payload);
     }
 
-    public function getActiveUsers()
+    public function getActiveUsers(Request $request)
     {
+        $site = SiteScope::selectedOrDefaultSite($request);
+        $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
+        $cacheKey = "tenant:{$tenantId}:site:" . ($site?->id ?: 'default') . ':dashboard:active-users';
+
+        if (!$request->boolean('refresh') && ($cached = Cache::get($cacheKey))) {
+            $cached['cache'] = [
+                'source' => 'redis',
+                'ttl_seconds' => 300,
+            ];
+
+            return response()->json($cached);
+        }
+
         if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
             return response()->json([
                 'total_active_users' => 0,
@@ -92,10 +126,18 @@ class TenantDashboardController extends Controller
             ]);
         }
 
-        $users = DB::connection('tenant')
+        $query = DB::connection('tenant')
             ->table('hotspot_users')
-            ->where('last_seen', '>=', now()->subMinutes(6))
-            ->orderByDesc('last_seen')
+            ->where('last_seen', '>=', now()->subMinutes(6));
+
+        if ($site && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
+            $query->where('site_id', $site->id);
+        } elseif ($site && Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+            $query->where('router_name', $site->name);
+        }
+
+        $users = $query->orderByDesc('last_seen')
+            ->limit(100)
             ->get()
             ->map(fn ($user) => [
                 'username' => $user->username ?? '',
@@ -110,12 +152,20 @@ class TenantDashboardController extends Controller
                 'last_seen' => $user->last_seen,
             ]);
 
-        return response()->json([
+        $payload = [
             'total_active_users' => $users->count(),
             'users' => $users,
             'cached' => true,
             'timestamp' => now()->toIso8601String(),
-        ]);
+            'cache' => [
+                'source' => 'database',
+                'ttl_seconds' => 300,
+            ],
+        ];
+
+        Cache::put($cacheKey, $payload, now()->addMinutes(5));
+
+        return response()->json($payload);
     }
 
     public function getRouterScript(Request $request)
