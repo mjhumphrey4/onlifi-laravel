@@ -893,13 +893,21 @@ RSC;
     private function dhcpNetworkFromCidr(string $cidr): string
     {
         [$ip, $prefix] = array_pad(explode('/', $cidr, 2), 2, '24');
+        $prefix = (int) $prefix;
 
-        $parts = explode('.', $ip);
-        if (count($parts) !== 4) {
+        if ($prefix < 0 || $prefix > 32 || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
             return $cidr;
         }
 
-        return "{$parts[0]}.{$parts[1]}.{$parts[2]}.0/{$prefix}";
+        $ipLong = ip2long($ip);
+        if ($ipLong === false) {
+            return $cidr;
+        }
+
+        $mask = $prefix === 0 ? 0 : (-1 << (32 - $prefix));
+        $network = long2ip($ipLong & $mask);
+
+        return "{$network}/{$prefix}";
     }
 
     private function rscString(?string $value): string
