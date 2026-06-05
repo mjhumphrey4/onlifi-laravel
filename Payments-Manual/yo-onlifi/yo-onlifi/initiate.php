@@ -5,9 +5,10 @@
 date_default_timezone_set('Africa/Nairobi');
 
 require_once 'config.php';
-require './YoAPI.php'; // Path to the YoAPI class file
 
 handleCorsPreflight();
+
+require './YoAPI.php'; // Path to the YoAPI class file
 
 // Set headers for JSON response
 header('Content-Type: application/json');

@@ -59,7 +59,7 @@ function readRequestData(): array {
   $contentType = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
   $input = file_get_contents('php://input') ?: '';
 
-  if (str_contains($contentType, 'application/json')) {
+  if (strpos($contentType, 'application/json') !== false) {
     $data = json_decode($input, true);
 
     if (json_last_error() !== JSON_ERROR_NONE) {

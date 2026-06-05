@@ -6,12 +6,13 @@ date_default_timezone_set('Africa/Nairobi');
 
 require_once 'config.php';
 require_once 'logger.php'; // Include logger
+
+handleCorsPreflight();
+
 require './YoAPI.php';
 require_once 'payment_fallback_helper.php';
 require_once 'voucher_helper.php';
 require_once 'sms_helper.php';
-
-handleCorsPreflight();
 
 header('Content-Type: application/json');
 error_reporting(E_ALL);
