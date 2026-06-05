@@ -297,34 +297,30 @@ export function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <h1 className="text-2xl sm:text-3xl text-foreground mb-1">Dashboard</h1>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mr-1">
+            <CalendarDays className="w-4 h-4" />
+            Filter
+          </div>
+          {DATE_FILTERS.map((filter) => (
+            <button
+              key={filter.id}
+              onClick={() => setDateFilter(filter.id)}
+              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                dateFilter === filter.id
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-card border-border text-card-foreground hover:bg-muted'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RefreshCw className="w-3 h-3" />
           {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading...'}
         </div>
-      </div>
-
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mr-1">
-          <CalendarDays className="w-4 h-4" />
-          Filter
-        </div>
-        {DATE_FILTERS.map((filter) => (
-          <button
-            key={filter.id}
-            onClick={() => setDateFilter(filter.id)}
-            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-              dateFilter === filter.id
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-card border-border text-card-foreground hover:bg-muted'
-            }`}
-          >
-            {filter.label}
-          </button>
-        ))}
       </div>
 
       {/* Network Status - Compact Widget */}
@@ -436,32 +432,15 @@ export function Dashboard() {
               clients.slice(0, 10).map((client, i) => (
                 <div
                   key={client.id || i}
-                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                  className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-semibold text-primary">
-                        {(client.username || client.mac_address || 'U').charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-card-foreground">
-                        {client.username || client.mac_address || 'Unknown'}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {client.ip_address || 'No IP'} - {client.total_sessions || 0} sessions
-                      </p>
-                    </div>
+                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Users className="w-5 h-5 text-primary" />
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-card-foreground">
-                      {fmt(client.total_spent || 0)}
-                    </p>
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs ${
-                      client.status === 'online' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {client.status || 'offline'}
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-card-foreground">{client.mac_address || 'Unknown MAC'}</p>
+                    <p className="text-xs text-muted-foreground">{client.ip_address || 'No IP address'}</p>
+                    <p className="truncate text-xs text-primary">{client.voucher_code || client.username || 'No voucher'}</p>
                   </div>
                 </div>
               ))

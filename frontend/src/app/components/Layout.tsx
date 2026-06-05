@@ -117,6 +117,7 @@ export function Layout() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [ticketUnreadCount, setTicketUnreadCount] = useState(0);
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteDescription, setNewSiteDescription] = useState('');
@@ -235,7 +236,9 @@ export function Layout() {
         // Count unread (check localStorage for read IDs)
         const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
         const unread = items.filter((a: Announcement) => !readIds.includes(a.id)).length;
+        const unreadTickets = items.filter((a: Announcement) => a.ticket_id && !readIds.includes(a.id)).length;
         setUnreadCount(unread);
+        setTicketUnreadCount(unreadTickets);
       } catch (error) {
         console.error('Failed to fetch announcements:', error);
       }
@@ -253,6 +256,10 @@ export function Layout() {
       readIds.push(id);
       localStorage.setItem('read_announcements', JSON.stringify(readIds));
       setUnreadCount(prev => Math.max(0, prev - 1));
+      const item = announcements.find((announcement) => announcement.id === id);
+      if (item?.ticket_id) {
+        setTicketUnreadCount(prev => Math.max(0, prev - 1));
+      }
     }
   };
 
@@ -260,6 +267,7 @@ export function Layout() {
     const readIds = announcements.map(a => a.id);
     localStorage.setItem('read_announcements', JSON.stringify(readIds));
     setUnreadCount(0);
+    setTicketUnreadCount(0);
   };
 
   const handleLogout = async () => {
@@ -392,6 +400,11 @@ export function Layout() {
                         <div className="flex items-center gap-3">
                           <Icon className="w-5 h-5 flex-shrink-0" />
                           <span className="text-sm">{item.label}</span>
+                          {item.path === '/support-tickets' && ticketUnreadCount > 0 && (
+                            <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                              {ticketUnreadCount > 9 ? '9+' : ticketUnreadCount}
+                            </span>
+                          )}
                         </div>
                         <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       </button>
@@ -428,7 +441,7 @@ export function Layout() {
                     <Link
                       to={item.path}
                       onClick={closeMobileMenu}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                      className={`flex w-full items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                         isActive
                           ? 'bg-primary text-primary-foreground'
                           : 'text-sidebar-foreground hover:bg-sidebar-accent'
@@ -436,6 +449,11 @@ export function Layout() {
                     >
                       <Icon className="w-5 h-5 flex-shrink-0" />
                       <span className="text-sm">{item.label}</span>
+                      {item.path === '/support-tickets' && ticketUnreadCount > 0 && (
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                          {ticketUnreadCount > 9 ? '9+' : ticketUnreadCount}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );

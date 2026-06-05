@@ -500,14 +500,20 @@ class MikrotikController extends Controller
         ]);
 
         if (!$created) {
+            $message = $this->mikrotikService->getLastError()
+                ?: 'Could not connect to the router or RouterOS rejected the binding.';
+
             return response()->json([
                 'error' => 'Failed to add IP binding',
-                'message' => 'Could not connect to the router or RouterOS rejected the binding.',
-            ], 500);
+                'message' => $message,
+            ], 422);
         }
 
         if ($site = SiteScope::selectedOrDefaultSite($request)) {
-            $this->snapshots->storeRouterListCache($site, 'ip_bindings', $this->mikrotikService->getIpBindings($router));
+            $bindings = $this->mikrotikService->getIpBindings($router);
+            if (!empty($bindings) || !$this->mikrotikService->getLastError()) {
+                $this->snapshots->storeRouterListCache($site, 'ip_bindings', $bindings);
+            }
         }
 
         return response()->json([

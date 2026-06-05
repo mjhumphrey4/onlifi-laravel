@@ -481,13 +481,18 @@ class MikrotikAPI {
             'server' => 'server',
             'comment' => 'comment',
         ] as $inputKey => $routerKey) {
+            if ($inputKey === 'server' && (($binding[$inputKey] ?? '') === '' || ($binding[$inputKey] ?? '') === 'all')) {
+                continue;
+            }
             if (!empty($binding[$inputKey])) {
                 $command[] = '=' . $routerKey . '=' . $binding[$inputKey];
             }
         }
 
         $response = $this->communicate($command);
-        return isset($response[0]) && $response[0] === '!done';
+        $this->parseResponse($response);
+
+        return is_array($response) && in_array('!done', $response, true) && !$this->lastError;
     }
 
     public function getPppoeSecrets() {
