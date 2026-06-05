@@ -959,7 +959,11 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
                 </label>
               </div>
               <div className="rounded-lg bg-slate-900 border border-slate-700 p-3 text-sm text-slate-300">
+                Remote access endpoint: <span className="font-mono text-emerald-300">{site.remote_access_endpoint || (site.remote_access_port ? `${data?.remote_access_host || 'vpn.onlifi.net'}:${site.remote_access_port}` : 'assigning port')}</span>
+                <span className="block mt-1">Remote access port: <span className="font-mono text-emerald-300">{site.remote_access_port || 'assigning'}</span></span>
+                <span className="block mt-3">
                 WireGuard endpoint: <span className="font-mono text-sky-300">{site.vpn_public_endpoint || data?.wireguard_endpoint || '89.167.42.53:51820'}</span>
+                </span>
                 <span className="block mt-1">Router public key: <span className="font-mono text-sky-300 break-all">{site.wireguard_public_key || 'pending'}</span></span>
                 {!data?.wireguard_server_public_key_configured && (
                   <span className="block mt-2 text-amber-300">Set the platform WireGuard server public key before provisioning routers.</span>

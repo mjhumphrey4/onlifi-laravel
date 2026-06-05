@@ -22,7 +22,7 @@ return [
 
     // Shared secret for RADIUS authentication
     // This should be a strong, random string shared between FreeRADIUS and MikroTik routers
-    'shared_secret' => env('RADIUS_SHARED_SECRET', 'onlifi_radius_secret_change_me'),
+    'shared_secret' => env('RADIUS_SHARED_SECRET', 'Onlifi26A'),
 
     /*
     |--------------------------------------------------------------------------

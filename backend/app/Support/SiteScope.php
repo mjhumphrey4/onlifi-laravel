@@ -168,6 +168,7 @@ class SiteScope
             $table->string('vpn_status')->default('active');
             $table->timestamp('vpn_last_seen_at')->nullable();
             $table->unsignedInteger('router_api_port')->nullable();
+            $table->unsignedInteger('remote_access_port')->nullable()->index();
             $table->text('remote_access_notes')->nullable();
             $table->timestamps();
 

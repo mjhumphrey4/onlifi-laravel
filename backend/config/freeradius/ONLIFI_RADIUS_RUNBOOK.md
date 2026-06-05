@@ -67,7 +67,7 @@ sudo chmod +x mods-config/perl/onlifi_multi_tenant.pl
 Edit `/etc/freeradius/3.0/clients.conf` and replace:
 
 ```text
-secret = onlifi_radius_secret_change_me
+secret = Onlifi26A
 ```
 
 with the exact `RADIUS_SHARED_SECRET` used by Laravel.

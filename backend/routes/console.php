@@ -242,7 +242,7 @@ Artisan::command('onlifi:radius:diagnose {--router= : NAS-Identifier/router iden
     }
 
     $this->line("Direct test:");
-    $this->line("echo 'User-Name={$voucherCode},User-Password={$voucherCode},NAS-Identifier={$routerIdentifier}' | radclient -x 127.0.0.1 auth onlifi_radius_secret_change_me");
+    $this->line("echo 'User-Name={$voucherCode},User-Password={$voucherCode},NAS-Identifier={$routerIdentifier}' | radclient -x 127.0.0.1 auth " . config('radius.shared_secret', 'Onlifi26A'));
 
     return (!$voucher || !$radcheck) ? Command::FAILURE : Command::SUCCESS;
 })->purpose('Diagnose one router/voucher RADIUS lookup across tenant/site DB and radcheck');

@@ -226,7 +226,7 @@ class SiteController extends Controller
             if (empty($existing->provisioning_token)) {
                 $updates['provisioning_token'] = Str::random(64);
             }
-            $sharedSecret = SystemSetting::get('radius_shared_secret', config('radius.shared_secret', 'onlifi_radius_secret_change_me'));
+            $sharedSecret = SystemSetting::get('radius_shared_secret', config('radius.shared_secret', 'Onlifi26A'));
             if ($existing->secret !== $sharedSecret) {
                 $updates['secret'] = $sharedSecret;
             }
@@ -245,7 +245,7 @@ class SiteController extends Controller
             'provisioning_token' => Str::random(64),
             'shortname' => $site->name,
             'type' => 'other',
-            'secret' => SystemSetting::get('radius_shared_secret', config('radius.shared_secret', 'onlifi_radius_secret_change_me')),
+            'secret' => SystemSetting::get('radius_shared_secret', config('radius.shared_secret', 'Onlifi26A')),
             'server' => null,
             'description' => $site->description,
             'tenant_id' => $site->tenant_id,

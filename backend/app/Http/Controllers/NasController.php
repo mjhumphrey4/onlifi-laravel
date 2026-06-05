@@ -430,7 +430,7 @@ class NasController extends Controller
 
     private function radiusSharedSecret(): string
     {
-        return (string) SystemSetting::get('radius_shared_secret', config('radius.shared_secret', 'onlifi_radius_secret_change_me'));
+        return (string) SystemSetting::get('radius_shared_secret', config('radius.shared_secret', 'Onlifi26A'));
     }
     
     /**

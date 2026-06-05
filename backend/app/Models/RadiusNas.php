@@ -83,7 +83,7 @@ class RadiusNas extends Model
         // Get or create the global RADIUS secret (shared across all routers)
         $globalSecret = SystemSetting::get('radius_shared_secret');
         if (!$globalSecret) {
-            $globalSecret = self::generateSecret();
+            $globalSecret = config('radius.shared_secret', 'Onlifi26A');
             SystemSetting::set('radius_shared_secret', $globalSecret, 'security', 'Shared RADIUS secret for all routers');
         }
 

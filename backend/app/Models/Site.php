@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class Site extends Model
@@ -30,6 +31,7 @@ class Site extends Model
         'vpn_password',
         'vpn_public_host',
         'vpn_public_port',
+        'remote_access_port',
         'vpn_status',
         'vpn_last_seen_at',
         'wireguard_private_key',
@@ -45,6 +47,7 @@ class Site extends Model
         'database_port' => 'integer',
         'router_api_port' => 'integer',
         'vpn_public_port' => 'integer',
+        'remote_access_port' => 'integer',
     ];
 
     protected $hidden = [
@@ -75,6 +78,9 @@ class Site extends Model
             }
             if (empty($site->vpn_public_port)) {
                 $site->vpn_public_port = self::defaultVpnPublicPort();
+            }
+            if (self::hasRemoteAccessPortColumn() && empty($site->remote_access_port)) {
+                $site->remote_access_port = self::uniqueRemoteAccessPort();
             }
             if (empty($site->vpn_status) || $site->vpn_status === 'pending') {
                 $site->vpn_status = 'active';
@@ -110,9 +116,37 @@ class Site extends Model
         return self::defaultVpnPublicPort();
     }
 
+    public static function uniqueRemoteAccessPort(?int $ignoreId = null): int
+    {
+        $start = 32000;
+        $max = 65535;
+
+        for ($port = $start; $port <= $max; $port++) {
+            $exists = self::query()
+                ->where('remote_access_port', $port)
+                ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+                ->exists();
+
+            if (!$exists) {
+                return $port;
+            }
+        }
+
+        throw new \RuntimeException('No available remote access ports remain.');
+    }
+
     public static function defaultVpnPublicPort(): int
     {
         return 51820;
+    }
+
+    public static function hasRemoteAccessPortColumn(): bool
+    {
+        try {
+            return Schema::connection('central')->hasColumn('sites', 'remote_access_port');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public static function generateWireGuardKeyPair(): array

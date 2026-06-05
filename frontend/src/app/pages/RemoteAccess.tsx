@@ -109,9 +109,9 @@ export function RemoteAccess() {
                     <p className="text-xs text-muted-foreground">{site.slug}</p>
                   </td>
                   <td className="px-5 py-3">
-                    <button onClick={() => copy(site.vpn_public_endpoint, `endpoint-${site.id}`)} className="inline-flex items-center gap-2 font-mono text-primary hover:underline disabled:text-muted-foreground" disabled={!site.vpn_public_endpoint}>
-                      {site.vpn_public_endpoint || 'Assigning endpoint'}
-                      {site.vpn_public_endpoint && (copied === `endpoint-${site.id}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />)}
+                    <button onClick={() => copy(site.remote_access_endpoint || site.vpn_public_endpoint, `endpoint-${site.id}`)} className="inline-flex items-center gap-2 font-mono text-primary hover:underline disabled:text-muted-foreground" disabled={!(site.remote_access_endpoint || site.vpn_public_endpoint)}>
+                      {site.remote_access_endpoint || site.vpn_public_endpoint || 'Assigning endpoint'}
+                      {(site.remote_access_endpoint || site.vpn_public_endpoint) && (copied === `endpoint-${site.id}` ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />)}
                     </button>
                   </td>
                   <td className="px-5 py-3">

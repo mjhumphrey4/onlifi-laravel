@@ -37,6 +37,9 @@ return new class extends Migration
             if (!Schema::connection('central')->hasColumn('sites', 'router_api_port')) {
                 $table->integer('router_api_port')->default(8728)->after('vpn_last_seen_at');
             }
+            if (!Schema::connection('central')->hasColumn('sites', 'remote_access_port')) {
+                $table->integer('remote_access_port')->nullable()->index()->after('router_api_port');
+            }
             if (!Schema::connection('central')->hasColumn('sites', 'remote_access_notes')) {
                 $table->text('remote_access_notes')->nullable()->after('router_api_port');
             }
@@ -50,7 +53,7 @@ return new class extends Migration
         }
 
         Schema::connection('central')->table('sites', function (Blueprint $table) {
-            foreach (['remote_access_notes', 'router_api_port', 'vpn_last_seen_at', 'vpn_status', 'vpn_public_port', 'vpn_public_host', 'vpn_password', 'vpn_username', 'vpn_private_ip'] as $column) {
+            foreach (['remote_access_notes', 'remote_access_port', 'router_api_port', 'vpn_last_seen_at', 'vpn_status', 'vpn_public_port', 'vpn_public_host', 'vpn_password', 'vpn_username', 'vpn_private_ip'] as $column) {
                 if (Schema::connection('central')->hasColumn('sites', $column)) {
                     $table->dropColumn($column);
                 }

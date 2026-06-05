@@ -157,7 +157,7 @@ SMS_SENDER_ID=OnLiFi
 RADIUS_SERVER_IP=89.167.42.53
 RADIUS_AUTH_PORT=1812
 RADIUS_ACCT_PORT=1813
-RADIUS_SHARED_SECRET=Onlifi@@rad_Secret$Xb@@26
+RADIUS_SHARED_SECRET=Onlifi26A
 RADIUS_DB_USER=radius_user
 RADIUS_DB_PASSWORD=onlifi@rad26
 ```
@@ -643,6 +643,8 @@ sudo wg show
 
 Once a router is provisioned, it should bring up `onlifi-wg`, assign its admin-selected `10.10.1.x/32` address, and create a peer pointed at `89.167.42.53:51820`. Traffic starts flowing as soon as the router has the server public key and the Linux server has the router public key as a peer.
 
+The tenant Remote Access page shows the user-facing endpoint as `vpn.onlifi.net:{remote_access_port}`. That generated port is for your public Winbox/Nginx mapping only. It is separate from the WireGuard UDP endpoint, which must remain `89.167.42.53:51820` for router provisioning.
+
 ## 14. FreeRADIUS Setup
 
 Copy OnLiFi FreeRADIUS files:
@@ -664,7 +666,7 @@ sudo chmod +x mods-config/perl/onlifi_multi_tenant.pl
 Edit `/etc/freeradius/3.0/clients.conf` and set:
 
 ```text
-secret = Onlifi@@rad_Secret$Xb@@26
+secret = Onlifi26A
 ```
 
 The secret must match `RADIUS_SHARED_SECRET`.
@@ -828,14 +830,14 @@ Direct RADIUS auth test, using a real voucher/router:
 
 ```bash
 echo 'User-Name=VOUCHER_CODE,User-Password=VOUCHER_CODE,NAS-Identifier=SITE-ONLIFI-1' \
-  | radclient -x 127.0.0.1 auth Onlifi@@rad_Secret$Xb@@26
+  | radclient -x 127.0.0.1 auth Onlifi26A
 ```
 
 Accounting test:
 
 ```bash
 echo 'User-Name=VOUCHER_CODE,NAS-Identifier=SITE-ONLIFI-1,Acct-Status-Type=Start,Acct-Session-Id=test-1,NAS-IP-Address=127.0.0.1,Framed-IP-Address=10.10.0.253,Calling-Station-Id=AA:BB:CC:DD:EE:FF,Called-Station-Id=onlifi-hotspot,NAS-Port-Type=Wireless-802.11,NAS-Port-Id=onlifi-lan' \
-  | radclient -x 127.0.0.1 acct Onlifi@@rad_Secret$Xb@@26
+  | radclient -x 127.0.0.1 acct Onlifi26A
 ```
 
 Expected:

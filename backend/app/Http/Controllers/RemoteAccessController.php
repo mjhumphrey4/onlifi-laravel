@@ -38,7 +38,9 @@ class RemoteAccessController extends Controller
                 'id' => $site['id'],
                 'name' => $site['name'],
                 'slug' => $site['slug'],
-                'vpn_public_endpoint' => $this->remoteAccessDisplayHost($webLoginUrl),
+                'remote_access_port' => $site['remote_access_port'],
+                'remote_access_endpoint' => $this->remoteAccessDisplayEndpoint($webLoginUrl, $site['remote_access_port']),
+                'vpn_public_endpoint' => $this->remoteAccessDisplayEndpoint($webLoginUrl, $site['remote_access_port']),
                 'vpn_status' => $site['vpn_status'],
             ]),
         ]);
@@ -61,6 +63,7 @@ class RemoteAccessController extends Controller
             ],
             'vpn_range' => SystemSetting::get('router_remote_vpn_cidr', '10.10.1.0/24'),
             'wireguard_endpoint' => $this->wireGuardEndpoint(),
+            'remote_access_host' => $this->remoteAccessDisplayHost(SystemSetting::get('remote_access_web_login_url', 'https://vpn.onlifi.net')),
             'wireguard_server_public_key_configured' => (bool) SystemSetting::get('wireguard_server_public_key', ''),
             'router_admin_username' => SystemSetting::get('router_admin_username', 'onlifi'),
             'sites' => $sites,
@@ -176,6 +179,8 @@ class RemoteAccessController extends Controller
             'vpn_password' => $site->vpn_password,
             'vpn_public_host' => $site->vpn_public_host ?: '89.167.42.53',
             'vpn_public_port' => Site::defaultVpnPublicPort(),
+            'remote_access_port' => $site->remote_access_port,
+            'remote_access_endpoint' => $this->remoteAccessDisplayEndpoint(SystemSetting::get('remote_access_web_login_url', 'https://vpn.onlifi.net'), $site->remote_access_port),
             'vpn_public_endpoint' => $this->publicEndpoint($site),
             'wireguard_public_key' => $site->wireguard_public_key,
             'wireguard_private_key' => $site->wireguard_private_key,
@@ -203,6 +208,14 @@ class RemoteAccessController extends Controller
         }
 
         return preg_replace('#^https?://#', '', rtrim($url, '/')) ?: 'vpn.onlifi.net';
+    }
+
+    private function remoteAccessDisplayEndpoint(string $url, ?int $port): string
+    {
+        $host = $this->remoteAccessDisplayHost($url);
+        $host = preg_replace('/:\d+$/', '', $host) ?: 'vpn.onlifi.net';
+
+        return $port ? "{$host}:{$port}" : $host;
     }
 
     private function defaultVpnUsername(Site $site): string
@@ -239,6 +252,9 @@ class RemoteAccessController extends Controller
         }
         if ((int) $site->vpn_public_port !== Site::defaultVpnPublicPort()) {
             $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
+        }
+        if (Site::hasRemoteAccessPortColumn() && !$site->remote_access_port) {
+            $updates['remote_access_port'] = Site::uniqueRemoteAccessPort($site->id);
         }
         if (!$site->vpn_status || $site->vpn_status === 'pending') {
             $updates['vpn_status'] = 'active';
