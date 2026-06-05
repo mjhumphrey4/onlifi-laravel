@@ -28,15 +28,17 @@ class RemoteAccessController extends Controller
             ->get()
             ->map(fn (Site $site) => $this->formatSite($this->ensureVpnDefaults($site)));
 
+        $webLoginUrl = SystemSetting::get('remote_access_web_login_url', 'https://vpn.onlifi.net');
+
         return response()->json([
-            'vpn_host' => '89.167.42.53',
+            'vpn_host' => $this->remoteAccessDisplayHost($webLoginUrl),
             'mobile_app_url' => SystemSetting::get('remote_access_mobile_app_url', 'https://onlifi.net/downloads/onlifi-mobile.apk'),
-            'web_login_url' => SystemSetting::get('remote_access_web_login_url', 'https://vpn.onlifi.net'),
+            'web_login_url' => $webLoginUrl,
             'sites' => $sites->map(fn (array $site) => [
                 'id' => $site['id'],
                 'name' => $site['name'],
                 'slug' => $site['slug'],
-                'vpn_public_endpoint' => $site['vpn_public_endpoint'],
+                'vpn_public_endpoint' => $this->remoteAccessDisplayHost($webLoginUrl),
                 'vpn_status' => $site['vpn_status'],
             ]),
         ]);
@@ -189,6 +191,18 @@ class RemoteAccessController extends Controller
     private function publicEndpoint(Site $site): ?string
     {
         return $this->wireGuardEndpoint();
+    }
+
+    private function remoteAccessDisplayHost(string $url): string
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        $port = parse_url($url, PHP_URL_PORT);
+
+        if ($host) {
+            return $host . ($port ? ':' . $port : '');
+        }
+
+        return preg_replace('#^https?://#', '', rtrim($url, '/')) ?: 'vpn.onlifi.net';
     }
 
     private function defaultVpnUsername(Site $site): string

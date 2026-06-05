@@ -134,7 +134,7 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       <div class="voucher-card style-${escapeHtml(style)}">
         <div class="voucher-header">
           ${(design.numbering ?? true) !== false ? `<span class="voucher-number">#${escapeHtml(number)}</span>` : ''}
-          <span>${escapeHtml(activeTemplate.header_text || 'STK WIFI POINT')}</span>
+          <span>${escapeHtml(activeTemplate.header_text || 'WIFI NAME')}</span>
         </div>
         <div class="wifi-name">${escapeHtml(group.group_name || activeTemplate.name || 'WiFi Access')}</div>
         <div class="voucher-body">

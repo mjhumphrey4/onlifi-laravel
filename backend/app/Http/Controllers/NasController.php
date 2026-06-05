@@ -612,11 +612,8 @@ class NasController extends Controller
 
 # DNS
 /ip dns set allow-remote-requests=yes servers=\$dnsServers
-:if ([:len [/ip dns static find name=\$hotspotDnsName]] = 0) do={
-  /ip dns static add name=\$hotspotDnsName address=\$lanGateway ttl=5m comment="OnLiFi hotspot DNS"
-} else={
-  /ip dns static set [find name=\$hotspotDnsName] address=\$lanGateway ttl=5m comment="OnLiFi hotspot DNS"
-}
+:do { /ip dns static remove [find where name=\$hotspotDnsName comment="OnLiFi hotspot DNS"] } on-error={}
+:do { /ip dns static add name=\$hotspotDnsName address=\$lanGateway ttl=5m comment="OnLiFi hotspot DNS" } on-error={ :log warning "OnLiFi hotspot DNS static entry already exists or could not be added" }
 
 # Dedicated OnLiFi administrator user for VPN telemetry and support access
 :if ([:len [/user find name=\$remoteAdminUser]] = 0) do={

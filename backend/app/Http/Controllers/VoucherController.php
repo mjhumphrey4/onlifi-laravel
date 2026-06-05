@@ -770,7 +770,7 @@ class VoucherController extends Controller
             'show_price' => true,
             'show_expiry' => false,
             'show_qr_code' => false,
-            'header_text' => 'STK WIFI POINT',
+            'header_text' => 'WIFI NAME',
             'footer_text' => 'Support: +256 700 000 000',
             'instructions' => 'One device per voucher.',
         ];
@@ -794,7 +794,7 @@ class VoucherController extends Controller
         $accent = e($template['accent_color'] ?? '#0444cf');
         $text = e($template['text_color'] ?? '#1f2937');
         $background = e($template['background_color'] ?? '#ffffff');
-        $header = e($template['header_text'] ?? 'STK WIFI POINT');
+        $header = e($template['header_text'] ?? 'WIFI NAME');
         $footer = e($template['footer_text'] ?? '');
         $instructions = e($template['instructions'] ?? '');
         $gradient = $style === 'modern-blue' ? "linear-gradient(90deg, {$accent}, #0666ff)" : $accent;

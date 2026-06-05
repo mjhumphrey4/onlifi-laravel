@@ -59,7 +59,7 @@ const DEFAULT_SKINS = [
       background_color: '#ffffff',
       text_color: '#1f2937',
       accent_color: '#0444cf',
-      header_text: 'STK WIFI POINT',
+      header_text: 'WIFI NAME',
       footer_text: 'Support: +256 700 000 000',
       instructions: 'One device per voucher.',
     }
@@ -74,7 +74,7 @@ const DEFAULT_SKINS = [
       background_color: '#ffffff',
       text_color: '#14532d',
       accent_color: '#2ecc71',
-      header_text: 'STK WIFI POINT',
+      header_text: 'WIFI NAME',
       footer_text: 'Support: +256 700 000 000',
       instructions: 'Use this voucher on one device only.',
     }
@@ -89,7 +89,7 @@ const DEFAULT_SKINS = [
       background_color: '#ffffff',
       text_color: '#164e63',
       accent_color: '#2563eb',
-      header_text: 'STK WIFI POINT',
+      header_text: 'WIFI NAME',
       footer_text: 'Support: +256 700 000 000',
       instructions: 'Connect to WiFi and enter the code.',
     }
@@ -104,7 +104,7 @@ const DEFAULT_SKINS = [
       background_color: '#ffffff',
       text_color: '#111827',
       accent_color: '#0444cf',
-      header_text: 'STK WIFI POINT',
+      header_text: 'WIFI NAME',
       footer_text: 'Support: +256 700 000 000',
       instructions: 'Terms apply. One device per voucher.',
     }

@@ -47,7 +47,7 @@ export function RemoteAccess() {
 
       <div className="bg-card border border-border rounded-lg p-5">
         <p className="text-sm text-muted-foreground">Remote access host</p>
-        <p className="text-2xl font-semibold mt-1 font-mono">{data?.vpn_host || '89.167.42.53'}</p>
+        <p className="text-2xl font-semibold mt-1 font-mono">{data?.vpn_host || 'vpn.onlifi.net'}</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
