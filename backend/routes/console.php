@@ -3,7 +3,9 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Schema;
 
@@ -289,6 +291,84 @@ Artisan::command('onlifi:tenants:migrate', function () {
     return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
 })->purpose('Run tenant migrations across all tenant and site databases');
 
+Artisan::command('onlifi:router-snapshots:sync {--tenant= : Limit sync to one tenant ID} {--site= : Limit sync to one site ID} {--only= : Comma-separated list: hotspot_users,ip_bindings,system_users,dhcp_leases,dhcp_pools,pppoe_clients}', function () {
+    $tenantId = $this->option('tenant') ? (int) $this->option('tenant') : null;
+    $siteId = $this->option('site') ? (int) $this->option('site') : null;
+    $only = trim((string) $this->option('only'));
+    $types = $only !== '' ? array_values(array_filter(array_map('trim', explode(',', $only)))) : null;
+    $rows = [];
+    $failed = 0;
+    $synced = 0;
+
+    $tenantQuery = \App\Models\Tenant::query()
+        ->whereNotNull('database_name')
+        ->when($tenantId, fn ($query) => $query->where('id', $tenantId))
+        ->orderBy('id');
+
+    $tenantQuery->chunkById(20, function ($tenants) use (&$rows, &$failed, &$synced, $siteId, $types) {
+        foreach ($tenants as $tenant) {
+            $sites = \App\Models\Site::where('tenant_id', $tenant->id)
+                ->where('is_active', true)
+                ->when($siteId, fn ($query) => $query->where('id', $siteId))
+                ->orderBy('id')
+                ->get();
+
+            foreach ($sites as $site) {
+                $lockKey = "router_snapshot_sync_site_{$site->id}";
+                if (!Cache::add($lockKey, true, now()->addMinutes(4))) {
+                    $rows[] = [$tenant->id, $site->id, $site->name, 'skipped', 'sync already running'];
+                    continue;
+                }
+
+                try {
+                    if ($site->database_name) {
+                        $site->configureTenantConnection($tenant);
+                    } else {
+                        $tenant->configure();
+                    }
+
+                    $result = app(\App\Services\RouterSnapshotService::class)->syncSite($site, $types);
+                    $status = ($result['ok'] ?? false) ? 'ok' : 'failed';
+                    $summary = json_encode($result['synced'] ?? []);
+
+                    if ($status === 'ok') {
+                        $synced++;
+                    } else {
+                        $failed++;
+                    }
+
+                    Cache::put("tenant:{$tenant->id}:site:{$site->id}:router:snapshot:summary", [
+                        'ok' => $result['ok'] ?? false,
+                        'router' => $result['router'] ?? null,
+                        'synced' => $result['synced'] ?? [],
+                        'message' => $result['message'] ?? null,
+                        'last_synced_at' => now()->toIso8601String(),
+                    ], now()->addMinutes(10));
+
+                    $rows[] = [$tenant->id, $site->id, $site->name, $status, $summary ?: ($result['message'] ?? '')];
+                } catch (\Throwable $e) {
+                    $failed++;
+                    Log::warning('Scheduled router snapshot sync failed', [
+                        'tenant_id' => $tenant->id,
+                        'site_id' => $site->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $rows[] = [$tenant->id, $site->id, $site->name, 'failed', $e->getMessage()];
+                }
+            }
+        }
+    });
+
+    $this->table(['Tenant', 'Site', 'Name', 'Status', 'Details'], $rows);
+    $this->info("Router snapshot sync completed. Sites synced: {$synced}; failed: {$failed}");
+
+    return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Pull RouterOS lists into Redis/database snapshots for fast dashboard reads');
+
 Schedule::command('onlifi:vouchers:cleanup')
     ->everyMinute()
+    ->withoutOverlapping();
+
+Schedule::command('onlifi:router-snapshots:sync')
+    ->everyFiveMinutes()
     ->withoutOverlapping();

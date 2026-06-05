@@ -9,6 +9,7 @@ use App\Models\Voucher;
 use App\Services\MikrotikService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class TenantDashboardController extends Controller
@@ -82,40 +83,37 @@ class TenantDashboardController extends Controller
 
     public function getActiveUsers()
     {
-        $routers = MikrotikRouter::where('is_active', true)->get();
-        $allUsers = [];
-
-        foreach ($routers as $router) {
-            if ($this->mikrotikService->connect($router)) {
-                try {
-                    $users = $this->mikrotikService->getActiveUsers($router);
-                    
-                    foreach ($users as $user) {
-                        $allUsers[] = [
-                            'username' => $user['username'] ?? 'Unknown',
-                            'mac_address' => $user['mac_address'] ?? 'Unknown',
-                            'ip_address' => $user['ip_address'] ?? 'Unknown',
-                            'uptime' => $user['uptime'] ?? '0s',
-                            'bytes_in' => $user['bytes_in'] ?? 0,
-                            'bytes_out' => $user['bytes_out'] ?? 0,
-                            'router_id' => $router->id,
-                            'router_name' => $router->name,
-                            'router_location' => $router->location,
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    \Log::error('Failed to get active users from router: ' . $router->name, [
-                        'error' => $e->getMessage(),
-                    ]);
-                } finally {
-                    $this->mikrotikService->disconnect();
-                }
-            }
+        if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
+            return response()->json([
+                'total_active_users' => 0,
+                'users' => [],
+                'cached' => true,
+                'timestamp' => now()->toIso8601String(),
+            ]);
         }
 
+        $users = DB::connection('tenant')
+            ->table('hotspot_users')
+            ->where('last_seen', '>=', now()->subMinutes(6))
+            ->orderByDesc('last_seen')
+            ->get()
+            ->map(fn ($user) => [
+                'username' => $user->username ?? '',
+                'hostname' => $user->hostname ?? '',
+                'mac_address' => $user->mac_address ?? '',
+                'ip_address' => $user->ip_address ?? '',
+                'uptime' => $user->uptime_seconds ?? 0,
+                'bytes_in' => (float) ($user->data_uploaded_mb ?? 0) * 1048576,
+                'bytes_out' => (float) ($user->data_downloaded_mb ?? 0) * 1048576,
+                'router_name' => $user->router_name ?? '',
+                'router_location' => $user->router_identity ?? '',
+                'last_seen' => $user->last_seen,
+            ]);
+
         return response()->json([
-            'total_active_users' => count($allUsers),
-            'users' => $allUsers,
+            'total_active_users' => $users->count(),
+            'users' => $users,
+            'cached' => true,
             'timestamp' => now()->toIso8601String(),
         ]);
     }

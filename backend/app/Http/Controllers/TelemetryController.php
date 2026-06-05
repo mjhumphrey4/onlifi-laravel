@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
-use App\Services\RouterSnapshotService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -383,9 +382,7 @@ class TelemetryController extends Controller
                 'cpu_load' => $telemetryData['cpu_load'],
             ]);
 
-            if (Cache::add("router_snapshot_sync_site_{$site->id}", true, now()->addSeconds(60))) {
-                app(RouterSnapshotService::class)->syncForTelemetrySite($site);
-            }
+            Cache::put("router_snapshot_seen_site_{$site->id}", now()->toIso8601String(), now()->addMinutes(10));
 
             return response()->json([
                 'success' => true,

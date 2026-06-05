@@ -566,6 +566,8 @@ sudo systemctl list-timers | grep onlifi
 
 The scheduler is required for recurring cleanup, accounting, expiry, and any queued maintenance commands that are wired into Laravel scheduling.
 
+The scheduler also runs `onlifi:router-snapshots:sync` every 5 minutes. This job pulls active clients, router users, IP bindings, DHCP leases, DHCP pools, and PPPoE clients from each site's MikroTik over the WireGuard/API path, stores the latest snapshot in the tenant database, and warms Redis. Dashboard pages should read this cached data instead of opening live RouterOS sessions on every page load.
+
 ## 12. Redis
 
 Enable and start Redis:
@@ -809,6 +811,8 @@ Scheduler:
 ```bash
 sudo systemctl status onlifi-scheduler.timer
 sudo systemctl list-timers | grep onlifi
+cd /var/www/onlifi/backend
+php artisan onlifi:router-snapshots:sync
 ```
 
 FreeRADIUS:

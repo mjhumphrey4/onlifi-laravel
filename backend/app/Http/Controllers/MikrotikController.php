@@ -170,7 +170,21 @@ class MikrotikController extends Controller
     public function getActiveUsers($id)
     {
         $router = MikrotikRouter::findOrFail($id);
-        $users = $this->mikrotikService->getActiveUsers($router);
+        if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
+            return response()->json([]);
+        }
+
+        $query = DB::connection('tenant')->table('hotspot_users');
+        if (Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id') && $router->site_id) {
+            $query->where('site_id', $router->site_id);
+        } elseif (Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+            $query->where('router_name', $router->name);
+        }
+
+        $users = $query
+            ->where('last_seen', '>=', now()->subMinutes(6))
+            ->orderByDesc('last_seen')
+            ->get();
 
         return response()->json($users);
     }
@@ -339,28 +353,18 @@ class MikrotikController extends Controller
 
     public function getAllActiveUsers()
     {
-        $routers = MikrotikRouter::where('is_active', true)->get();
-        $allUsers = [];
-
-        foreach ($routers as $router) {
-            if ($this->mikrotikService->connect($router)) {
-                $users = $this->mikrotikService->getActiveUsers($router);
-                
-                foreach ($users as $user) {
-                    $allUsers[] = array_merge($user, [
-                        'router_id' => $router->id,
-                        'router_name' => $router->name,
-                        'router_location' => $router->location,
-                    ]);
-                }
-                
-                $this->mikrotikService->disconnect();
-            }
-        }
+        $allUsers = Schema::connection('tenant')->hasTable('hotspot_users')
+            ? DB::connection('tenant')
+                ->table('hotspot_users')
+                ->where('last_seen', '>=', now()->subMinutes(6))
+                ->orderByDesc('last_seen')
+                ->get()
+            : collect();
 
         return response()->json([
-            'total_active_users' => count($allUsers),
+            'total_active_users' => $allUsers->count(),
             'users' => $allUsers,
+            'cached' => true,
             'timestamp' => now()->toIso8601String(),
         ]);
     }
@@ -434,6 +438,13 @@ class MikrotikController extends Controller
                     'last_synced_at' => $cached['last_synced_at'],
                 ]);
             }
+
+            return response()->json([
+                'bindings' => [],
+                'cached' => true,
+                'last_synced_at' => null,
+                'message' => 'Waiting for the background router snapshot job to populate IP bindings.',
+            ]);
         }
 
         $router = $this->resolveSiteRouter($request);
@@ -533,6 +544,13 @@ class MikrotikController extends Controller
                     'last_synced_at' => $cached['last_synced_at'],
                 ]);
             }
+
+            return response()->json([
+                'users' => [],
+                'cached' => true,
+                'last_synced_at' => null,
+                'message' => 'Waiting for the background router snapshot job to populate router users.',
+            ]);
         }
 
         $router = $this->resolveSiteRouter($request);
@@ -567,13 +585,20 @@ class MikrotikController extends Controller
         if (!$request->boolean('refresh')) {
             $site = SiteScope::selectedOrDefaultSite($request);
             $cached = $site ? $this->snapshots->cachedRouterList($site, 'dhcp_leases') : null;
-            if ($cached && count($cached['data']) > 0) {
+            if ($cached) {
                 return response()->json([
                     'leases' => $cached['data'],
                     'cached' => true,
                     'last_synced_at' => $cached['last_synced_at'],
                 ]);
             }
+
+            return response()->json([
+                'leases' => [],
+                'cached' => true,
+                'last_synced_at' => null,
+                'message' => 'Waiting for the background router snapshot job to populate DHCP leases.',
+            ]);
         }
 
         $router = $this->resolveSiteRouter($request);
@@ -608,13 +633,20 @@ class MikrotikController extends Controller
         if (!$request->boolean('refresh')) {
             $site = SiteScope::selectedOrDefaultSite($request);
             $cached = $site ? $this->snapshots->cachedRouterList($site, 'dhcp_pools') : null;
-            if ($cached && count($cached['data']) > 0) {
+            if ($cached) {
                 return response()->json([
                     'pools' => $cached['data'],
                     'cached' => true,
                     'last_synced_at' => $cached['last_synced_at'],
                 ]);
             }
+
+            return response()->json([
+                'pools' => [],
+                'cached' => true,
+                'last_synced_at' => null,
+                'message' => 'Waiting for the background router snapshot job to populate DHCP pools.',
+            ]);
         }
 
         $router = $this->resolveSiteRouter($request);

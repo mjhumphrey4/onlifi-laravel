@@ -179,6 +179,8 @@ class RouterSnapshotService
             }
         });
 
+        $this->warmHotspotClientCaches($site, $routerName);
+
         return count($rows);
     }
 
@@ -226,7 +228,12 @@ class RouterSnapshotService
     {
         $this->ensurePppoeClientsTable();
         $secrets = $this->mikrotikService->getPppoeSecrets($router);
+        if (empty($secrets) && $this->mikrotikService->getLastError()) {
+            return 0;
+        }
+
         $now = now();
+        $rows = [];
 
         foreach ($secrets as $secret) {
             $username = $secret['username'] ?: $secret['name'];
@@ -234,28 +241,43 @@ class RouterSnapshotService
                 continue;
             }
 
-            DB::connection('tenant')->table('pppoe_clients')->updateOrInsert(
-                [
-                    'site_id' => $site->id,
-                    'username' => $username,
-                ],
-                [
-                    'router_id' => $secret['id'] ?: null,
-                    'name' => $secret['name'] ?: $username,
-                    'password' => $secret['password'] ?: null,
-                    'profile' => $secret['profile'] ?: null,
-                    'service' => $secret['service'] ?: 'pppoe',
-                    'remote_address' => $secret['remote_address'] ?: null,
-                    'notes' => $secret['comment'] ?: null,
-                    'is_active' => !$secret['disabled'],
-                    'last_seen_at' => $secret['last_logged_out'] ?: null,
-                    'updated_at' => $now,
-                    'created_at' => $now,
-                ]
-            );
+            $rows[] = [
+                'site_id' => $site->id,
+                'router_id' => $secret['id'] ?: null,
+                'name' => $secret['name'] ?: $username,
+                'username' => $username,
+                'password' => $secret['password'] ?: null,
+                'profile' => $secret['profile'] ?: null,
+                'service' => $secret['service'] ?: 'pppoe',
+                'remote_address' => $secret['remote_address'] ?: null,
+                'phone' => null,
+                'notes' => $secret['comment'] ?: null,
+                'is_active' => !$secret['disabled'],
+                'last_seen_at' => $secret['last_logged_out'] ?: null,
+                'updated_at' => $now,
+                'created_at' => $now,
+            ];
         }
 
-        return count($secrets);
+        DB::connection('tenant')->transaction(function () use ($site, $rows) {
+            DB::connection('tenant')->table('pppoe_clients')->where('site_id', $site->id)->delete();
+
+            if (!empty($rows)) {
+                DB::connection('tenant')->table('pppoe_clients')->insert($rows);
+            }
+        });
+
+        $cachedRows = DB::connection('tenant')
+            ->table('pppoe_clients')
+            ->where('site_id', $site->id)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->all();
+
+        $this->storeRouterListCache($site, 'pppoe_clients', $cachedRows);
+
+        return count($cachedRows);
     }
 
     public function cachedRouterList(Site $site, string $type): ?array
@@ -317,6 +339,85 @@ class RouterSnapshotService
     private function routerCacheKey(Site $site, string $type): string
     {
         return "tenant:{$site->tenant_id}:site:{$site->id}:router:list:{$type}";
+    }
+
+    private function clientsCacheKey(Site $site, int $limit): string
+    {
+        return "tenant:{$site->tenant_id}:site:{$site->id}:clients:limit:{$limit}";
+    }
+
+    private function warmHotspotClientCaches(Site $site, string $routerName): void
+    {
+        if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
+            return;
+        }
+
+        foreach ([10, 100] as $limit) {
+            $clients = $this->hotspotClientQuery($site, $routerName)
+                ->orderBy('last_seen', 'desc')
+                ->limit($limit)
+                ->get();
+
+            Cache::put($this->clientsCacheKey($site, $limit), [
+                'clients' => $clients,
+                'total' => $clients->count(),
+                'refreshed_at' => $clients->max('last_seen'),
+                'cache' => [
+                    'source' => 'redis',
+                    'ttl_seconds' => 300,
+                ],
+            ], now()->addMinutes(6));
+        }
+    }
+
+    private function hotspotClientQuery(Site $site, string $routerName)
+    {
+        $select = [
+            'id',
+            'mac_address',
+            'ip_address',
+            'username',
+            'device_type',
+            'uptime_seconds',
+            'data_uploaded_mb',
+            'data_downloaded_mb',
+            DB::raw('(data_uploaded_mb + data_downloaded_mb) as total_data_mb'),
+            'signal_strength',
+            'last_seen',
+            'router_name',
+            'voucher_code',
+            'profile_name',
+            'expires_at',
+            DB::raw('CASE WHEN last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN "online" ELSE "offline" END as status'),
+        ];
+
+        if (Schema::connection('tenant')->hasColumn('hotspot_users', 'hostname')) {
+            array_splice($select, 4, 0, ['hostname']);
+        }
+
+        if (Schema::connection('tenant')->hasTable('transactions')) {
+            $select[] = DB::raw('COALESCE((SELECT SUM(amount) FROM transactions WHERE transactions.msisdn = hotspot_users.username), 0) as total_spent');
+        } else {
+            $select[] = DB::raw('0 as total_spent');
+        }
+
+        if (Schema::connection('tenant')->hasTable('radacct')) {
+            $select[] = DB::raw('(SELECT COUNT(*) FROM radacct WHERE radacct.callingstationid = hotspot_users.mac_address) as total_sessions');
+        } else {
+            $select[] = DB::raw('0 as total_sessions');
+        }
+
+        $query = DB::connection('tenant')
+            ->table('hotspot_users')
+            ->select($select);
+
+        if (Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
+            $query->where('site_id', $site->id);
+        } elseif (Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+            $query->where('router_name', $routerName);
+        }
+
+        return $query;
     }
 
     public function ensureRouterCacheTable(): void

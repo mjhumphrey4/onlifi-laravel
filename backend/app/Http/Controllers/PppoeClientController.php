@@ -32,6 +32,14 @@ class PppoeClientController extends Controller
 
         if ($request->boolean('refresh')) {
             $this->snapshots->syncSite($site, ['pppoe_clients']);
+        } elseif ($cached = $this->snapshots->cachedRouterList($site, 'pppoe_clients')) {
+            return response()->json([
+                'clients' => $cached['data'],
+                'site' => ['id' => $site->id, 'name' => $site->name],
+                'source' => $cached['source'],
+                'cached' => true,
+                'last_synced_at' => $cached['last_synced_at'],
+            ]);
         }
 
         $clients = DB::connection('tenant')->table('pppoe_clients')

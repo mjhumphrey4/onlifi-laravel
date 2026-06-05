@@ -30,10 +30,8 @@ class ClientController extends Controller
             $refreshResult = $this->refreshFromRouter($request, true);
             Cache::forget($cacheKey);
         } elseif ($cached = Cache::get($cacheKey)) {
-            if (($cached['total'] ?? 0) > 0) {
-                $cached['cache']['source'] = 'cache';
-                return response()->json($cached);
-            }
+            $cached['cache']['source'] = 'redis';
+            return response()->json($cached);
         }
 
         try {
@@ -45,10 +43,6 @@ class ClientController extends Controller
                     'total' => 0,
                     'message' => 'Run tenant migrations to enable client telemetry storage.',
                 ]);
-            }
-
-            if ($site) {
-                $refreshResult = $refreshResult ?: $this->refreshFromRouter($request, false);
             }
 
             $select = [
@@ -100,6 +94,9 @@ class ClientController extends Controller
                     'ttl_seconds' => 300,
                 ],
             ];
+            if ($site && $clients->isEmpty()) {
+                $payload['message'] = 'No cached client data is available yet. The background router snapshot job refreshes this every 5 minutes.';
+            }
             if ($refreshResult && !$refreshResult['ok']) {
                 $payload['message'] = $refreshResult['message'];
                 $payload['router_error'] = $refreshResult['message'];
