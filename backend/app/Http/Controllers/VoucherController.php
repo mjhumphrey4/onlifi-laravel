@@ -41,6 +41,45 @@ class VoucherController extends Controller
         return $site;
     }
 
+    private function hideManualPaymentGroups($query, string $table = 'voucher_groups')
+    {
+        if (Schema::connection('tenant')->hasColumn('voucher_groups', 'created_by')) {
+            $query->where(function ($groupQuery) use ($table) {
+                $groupQuery->whereNull("{$table}.created_by")
+                    ->orWhere("{$table}.created_by", '!=', 'manual-payment');
+            });
+        }
+
+        if (Schema::connection('tenant')->hasColumn('voucher_groups', 'description')) {
+            $query->where(function ($groupQuery) use ($table) {
+                $groupQuery->whereNull("{$table}.description")
+                    ->orWhere("{$table}.description", 'not like', '%Auto-created by manual payment%');
+            });
+        }
+
+        return $query;
+    }
+
+    private function hideManualPaymentVouchers($query)
+    {
+        $hasCreatedBy = Schema::connection('tenant')->hasColumn('voucher_groups', 'created_by');
+        $hasDescription = Schema::connection('tenant')->hasColumn('voucher_groups', 'description');
+
+        if (!Schema::connection('tenant')->hasTable('voucher_groups') || (!$hasCreatedBy && !$hasDescription)) {
+            return $query;
+        }
+
+        return $query->whereDoesntHave('group', function ($groupQuery) use ($hasCreatedBy, $hasDescription) {
+            if ($hasCreatedBy) {
+                $groupQuery->where('created_by', 'manual-payment');
+            }
+
+            if ($hasDescription) {
+                $groupQuery->orWhere('description', 'like', '%Auto-created by manual payment%');
+            }
+        });
+    }
+
     public function index(Request $request)
     {
         $query = Voucher::with(['group', 'salesPoint']);
@@ -82,6 +121,10 @@ class VoucherController extends Controller
 
         if ($request->has('group_id')) {
             $query->where('group_id', $request->group_id);
+        }
+
+        if ($status !== 'expired') {
+            $this->hideManualPaymentVouchers($query);
         }
 
         $search = trim((string) $request->query('search', ''));
@@ -697,6 +740,7 @@ class VoucherController extends Controller
         $types = $query->orderBy('type_name')->get()->map(function ($type) use ($site) {
             $groupQuery = VoucherGroup::query();
             SiteScope::applyToTenantTable($groupQuery, 'voucher_groups', $site);
+            $this->hideManualPaymentGroups($groupQuery);
             $groupQuery
                 ->where('validity_hours', $type->duration_hours)
                 ->where('price', $type->base_amount);
@@ -861,6 +905,7 @@ class VoucherController extends Controller
         }
         $query = VoucherGroup::with('salesPoint');
         SiteScope::applyToTenantTable($query, 'voucher_groups', $site);
+        $this->hideManualPaymentGroups($query);
 
         if (Schema::connection('tenant')->hasColumn('voucher_groups', 'tenant_id') && app()->bound('tenant')) {
             $query->where(function ($q) {
@@ -904,6 +949,7 @@ class VoucherController extends Controller
 
         $groupQuery = VoucherGroup::with('salesPoint');
         SiteScope::applyToTenantTable($groupQuery, 'voucher_groups', $site);
+        $this->hideManualPaymentGroups($groupQuery);
         $group = $groupQuery->findOrFail($id);
 
         $voucherQuery = Voucher::with(['group', 'salesPoint'])->where('group_id', $group->id);
@@ -1130,6 +1176,7 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
 
         $voucherQuery = Voucher::query();
         SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
+        $this->hideManualPaymentVouchers($voucherQuery);
         if ($salesPointId) {
             $voucherQuery->where('sales_point_id', $salesPointId);
         }
@@ -1156,6 +1203,7 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
         // Daily statistics (last 30 days)
         $dailyQuery = Voucher::selectRaw('DATE(first_used_at) as date, COUNT(*) as vouchers_used, SUM(price) as revenue, COUNT(DISTINCT used_by_mac) as unique_devices');
         SiteScope::applyToTenantTable($dailyQuery, 'vouchers', $site);
+        $this->hideManualPaymentVouchers($dailyQuery);
         if ($salesPointId) {
             $dailyQuery->where('sales_point_id', $salesPointId);
         }
@@ -1190,6 +1238,7 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
                     SUM(CASE WHEN vouchers.first_used_at IS NOT NULL AND vouchers.first_used_at >= ? THEN vouchers.price ELSE 0 END) as revenue_30_days
                 ', [now()->subDays(30)]);
             SiteScope::applyToTenantTable($salesQuery, 'voucher_groups', $site);
+            $this->hideManualPaymentGroups($salesQuery);
             if (Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
                 $salesQuery->where('vouchers.site_id', $site->id);
             }

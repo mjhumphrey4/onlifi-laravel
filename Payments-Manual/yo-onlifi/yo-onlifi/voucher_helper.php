@@ -3,6 +3,7 @@
 // Auto-create OnLiFi vouchers and RADIUS rows after successful payment.
 
 require_once 'config.php';
+require_once 'sms_helper.php';
 
 function assignVoucherToTransaction($externalRef, $pdo = null) {
     $result = createPaidVouchers($externalRef, 1, $pdo);
@@ -10,6 +11,7 @@ function assignVoucherToTransaction($externalRef, $pdo = null) {
     return [
         'success' => $result['success'],
         'voucherCode' => $result['voucherCodes'][0] ?? null,
+        'sms' => $result['sms'] ?? null,
         'error' => $result['error'] ?? null,
     ];
 }
@@ -20,6 +22,7 @@ function assignTwoVouchersToTransaction($externalRef, $pdo = null) {
     return [
         'success' => $result['success'],
         'voucherCodes' => $result['voucherCodes'] ?? null,
+        'sms' => $result['sms'] ?? null,
         'error' => $result['error'] ?? null,
     ];
 }
@@ -49,7 +52,9 @@ function createPaidVouchers(string $externalRef, int $count, ?PDO $pdo = null): 
 
         if (!empty($transaction['voucher_code'])) {
             $pdo->commit();
-            return ['success' => true, 'voucherCodes' => [$transaction['voucher_code']]];
+            $codes = [$transaction['voucher_code']];
+            $sms = sendTransactionVoucherSms($pdo, $transaction, $codes);
+            return ['success' => true, 'voucherCodes' => $codes, 'sms' => $sms];
         }
 
         $codes = [];
@@ -64,7 +69,10 @@ function createPaidVouchers(string $externalRef, int $count, ?PDO $pdo = null): 
 
         $pdo->commit();
 
-        return ['success' => true, 'voucherCodes' => $codes];
+        $transaction['voucher_code'] = $codes[0] ?? null;
+        $sms = sendTransactionVoucherSms($pdo, $transaction, $codes);
+
+        return ['success' => true, 'voucherCodes' => $codes, 'sms' => $sms];
     } catch (Exception $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -76,6 +84,60 @@ function createPaidVouchers(string $externalRef, int $count, ?PDO $pdo = null): 
             $pdo = null;
         }
     }
+}
+
+function sendTransactionVoucherSms(PDO $pdo, array $transaction, array $codes): array {
+    $externalRef = (string) ($transaction['external_ref'] ?? '');
+    $msisdn = trim((string) ($transaction['msisdn'] ?? ''));
+    $codes = array_values(array_filter($codes, function ($code) {
+        return trim((string) $code) !== '';
+    }));
+
+    if ($externalRef === '' || !$codes) {
+        return ['success' => false, 'message' => 'Missing transaction reference or voucher code'];
+    }
+
+    if (columnExists($pdo, 'transactions', 'sms_sent_at')) {
+        $fresh = fetchTransactionBy($pdo, 'external_ref', $externalRef);
+        if (!empty($fresh['sms_sent_at'])) {
+            return ['success' => true, 'message' => 'SMS already sent', 'skipped' => true];
+        }
+        if ($fresh && empty($msisdn)) {
+            $msisdn = trim((string) ($fresh['msisdn'] ?? ''));
+        }
+    }
+
+    if ($msisdn === '') {
+        updateTransaction($pdo, $externalRef, [
+            'sms_status' => 'failed',
+            'sms_error' => 'Missing customer phone number',
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+        return ['success' => false, 'message' => 'Missing customer phone number'];
+    }
+
+    try {
+        $packageName = trim((string) ($transaction['voucher_type'] ?? ''));
+        if (count($codes) >= 2 && function_exists('sendTwoVouchersSMS')) {
+            $result = sendTwoVouchersSMS($msisdn, $codes, $packageName);
+        } elseif (function_exists('sendVoucherSMS')) {
+            $result = sendVoucherSMS($msisdn, $codes[0], $packageName);
+        } else {
+            $result = ['success' => false, 'message' => 'SMS helper is not loaded'];
+        }
+    } catch (Exception $e) {
+        $result = ['success' => false, 'message' => 'SMS error: ' . $e->getMessage()];
+    }
+
+    $success = !empty($result['success']);
+    updateTransaction($pdo, $externalRef, [
+        'sms_sent_at' => $success ? date('Y-m-d H:i:s') : null,
+        'sms_status' => $success ? 'sent' : 'failed',
+        'sms_error' => $success ? null : substr((string) ($result['message'] ?? 'SMS sending failed'), 0, 255),
+        'updated_at' => date('Y-m-d H:i:s'),
+    ]);
+
+    return $result;
 }
 
 function createVoucherAndRadiusRows(PDO $pdo, array $transaction): string {
@@ -111,34 +173,57 @@ function resolvePackage(PDO $pdo, array $transaction): array {
     $voucherType = trim((string) ($transaction['voucher_type'] ?? ''));
     $siteId = $transaction['site_id'] ?? ONLIFI_SITE_ID;
 
-    $sql = "SELECT * FROM voucher_groups WHERE price = ?";
-    $params = [$amount];
+    $baseSql = "SELECT * FROM voucher_groups WHERE price = ?";
+    $baseParams = [$amount];
 
     if ($voucherType !== '') {
-        $sql .= " AND group_name LIKE ?";
-        $params[] = "%$voucherType%";
+        $baseSql .= " AND group_name LIKE ?";
+        $baseParams[] = "%$voucherType%";
     }
 
     if (columnExists($pdo, 'voucher_groups', 'site_id')) {
-        $sql .= " AND (site_id = ? OR site_id IS NULL)";
-        $params[] = $siteId;
+        $baseSql .= " AND (site_id = ? OR site_id IS NULL)";
+        $baseParams[] = $siteId;
     }
 
-    $sql .= " ORDER BY id ASC LIMIT 1";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
+    $manualSql = $baseSql;
+    $manualParams = $baseParams;
+    $manualConditions = [];
+
+    if (columnExists($pdo, 'voucher_groups', 'created_by')) {
+        $manualConditions[] = "created_by = ?";
+        $manualParams[] = 'manual-payment';
+    }
+
+    if (columnExists($pdo, 'voucher_groups', 'description')) {
+        $manualConditions[] = "description LIKE ?";
+        $manualParams[] = '%Auto-created by manual payment%';
+    }
+
+    if ($manualConditions) {
+        $manualSql .= " AND (" . implode(' OR ', $manualConditions) . ")";
+    }
+
+    $manualSql .= " ORDER BY id ASC LIMIT 1";
+    $stmt = $pdo->prepare($manualSql);
+    $stmt->execute($manualParams);
     $group = $stmt->fetch();
 
     if (!$group) {
-        $defaults = packageDefaults($voucherType, $amount);
+        $configuredSql = $baseSql . " ORDER BY id ASC LIMIT 1";
+        $stmt = $pdo->prepare($configuredSql);
+        $stmt->execute($baseParams);
+        $configuredGroup = $stmt->fetch();
+
+        $defaults = $configuredGroup ?: packageDefaults($voucherType, $amount);
         $groupData = [
             'group_name' => $defaults['group_name'],
             'description' => 'Auto-created by manual payment',
-            'profile_name' => $defaults['profile_name'],
-            'validity_hours' => $defaults['validity_hours'],
-            'validity_minutes' => $defaults['validity_minutes'],
-            'data_limit_mb' => null,
-            'speed_limit_kbps' => null,
+            'profile_name' => $defaults['profile_name'] ?? ONLIFI_DEFAULT_PROFILE,
+            'validity_hours' => $defaults['validity_hours'] ?? 24,
+            'validity_minutes' => $defaults['validity_minutes'] ?? null,
+            'data_limit_mb' => $defaults['data_limit_mb'] ?? null,
+            'speed_limit_kbps' => $defaults['speed_limit_kbps'] ?? null,
             'price' => $amount,
             'site_id' => $siteId,
             'created_by' => 'manual-payment',
