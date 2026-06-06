@@ -93,13 +93,21 @@ try {
 
     // Check if voucher already assigned
     if ($transaction['voucher_code']) {
+        $smsResult = sendTransactionVoucherSms($pdo, $transaction, [$transaction['voucher_code']]);
         $logger->info("Voucher already assigned to transaction", [
             'externalRef' => $externalRef,
-            'voucherCode' => $transaction['voucher_code']
+            'voucherCode' => $transaction['voucher_code'],
+            'sms_sent' => $smsResult['success'] ?? false,
+            'sms_message' => $smsResult['message'] ?? null,
         ]);
         if ($isBackgroundCall) {
             header('Content-Type: application/json');
-            echo json_encode(['success' => true, 'voucherCode' => $transaction['voucher_code']]);
+            echo json_encode([
+                'success' => true,
+                'voucherCode' => $transaction['voucher_code'],
+                'smsSent' => $smsResult['success'] ?? false,
+                'smsMessage' => $smsResult['message'] ?? null,
+            ]);
             exit;
         } else {
             header("Location: " . $_SERVER['HTTP_REFERER'] ?? SITE_URL);
@@ -142,16 +150,24 @@ $voucherResult = assignVoucherToTransaction($externalRef, $pdo);
 
 if ($voucherResult['success']) {
     $voucherCode = $voucherResult['voucherCode'];
+    $smsResult = $voucherResult['sms'] ?? ['success' => false, 'message' => 'SMS result unavailable'];
     
     $logger->success("Voucher assignment complete", [
         'voucherCode' => $voucherCode,
         'externalRef' => $externalRef,
-        'isBackgroundCall' => $isBackgroundCall
+        'isBackgroundCall' => $isBackgroundCall,
+        'sms_sent' => $smsResult['success'] ?? false,
+        'sms_message' => $smsResult['message'] ?? null,
     ]);
 
     if ($isBackgroundCall) {
         header('Content-Type: application/json');
-        echo json_encode(['success' => true, 'voucherCode' => $voucherCode]);
+        echo json_encode([
+            'success' => true,
+            'voucherCode' => $voucherCode,
+            'smsSent' => $smsResult['success'] ?? false,
+            'smsMessage' => $smsResult['message'] ?? null,
+        ]);
         exit;
     } else {
         header("Location: " . $_SERVER['HTTP_REFERER'] ?? SITE_URL);

@@ -83,9 +83,12 @@ try {
         $voucherCode = $transaction['voucher_code'];
 
         if ($voucherCode) {
+            $smsResult = sendTransactionVoucherSms($pdo, $transaction, [$voucherCode]);
             $logger->success("Voucher already assigned, returning to frontend", [
                 'voucherCode' => $voucherCode,
-                'external_ref' => $transaction['external_ref']
+                'external_ref' => $transaction['external_ref'],
+                'sms_sent' => $smsResult['success'] ?? false,
+                'sms_message' => $smsResult['message'] ?? null,
             ]);
             echo json_encode([
                 'transactionStatus' => 1,
@@ -305,7 +308,7 @@ try {
 
             if ($voucherResult['success'] ?? false) {
                 $voucherCode = $voucherResult['voucherCode'];
-                $smsResult = sendVoucherSMS($transaction['msisdn'], $voucherCode, '');
+                $smsResult = $voucherResult['sms'] ?? ['success' => false, 'message' => 'SMS result unavailable'];
 
                 $response = [
                     'transactionStatus' => 1,
@@ -318,6 +321,7 @@ try {
                     'external_ref' => $transaction['external_ref'],
                     'voucherCode' => $voucherCode,
                     'sms_sent' => $smsResult['success'] ?? false,
+                    'sms_message' => $smsResult['message'] ?? null,
                 ]);
 
                 echo json_encode($response);

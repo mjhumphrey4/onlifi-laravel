@@ -214,10 +214,10 @@ function checkIOTECFallbackStatus($iotecExternalRef, $logger) {
                     'voucher_code' => $voucherResult['voucherCode']
                 ]);
                 
-                require_once __DIR__ . '/IOTEC/sms_helper.php';
-                $smsResult = sendVoucherSMS($transaction['msisdn'], $voucherResult['voucherCode'], '');
+                $smsResult = $voucherResult['sms'] ?? ['success' => false, 'message' => 'SMS result unavailable'];
                 $logger->info("SMS sent for fallback voucher", [
-                    'success' => $smsResult['success']
+                    'success' => $smsResult['success'] ?? false,
+                    'message' => $smsResult['message'] ?? null,
                 ]);
                 
                 return [

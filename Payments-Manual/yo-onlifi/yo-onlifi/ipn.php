@@ -133,15 +133,12 @@ if (isset($_POST)) {
                     
                     if ($voucherResult['success']) {
                         logIPN("TWO vouchers assigned successfully: " . implode(', ', $voucherResult['voucherCodes']) . " for external_ref: $externalRef", 'VOUCHER_SUCCESS');
-                        
-                        // Send SMS with BOTH voucher codes to customer
-                        logIPN("Attempting to send SMS with 2 voucher codes to: $msisdn", 'SMS_SEND');
-                        $smsResult = sendTwoVouchersSMS($msisdn, $voucherResult['voucherCodes'], '7 Days');
-                        
-                        if ($smsResult['success']) {
+
+                        $smsResult = $voucherResult['sms'] ?? ['success' => false, 'message' => 'SMS result unavailable'];
+                        if (!empty($smsResult['success'])) {
                             logIPN("SMS sent successfully to $msisdn with 2 vouchers: " . implode(', ', $voucherResult['voucherCodes']), 'SMS_SUCCESS');
                         } else {
-                            logIPN("SMS sending failed for $msisdn - Error: " . $smsResult['message'], 'SMS_ERROR');
+                            logIPN("SMS sending failed for $msisdn - Error: " . ($smsResult['message'] ?? 'Unknown SMS error'), 'SMS_ERROR');
                         }
                     } else {
                         logIPN("TWO vouchers assignment failed for external_ref: $externalRef - Error: " . $voucherResult['error'], 'VOUCHER_ERROR');
@@ -153,15 +150,12 @@ if (isset($_POST)) {
                     
                     if ($voucherResult['success']) {
                         logIPN("Voucher assigned successfully: " . $voucherResult['voucherCode'] . " for external_ref: $externalRef", 'VOUCHER_SUCCESS');
-                        
-                        // Send SMS with voucher code to customer
-                        logIPN("Attempting to send SMS to: $msisdn", 'SMS_SEND');
-                        $smsResult = sendVoucherSMS($msisdn, $voucherResult['voucherCode'], '');
-                        
-                        if ($smsResult['success']) {
+
+                        $smsResult = $voucherResult['sms'] ?? ['success' => false, 'message' => 'SMS result unavailable'];
+                        if (!empty($smsResult['success'])) {
                             logIPN("SMS sent successfully to $msisdn with voucher: " . $voucherResult['voucherCode'], 'SMS_SUCCESS');
                         } else {
-                            logIPN("SMS sending failed for $msisdn - Error: " . $smsResult['message'], 'SMS_ERROR');
+                            logIPN("SMS sending failed for $msisdn - Error: " . ($smsResult['message'] ?? 'Unknown SMS error'), 'SMS_ERROR');
                         }
                     } else {
                         logIPN("Voucher assignment failed for external_ref: $externalRef - Error: " . $voucherResult['error'], 'VOUCHER_ERROR');
