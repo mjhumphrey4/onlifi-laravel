@@ -12,7 +12,6 @@ interface SiteStat {
   week_amount: number;
   withdrawn: number;
   pending_withdraw: number;
-  balance: number;
   total_sales: number;
 }
 
@@ -205,11 +204,10 @@ export function Dashboard() {
         const site = tx.origin_site || 'Default Site';
         const amount = tx.status === 'success' ? parseFloat(tx.amount || '0') : 0;
         if (!acc[site]) {
-          acc[site] = { total_amount: 0, today_amount: 0, week_amount: 0, withdrawn: 0, pending_withdraw: 0, balance: 0, total_sales: 0 };
+          acc[site] = { total_amount: 0, today_amount: 0, week_amount: 0, withdrawn: 0, pending_withdraw: 0, total_sales: 0 };
         }
         acc[site].total_amount += amount;
         acc[site].today_amount += amount;
-        acc[site].balance += amount;
         acc[site].total_sales += tx.status === 'success' ? 1 : 0;
         return acc;
       }, {});
@@ -393,10 +391,6 @@ export function Dashboard() {
                   <div className="flex justify-between">
                     <span className="opacity-80">{periodLabel}</span>
                     <span className="font-semibold">{fmt(stat.today_amount)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-white/20 pt-1 mt-1">
-                    <span className="font-semibold">Balance</span>
-                    <span className="font-bold text-yellow-200">{fmt(stat.balance)}</span>
                   </div>
                 </div>
               </div>
