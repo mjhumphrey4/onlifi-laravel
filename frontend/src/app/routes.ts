@@ -10,6 +10,8 @@ import { ImportVouchers } from './pages/ImportVouchers';
 import { Clients } from './pages/Clients';
 import { Devices } from './pages/Devices';
 import { Vouchers } from './pages/Vouchers';
+import { ManualVouchers } from './pages/ManualVouchers';
+import { ExpiredVouchers } from './pages/ExpiredVouchers';
 import { VoucherTypes } from './pages/VoucherTypes';
 import { VoucherTemplates } from './pages/VoucherTemplates';
 import { Settings } from './pages/Settings';
@@ -69,6 +71,8 @@ export const router = createBrowserRouter([
       { path: 'clients', Component: Clients },
       { path: 'devices', Component: Devices },
       { path: 'vouchers', Component: Vouchers },
+      { path: 'manual-vouchers', Component: ManualVouchers },
+      { path: 'expired-vouchers', Component: ExpiredVouchers },
       { path: 'voucher-types', Component: VoucherTypes },
       { path: 'voucher-templates', Component: VoucherTemplates },
       { path: 'settings', Component: Settings },

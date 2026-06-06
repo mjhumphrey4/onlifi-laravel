@@ -65,6 +65,8 @@ const menuItems: MenuItem[] = [
     permission: 'manage_vouchers',
     children: [
       { path: '/vouchers',       label: 'Vouchers',           icon: Ticket, adminOnly: false },
+      { path: '/manual-vouchers', label: 'Manual Vouchers', icon: Plus, adminOnly: false },
+      { path: '/expired-vouchers', label: 'Expired Vouchers', icon: Clock, adminOnly: false },
       { path: '/voucher-types',  label: 'Voucher Types',      icon: Clock, adminOnly: false },
       { path: '/voucher-templates', label: 'Templates', icon: Ticket, adminOnly: false },
       { path: '/import-vouchers', label: 'Import',    icon: Upload, adminOnly: false },

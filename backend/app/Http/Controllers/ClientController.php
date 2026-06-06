@@ -60,7 +60,10 @@ class ClientController extends Controller
                 'router_name',
                 'voucher_code',
                 'profile_name',
+                'voucher_type',
+                'first_used_at',
                 'expires_at',
+                DB::raw('CASE WHEN expires_at IS NOT NULL THEN GREATEST(TIMESTAMPDIFF(SECOND, NOW(), expires_at), 0) ELSE NULL END as time_left_seconds'),
                 DB::raw('CASE WHEN last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN "online" ELSE "offline" END as status'),
                 DB::raw('0 as total_spent'),
                 DB::raw('0 as total_sessions'),
@@ -215,6 +218,8 @@ class ClientController extends Controller
         $routerName = $router->name ?: $site->name;
         $hasSiteId = Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id');
         $hasHostname = Schema::connection('tenant')->hasColumn('hotspot_users', 'hostname');
+        $hasFirstUsedAt = Schema::connection('tenant')->hasColumn('hotspot_users', 'first_used_at');
+        $hasVoucherType = Schema::connection('tenant')->hasColumn('hotspot_users', 'voucher_type');
         $hasVouchers = Schema::connection('tenant')->hasTable('vouchers');
         $seenMacs = [];
 
@@ -228,9 +233,18 @@ class ClientController extends Controller
             $lease = $leasesByMac->get($mac, []);
 
             $username = $user['username'] ?: null;
-            $voucher = $username && $hasVouchers
-                ? DB::connection('tenant')->table('vouchers')->where('voucher_code', $username)->first()
-                : null;
+            $voucher = null;
+            if ($username && $hasVouchers) {
+                $voucherQuery = DB::connection('tenant')->table('vouchers');
+                if (Schema::connection('tenant')->hasTable('voucher_groups') && Schema::connection('tenant')->hasColumn('vouchers', 'group_id')) {
+                    $voucherQuery
+                        ->leftJoin('voucher_groups', 'voucher_groups.id', '=', 'vouchers.group_id')
+                        ->select('vouchers.*', 'voucher_groups.group_name as voucher_type_name');
+                } else {
+                    $voucherQuery->select('vouchers.*');
+                }
+                $voucher = $voucherQuery->where('vouchers.voucher_code', $username)->first();
+            }
 
             $values = [
                 'mac_address' => $mac,
@@ -255,6 +269,12 @@ class ClientController extends Controller
             }
             if ($hasHostname) {
                 $values['hostname'] = $lease['hostname'] ?? '';
+            }
+            if ($hasFirstUsedAt) {
+                $values['first_used_at'] = $voucher?->first_used_at;
+            }
+            if ($hasVoucherType) {
+                $values['voucher_type'] = $voucher?->voucher_type_name ?: $voucher?->profile_name;
             }
             if (empty($values['ip_address']) && !empty($lease['ip_address'])) {
                 $values['ip_address'] = $lease['ip_address'];

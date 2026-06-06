@@ -55,18 +55,56 @@ class VoucherController extends Controller
         }
         SiteScope::applyToTenantTable($query, 'vouchers', $site);
 
-        if ($request->status === 'consumed') {
+        $status = $request->query('status');
+        $hasExpiredReason = Schema::connection('tenant')->hasColumn('vouchers', 'expired_reason');
+        $hasExpiresAt = Schema::connection('tenant')->hasColumn('vouchers', 'expires_at');
+        $hasLastUsedAt = Schema::connection('tenant')->hasColumn('vouchers', 'last_used_at');
+        $hasUsedByMac = Schema::connection('tenant')->hasColumn('vouchers', 'used_by_mac');
+        $hasUsedByIp = Schema::connection('tenant')->hasColumn('vouchers', 'used_by_ip');
+
+        if ($status === 'consumed') {
             $query->whereIn('status', ['in_use', 'used', 'expired']);
-        } elseif ($request->has('status')) {
-            $query->where('status', $request->status);
+        } elseif ($status === 'expired') {
+            $query->where(function ($expiredQuery) use ($hasExpiredReason, $hasExpiresAt) {
+                $expiredQuery->whereIn('status', ['used', 'expired']);
+
+                if ($hasExpiredReason) {
+                    $expiredQuery->orWhereNotNull('expired_reason');
+                }
+
+                if ($hasExpiresAt) {
+                    $expiredQuery->orWhere('expires_at', '<=', now());
+                }
+            });
+        } elseif ($request->filled('status')) {
+            $query->where('status', $status);
         }
 
         if ($request->has('group_id')) {
             $query->where('group_id', $request->group_id);
         }
 
-        $vouchers = $query->orderBy('created_at', 'desc')
-            ->paginate($request->per_page ?? 50);
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $query->where(function ($searchQuery) use ($search, $hasUsedByMac, $hasUsedByIp) {
+                $like = '%' . str_replace(['%', '_'], ['\%', '\_'], $search) . '%';
+                $searchQuery->where('voucher_code', 'like', $like);
+
+                if ($hasUsedByMac) {
+                    $searchQuery->orWhere('used_by_mac', 'like', $like);
+                }
+
+                if ($hasUsedByIp) {
+                    $searchQuery->orWhere('used_by_ip', 'like', $like);
+                }
+            });
+        }
+
+        if ($status === 'expired' && $hasLastUsedAt) {
+            $query->orderBy('last_used_at', 'desc');
+        }
+
+        $vouchers = $query->orderBy('created_at', 'desc')->paginate($request->per_page ?? 50);
 
         return response()->json($vouchers);
     }
@@ -160,6 +198,163 @@ class VoucherController extends Controller
             
             return response()->json([
                 'error' => 'Failed to generate vouchers',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function createManual(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'voucher_code' => ['required', 'string', 'min:3', 'max:64', 'regex:/^[A-Za-z0-9._-]+$/'],
+            'voucher_type_id' => 'required|integer',
+        ], [
+            'voucher_code.regex' => 'Voucher codes may only contain letters, numbers, dots, dashes, and underscores.',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'error' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $site = $this->resolveVoucherSite($request);
+        if (!$site) {
+            return response()->json([
+                'error' => 'Site required',
+                'message' => 'Select a site before creating manual vouchers.',
+            ], 422);
+        }
+
+        foreach (['voucher_types', 'voucher_groups', 'vouchers'] as $table) {
+            if (!Schema::connection('tenant')->hasTable($table)) {
+                return response()->json([
+                    'error' => 'Tenant database needs migration',
+                    'message' => "The {$table} table is required before manual vouchers can be created.",
+                ], 500);
+            }
+        }
+
+        $typeQuery = VoucherType::query()->where('is_active', true);
+        SiteScope::applyToTenantTable($typeQuery, 'voucher_types', $site);
+        $type = $typeQuery->find($request->integer('voucher_type_id'));
+
+        if (!$type) {
+            return response()->json([
+                'error' => 'Invalid voucher type',
+                'message' => 'Choose an active voucher type for the selected site.',
+            ], 422);
+        }
+
+        $voucherCode = strtoupper(trim((string) $request->voucher_code));
+
+        if (Voucher::where('voucher_code', $voucherCode)->exists()) {
+            return response()->json([
+                'error' => 'Voucher already exists',
+                'message' => 'A voucher with this code already exists.',
+            ], 422);
+        }
+
+        $validityMinutes = $type->validity_minutes ?: max(1, (int) $type->duration_hours) * 60;
+        $validityHours = max(1, (int) ceil($validityMinutes / 60));
+
+        try {
+            $groupName = 'Manual - ' . $type->type_name;
+            $groupQuery = VoucherGroup::query()
+                ->where('group_name', $groupName)
+                ->where('validity_hours', $validityHours)
+                ->where('price', $type->base_amount);
+            SiteScope::applyToTenantTable($groupQuery, 'voucher_groups', $site);
+
+            if (Schema::connection('tenant')->hasColumn('voucher_groups', 'validity_minutes')) {
+                $groupQuery->where(function ($query) use ($validityMinutes) {
+                    $query->where('validity_minutes', $validityMinutes)->orWhereNull('validity_minutes');
+                });
+            }
+
+            foreach (['data_limit_mb', 'speed_limit_kbps'] as $column) {
+                if ($type->{$column} === null) {
+                    $groupQuery->whereNull($column);
+                } else {
+                    $groupQuery->where($column, $type->{$column});
+                }
+            }
+
+            $group = $groupQuery->first();
+
+            if (!$group) {
+                $groupData = [
+                    'group_name' => $groupName,
+                    'description' => 'Manual vouchers created from the ' . $type->type_name . ' voucher type.',
+                    'profile_name' => 'default',
+                    'validity_hours' => $validityHours,
+                    'validity_minutes' => $validityMinutes,
+                    'data_limit_mb' => $type->data_limit_mb,
+                    'speed_limit_kbps' => $type->speed_limit_kbps,
+                    'price' => $type->base_amount,
+                    'site_id' => $site->id,
+                    'created_by' => 'manual',
+                ];
+
+                $groupData = SiteScope::tenantCompatColumns('voucher_groups', $groupData);
+                if (!Schema::connection('tenant')->hasColumn('voucher_groups', 'site_id')) {
+                    unset($groupData['site_id']);
+                }
+                if (!Schema::connection('tenant')->hasColumn('voucher_groups', 'validity_minutes')) {
+                    unset($groupData['validity_minutes']);
+                }
+
+                $group = VoucherGroup::create($groupData);
+            }
+
+            $voucherData = [
+                'voucher_code' => $voucherCode,
+                'password' => $voucherCode,
+                'group_id' => $group->id,
+                'profile_name' => $group->profile_name ?: 'default',
+                'validity_hours' => $validityHours,
+                'validity_minutes' => $validityMinutes,
+                'data_limit_mb' => $type->data_limit_mb,
+                'speed_limit_kbps' => $type->speed_limit_kbps,
+                'price' => $type->base_amount,
+                'site_id' => $site->id,
+                'status' => 'unused',
+            ];
+
+            $voucherData = SiteScope::tenantCompatColumns('vouchers', $voucherData);
+            if (!Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
+                unset($voucherData['site_id']);
+            }
+            if (!Schema::connection('tenant')->hasColumn('vouchers', 'validity_minutes')) {
+                unset($voucherData['validity_minutes']);
+            }
+
+            $voucher = Voucher::create($voucherData);
+
+            $radiusSynced = app(FreeRadiusService::class)->syncVoucherToRadius([
+                'voucher_code' => $voucher->voucher_code,
+                'password' => $voucher->password,
+                'validity_hours' => $voucher->validity_hours,
+                'validity_minutes' => $voucher->validity_minutes,
+                'data_limit_mb' => $voucher->data_limit_mb,
+                'speed_limit_kbps' => $voucher->speed_limit_kbps,
+            ]);
+
+            return response()->json([
+                'message' => 'Manual voucher created successfully',
+                'voucher' => $voucher->load('group'),
+                'radius_synced' => $radiusSynced,
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Manual voucher creation failed', [
+                'error' => $e->getMessage(),
+                'site_id' => $site->id,
+                'voucher_code' => $voucherCode,
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to create manual voucher',
                 'message' => $e->getMessage(),
             ], 500);
         }

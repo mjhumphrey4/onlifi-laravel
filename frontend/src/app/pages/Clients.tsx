@@ -19,7 +19,10 @@ interface Client {
   router_name: string;
   voucher_code: string | null;
   profile_name: string | null;
+  voucher_type: string | null;
+  first_used_at: string | null;
   expires_at: string | null;
+  time_left_seconds?: number | string | null;
 }
 
 function toNumber(value: number | string | null | undefined): number {
@@ -39,6 +42,9 @@ function normalizeClient(client: any): Client {
     signal_strength: client.signal_strength === null || client.signal_strength === undefined
       ? null
       : toNumber(client.signal_strength),
+    voucher_type: client.voucher_type ?? client.profile_name ?? '',
+    first_used_at: client.first_used_at ?? null,
+    time_left_seconds: client.time_left_seconds ?? null,
   };
 }
 
@@ -121,9 +127,9 @@ export function Clients() {
   };
 
   useEffect(() => {
-    loadClients(false, true);
+    loadClients(false, false);
     loadRouters();
-    const interval = setInterval(() => loadClients(true, true), 300000);
+    const interval = setInterval(() => loadClients(true, false), 300000);
     return () => clearInterval(interval);
   }, [selectedSite?.id]);
 
@@ -139,6 +145,33 @@ export function Clients() {
     const mb = toNumber(value);
     if (mb >= 1024) return `${(mb / 1024).toFixed(2)} GB`;
     return `${mb.toFixed(2)} MB`;
+  };
+
+  const formatTimeLeft = (client: Client) => {
+    let seconds = client.time_left_seconds === null || client.time_left_seconds === undefined
+      ? NaN
+      : toNumber(client.time_left_seconds);
+
+    if (!Number.isFinite(seconds) && client.expires_at) {
+      seconds = Math.max(0, Math.floor((new Date(client.expires_at).getTime() - Date.now()) / 1000));
+    }
+
+    if (!Number.isFinite(seconds)) return '-';
+    if (seconds <= 0) return 'Expired';
+
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const formatStartTime = (value: string | null) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
   };
 
   if (loading) {
@@ -255,6 +288,9 @@ export function Clients() {
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">IP Address</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">MAC Address</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Voucher</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Voucher Type</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Start Time</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Time Left</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Uptime</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Upload</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Download</th>
@@ -264,7 +300,7 @@ export function Clients() {
             <tbody>
               {clients.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={11} className="py-8 text-center text-muted-foreground">
                     No active clients found
                   </td>
                 </tr>
@@ -297,6 +333,15 @@ export function Clients() {
                       ) : (
                         <span className="text-xs text-muted-foreground">-</span>
                       )}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-card-foreground">
+                      {client.voucher_type || '-'}
+                    </td>
+                    <td className="py-3 px-4 text-xs text-muted-foreground whitespace-nowrap">
+                      {formatStartTime(client.first_used_at)}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-card-foreground whitespace-nowrap">
+                      {formatTimeLeft(client)}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1 text-sm text-card-foreground">

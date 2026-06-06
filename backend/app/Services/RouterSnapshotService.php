@@ -116,6 +116,8 @@ class RouterSnapshotService
         $rows = [];
         $hasSiteId = Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id');
         $hasHostname = Schema::connection('tenant')->hasColumn('hotspot_users', 'hostname');
+        $hasFirstUsedAt = Schema::connection('tenant')->hasColumn('hotspot_users', 'first_used_at');
+        $hasVoucherType = Schema::connection('tenant')->hasColumn('hotspot_users', 'voucher_type');
         $routerName = $router->name ?: $site->name;
         $seenMacs = [];
 
@@ -128,9 +130,18 @@ class RouterSnapshotService
 
             $lease = $leasesByMac->get($mac, []);
             $username = $user['username'] ?: null;
-            $voucher = $username && Schema::connection('tenant')->hasTable('vouchers')
-                ? DB::connection('tenant')->table('vouchers')->where('voucher_code', $username)->first()
-                : null;
+            $voucher = null;
+            if ($username && Schema::connection('tenant')->hasTable('vouchers')) {
+                $voucherQuery = DB::connection('tenant')->table('vouchers');
+                if (Schema::connection('tenant')->hasTable('voucher_groups') && Schema::connection('tenant')->hasColumn('vouchers', 'group_id')) {
+                    $voucherQuery
+                        ->leftJoin('voucher_groups', 'voucher_groups.id', '=', 'vouchers.group_id')
+                        ->select('vouchers.*', 'voucher_groups.group_name as voucher_type_name');
+                } else {
+                    $voucherQuery->select('vouchers.*');
+                }
+                $voucher = $voucherQuery->where('vouchers.voucher_code', $username)->first();
+            }
 
             $values = [
                 'mac_address' => $mac,
@@ -155,6 +166,12 @@ class RouterSnapshotService
             }
             if ($hasHostname) {
                 $values['hostname'] = $lease['hostname'] ?? '';
+            }
+            if ($hasFirstUsedAt) {
+                $values['first_used_at'] = $voucher?->first_used_at;
+            }
+            if ($hasVoucherType) {
+                $values['voucher_type'] = $voucher?->voucher_type_name ?: $voucher?->profile_name;
             }
             if (empty($values['ip_address']) && !empty($lease['ip_address'])) {
                 $values['ip_address'] = $lease['ip_address'];
@@ -387,7 +404,10 @@ class RouterSnapshotService
             'router_name',
             'voucher_code',
             'profile_name',
+            'voucher_type',
+            'first_used_at',
             'expires_at',
+            DB::raw('CASE WHEN expires_at IS NOT NULL THEN GREATEST(TIMESTAMPDIFF(SECOND, NOW(), expires_at), 0) ELSE NULL END as time_left_seconds'),
             DB::raw('CASE WHEN last_seen > DATE_SUB(NOW(), INTERVAL 5 MINUTE) THEN "online" ELSE "offline" END as status'),
         ];
 
@@ -466,6 +486,16 @@ class RouterSnapshotService
                     $table->string('hostname', 100)->nullable()->after('username');
                 });
             }
+            if (!Schema::connection('tenant')->hasColumn('hotspot_users', 'first_used_at')) {
+                Schema::connection('tenant')->table('hotspot_users', function (Blueprint $table) {
+                    $table->timestamp('first_used_at')->nullable()->after('profile_name');
+                });
+            }
+            if (!Schema::connection('tenant')->hasColumn('hotspot_users', 'voucher_type')) {
+                Schema::connection('tenant')->table('hotspot_users', function (Blueprint $table) {
+                    $table->string('voucher_type', 100)->nullable()->after('profile_name');
+                });
+            }
             return;
         }
 
@@ -486,6 +516,8 @@ class RouterSnapshotService
             $table->string('router_identity', 100)->nullable();
             $table->string('voucher_code', 100)->nullable();
             $table->string('profile_name', 100)->nullable();
+            $table->string('voucher_type', 100)->nullable();
+            $table->timestamp('first_used_at')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();
             $table->unique(['site_id', 'mac_address']);

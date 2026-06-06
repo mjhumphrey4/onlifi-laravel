@@ -228,18 +228,20 @@ export const getTelemetryStats = () => get('/telemetry/stats');
 export const getTelemetryUsage = (period: 'today' | 'week' | 'month' = 'today') => get(`/telemetry/usage?period=${period}`);
 
 // ============ VOUCHERS (Tenant) ============
-export const getVouchers = (params?: { page?: number; per_page?: number; status?: string; group_id?: number }) => {
+export const getVouchers = (params?: { page?: number; per_page?: number; status?: string; group_id?: number; search?: string }) => {
   let endpoint = '/vouchers';
   const searchParams = new URLSearchParams();
   if (params?.page) searchParams.set('page', String(params.page));
   if (params?.per_page) searchParams.set('per_page', String(params.per_page));
   if (params?.status) searchParams.set('status', params.status);
   if (params?.group_id) searchParams.set('group_id', String(params.group_id));
+  if (params?.search) searchParams.set('search', params.search);
   if (searchParams.toString()) endpoint += `?${searchParams.toString()}`;
   return get(endpoint);
 };
 export const getVoucher = (id: number) => get(`/vouchers/${id}`);
 export const generateVouchers = (data: Record<string, unknown>) => post('/vouchers/generate-batch', data);
+export const createManualVoucher = (data: Record<string, unknown>) => post('/vouchers/manual', data);
 export const getVoucherTypes = () => get('/vouchers/types');
 export const getVoucherGroups = () => get('/vouchers/groups');
 export const getVoucherStatistics = (params?: { sales_point_id?: number }) => {
