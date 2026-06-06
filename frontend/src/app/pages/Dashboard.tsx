@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, RefreshCw, Users, User, ArrowRight, Server, Activity, Cpu, HardDrive, ArrowUp, ArrowDown, CalendarDays, Smartphone } from 'lucide-react';
+import { DollarSign, TrendingUp, RefreshCw, Users, User, ArrowRight, Server, Activity, Cpu, HardDrive, ArrowUp, ArrowDown, CalendarDays, Smartphone, HelpCircle, X, CheckCircle2, Router, Paintbrush } from 'lucide-react';
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
@@ -70,6 +70,39 @@ const DATE_FILTERS: { id: DateFilter; label: string }[] = [
   { id: 'all', label: 'All' },
 ];
 
+const TOUR_STORAGE_KEY = 'onlifi_dashboard_tour_completed';
+
+const TOUR_STEPS = [
+  {
+    icon: Users,
+    title: 'Create vouchers',
+    body: 'Open Manage Vouchers, choose voucher types, then create a batch or manual voucher for the active site.',
+    action: 'Create Vouchers',
+    path: '/vouchers',
+  },
+  {
+    icon: Smartphone,
+    title: 'Track mobile money',
+    body: 'Mobile money purchases land in Transactions with the phone number, voucher code, amount, and payment status.',
+    action: 'View Transactions',
+    path: '/transactions',
+  },
+  {
+    icon: Paintbrush,
+    title: 'Customize captive page',
+    body: 'Use Captive Page under Manage Router to download or adjust the hotspot files your customers see at login.',
+    action: 'Customize Page',
+    path: '/captive-portal',
+  },
+  {
+    icon: Router,
+    title: 'Onboard the router',
+    body: 'Use Provisioning to generate the MikroTik setup, then Monitor Router and Clients to confirm live data is flowing.',
+    action: 'Open Provisioning',
+    path: '/provisioning',
+  },
+];
+
 const SITE_COLORS: Record<string, string> = {
   Enock:   'from-blue-600 to-blue-700',
   Richard: 'from-emerald-600 to-emerald-700',
@@ -80,15 +113,6 @@ const SITE_COLORS: Record<string, string> = {
 
 function fmt(n: number) {
   return 'UGX ' + Math.round(n).toLocaleString();
-}
-
-function statusStyle(s: string) {
-  switch (s.toLowerCase()) {
-    case 'success': return 'bg-primary/10 text-primary';
-    case 'pending': return 'bg-yellow-500/10 text-yellow-500';
-    case 'failed':  return 'bg-destructive/10 text-destructive';
-    default:        return 'bg-muted text-muted-foreground';
-  }
 }
 
 export function Dashboard() {
@@ -107,6 +131,8 @@ export function Dashboard() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [deviceStats, setDeviceStats] = useState<DeviceStats>({ total_routers: 0, online_routers: 0, total_clients: 0, active_connections: 0, avg_cpu: 0, avg_memory: 0, bandwidth_up: 0, bandwidth_down: 0 });
+  const [showTour, setShowTour] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
 
   const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('tenant_token');
@@ -284,6 +310,18 @@ export function Dashboard() {
     return () => clearInterval(iv);
   }, [load]);
 
+  useEffect(() => {
+    const completed = localStorage.getItem(TOUR_STORAGE_KEY);
+    if (!completed) {
+      setShowTour(true);
+    }
+  }, []);
+
+  const closeTour = () => {
+    localStorage.setItem(TOUR_STORAGE_KEY, '1');
+    setShowTour(false);
+  };
+
   const siteList = Object.entries(sites);
   const periodLabel = DATE_FILTERS.find((f) => f.id === dateFilter)?.label || 'Period';
 
@@ -318,6 +356,16 @@ export function Dashboard() {
           ))}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <button
+            onClick={() => {
+              setTourStep(0);
+              setShowTour(true);
+            }}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-card-foreground hover:bg-muted transition-colors"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            Tour
+          </button>
           <RefreshCw className="w-3 h-3" />
           {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading...'}
         </div>
@@ -370,9 +418,9 @@ export function Dashboard() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
-        <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings)} icon={DollarSign} trend={{ value: periodLabel, isPositive: true }} />
-        <StatsCard title="Vouchers" value={fmt(summary.voucherAmount)} icon={Users} trend={{ value: periodLabel, isPositive: true }} />
-        <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: periodLabel, isPositive: true }} />
+        <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings)} icon={DollarSign} trend={{ value: periodLabel, isPositive: true }} action={{ label: 'View Statistics', to: '/performance' }} />
+        <StatsCard title="Vouchers" value={fmt(summary.voucherAmount)} icon={Users} trend={{ value: periodLabel, isPositive: true }} action={{ label: 'Create Vouchers', to: '/vouchers' }} />
+        <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: periodLabel, isPositive: true }} action={{ label: 'View Transactions', to: '/transactions' }} />
       </div>
 
       {/* Per-site cards (admin sees all, user sees their own) */}
@@ -400,9 +448,9 @@ export function Dashboard() {
       )}
 
       {/* Clients and Recent Transactions - Side by Side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* Active Clients */}
-        <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 flex min-h-[520px] flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <User className="w-5 h-5 text-primary" />
@@ -415,7 +463,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className="flex-1">
             {clients.length === 0 ? (
               <div className="py-8 text-center">
                 <User className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
@@ -454,26 +502,21 @@ export function Dashboard() {
               </div>
             )}
           </div>
-          {deviceStats.total_clients > clients.length && (
-            <Link to="/clients" className="mt-4 flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-sm text-primary hover:bg-muted transition-colors">
-              View all {deviceStats.total_clients} clients <ArrowRight className="w-4 h-4" />
-            </Link>
-          )}
+          <Link to="/clients" className="mt-4 flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-sm text-primary hover:bg-muted transition-colors">
+            View more <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
 
         {/* Recent Transactions */}
-        <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
+        <div className="bg-card border border-border rounded-lg p-4 sm:p-6 flex min-h-[520px] flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Smartphone className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold text-card-foreground">Recent Transactions</h2>
             </div>
-            <Link to="/transactions" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
-              View all <ArrowRight className="w-4 h-4" />
-            </Link>
           </div>
 
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className="flex-1">
             {txs.length === 0 ? (
               <div className="py-8 text-center">
                 <DollarSign className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
@@ -508,8 +551,90 @@ export function Dashboard() {
               </div>
             )}
           </div>
+          <Link to="/transactions" className="mt-4 flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-sm text-primary hover:bg-muted transition-colors">
+            View more <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </div>
+
+      {showTour && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 sm:items-center">
+          <div className="w-full max-w-lg rounded-lg border border-border bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                  {(() => {
+                    const Icon = TOUR_STEPS[tourStep].icon;
+                    return <Icon className="h-5 w-5 text-primary" />;
+                  })()}
+                </span>
+                <div>
+                  <p className="text-xs text-muted-foreground">Getting started</p>
+                  <h3 className="font-semibold text-card-foreground">{TOUR_STEPS[tourStep].title}</h3>
+                </div>
+              </div>
+              <button onClick={closeTour} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" title="Close tour">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              <p className="text-sm leading-6 text-muted-foreground">{TOUR_STEPS[tourStep].body}</p>
+
+              <div className="mt-5 grid grid-cols-4 gap-2">
+                {TOUR_STEPS.map((step, index) => (
+                  <button
+                    key={step.title}
+                    onClick={() => setTourStep(index)}
+                    className={`h-1.5 rounded-full transition-colors ${index <= tourStep ? 'bg-primary' : 'bg-muted'}`}
+                    aria-label={`Go to tour step ${index + 1}`}
+                  />
+                ))}
+              </div>
+
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <button onClick={closeTour} className="rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+                  Skip
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setTourStep((step) => Math.max(0, step - 1))}
+                    disabled={tourStep === 0}
+                    className="flex-1 rounded-lg border border-border px-3 py-2 text-sm text-card-foreground hover:bg-muted disabled:opacity-50 sm:flex-none"
+                  >
+                    Back
+                  </button>
+                  {tourStep < TOUR_STEPS.length - 1 ? (
+                    <button
+                      onClick={() => setTourStep((step) => Math.min(TOUR_STEPS.length - 1, step + 1))}
+                      className="flex-1 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground hover:bg-primary/90 sm:flex-none"
+                    >
+                      Next
+                    </button>
+                  ) : (
+                    <button
+                      onClick={closeTour}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground hover:bg-primary/90 sm:flex-none"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Done
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <Link
+                to={TOUR_STEPS[tourStep].path}
+                onClick={closeTour}
+                className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-primary hover:bg-muted"
+              >
+                {TOUR_STEPS[tourStep].action}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {topSalesAgents.length > 0 && (
         <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mt-6">

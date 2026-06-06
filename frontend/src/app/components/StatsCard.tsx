@@ -1,4 +1,5 @@
 import { LucideIcon } from 'lucide-react';
+import { Link } from 'react-router';
 
 interface StatsCardProps {
   title: string;
@@ -9,9 +10,13 @@ interface StatsCardProps {
     isPositive: boolean;
   };
   note?: string;
+  action?: {
+    label: string;
+    to: string;
+  };
 }
 
-export function StatsCard({ title, value, icon: Icon, trend, note }: StatsCardProps) {
+export function StatsCard({ title, value, icon: Icon, trend, note, action }: StatsCardProps) {
   return (
     <div className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:border-primary/50 transition-colors">
       <div className="flex items-start justify-between">
@@ -24,6 +29,14 @@ export function StatsCard({ title, value, icon: Icon, trend, note }: StatsCardPr
             </p>
           )}
           {note && <p className="text-xs text-muted-foreground mt-1">{note}</p>}
+          {action && (
+            <Link
+              to={action.to}
+              className="mt-3 inline-flex items-center rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-muted transition-colors"
+            >
+              {action.label}
+            </Link>
+          )}
         </div>
         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
           <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
