@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MikrotikRouter;
 use App\Services\MikrotikService;
+use App\Services\RadiusService;
 use App\Services\RouterSnapshotService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Illuminate\Support\Carbon;
 
 class ClientController extends Controller
 {
-    public function __construct(private MikrotikService $mikrotikService, private RouterSnapshotService $snapshots)
+    public function __construct(private MikrotikService $mikrotikService, private RouterSnapshotService $snapshots, private RadiusService $radiusService)
     {
     }
 
@@ -77,12 +78,13 @@ class ClientController extends Controller
                 ->table('hotspot_users')
                 ->select($select);
 
-            if ($site && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
+            if ($site && !$this->siteUsesDedicatedDatabase($site) && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
                 $query->where('site_id', $site->id);
-            } elseif ($site && Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+            } elseif ($site && !$this->siteUsesDedicatedDatabase($site) && Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
                 $query->where('router_name', $site->name);
             }
 
+            $total = (clone $query)->count();
             $clients = $query
                 ->orderBy('last_seen', 'desc')
                 ->limit($limit)
@@ -90,7 +92,7 @@ class ClientController extends Controller
 
             $payload = [
                 'clients' => $clients,
-                'total' => $clients->count(),
+                'total' => $total,
                 'refreshed_at' => $clients->max('last_seen'),
                 'cache' => [
                     'source' => 'database',
@@ -155,6 +157,125 @@ class ClientController extends Controller
         return $this->index($request);
     }
 
+    public function inactive(Request $request)
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!Schema::connection('tenant')->hasTable('vouchers')) {
+            return response()->json(['clients' => [], 'total' => 0]);
+        }
+
+        $activeUsernames = Schema::connection('tenant')->hasTable('hotspot_users')
+            ? DB::connection('tenant')->table('hotspot_users')
+                ->when($site && !$this->siteUsesDedicatedDatabase($site) && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id'), fn ($query) => $query->where('site_id', $site->id))
+                ->pluck('username')
+                ->filter()
+                ->values()
+            : collect();
+
+        $query = DB::connection('tenant')
+            ->table('vouchers')
+            ->leftJoin('voucher_groups', 'voucher_groups.id', '=', 'vouchers.group_id')
+            ->select([
+                'vouchers.id',
+                'vouchers.voucher_code',
+                'vouchers.used_by_mac as mac_address',
+                'vouchers.used_by_ip as ip_address',
+                'vouchers.first_used_at',
+                'vouchers.last_used_at',
+                'vouchers.expires_at',
+                'vouchers.status',
+                DB::raw('COALESCE(voucher_groups.group_name, vouchers.profile_name) as voucher_type'),
+                DB::raw('CASE WHEN vouchers.expires_at IS NOT NULL THEN GREATEST(TIMESTAMPDIFF(SECOND, NOW(), vouchers.expires_at), 0) ELSE NULL END as time_left_seconds'),
+            ])
+            ->whereNotNull('vouchers.first_used_at')
+            ->whereNotNull('vouchers.expires_at')
+            ->where('vouchers.expires_at', '>', now())
+            ->whereNotIn('vouchers.status', ['expired', 'disabled']);
+
+        if ($activeUsernames->isNotEmpty()) {
+            $query->whereNotIn('vouchers.voucher_code', $activeUsernames);
+        }
+
+        if ($site && !$this->siteUsesDedicatedDatabase($site) && Schema::connection('tenant')->hasColumn('vouchers', 'site_id')) {
+            $query->where('vouchers.site_id', $site->id);
+        }
+
+        $clients = $query
+            ->orderByDesc('vouchers.last_used_at')
+            ->limit((int) $request->input('limit', 250))
+            ->get();
+
+        return response()->json([
+            'clients' => $clients,
+            'total' => $clients->count(),
+        ]);
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        if (!Schema::connection('tenant')->hasTable('hotspot_users')) {
+            return response()->json(['message' => 'Client telemetry storage is unavailable.'], 404);
+        }
+
+        $site = SiteScope::selectedOrDefaultSite($request);
+        $query = DB::connection('tenant')->table('hotspot_users')->where('id', $id);
+
+        if ($site && !$this->siteUsesDedicatedDatabase($site) && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
+            $query->where('site_id', $site->id);
+        }
+
+        $client = $query->first();
+        if (!$client) {
+            return response()->json(['message' => 'Active client not found.'], 404);
+        }
+
+        $voucherCode = $client->voucher_code ?: $client->username;
+        $routerRemoved = false;
+
+        if ($voucherCode && $site && ($router = $this->resolveSiteRouter($site))) {
+            $routerRemoved = $this->mikrotikService->removeActiveHotspotUser($router, $voucherCode);
+        }
+
+        if ($voucherCode) {
+            $voucher = Schema::connection('tenant')->hasTable('vouchers')
+                ? \App\Models\Voucher::where('voucher_code', $voucherCode)->first()
+                : null;
+
+            if ($voucher) {
+                $updates = [
+                    'status' => 'disabled',
+                    'last_used_at' => now(),
+                    'updated_at' => now(),
+                ];
+                if (Schema::connection('tenant')->hasColumn('vouchers', 'expired_reason')) {
+                    $updates['expired_reason'] = 'operator_invalidated';
+                }
+                $voucher->forceFill($updates)->save();
+                $this->radiusService->disableVoucher($voucher);
+            } else {
+                if (Schema::connection('tenant')->hasTable('radcheck')) {
+                    DB::connection('tenant')->table('radcheck')->where('username', $voucherCode)->delete();
+                }
+                if (Schema::connection('tenant')->hasTable('radreply')) {
+                    DB::connection('tenant')->table('radreply')->where('username', $voucherCode)->delete();
+                }
+            }
+        }
+
+        DB::connection('tenant')->table('hotspot_users')->where('id', $client->id)->delete();
+        Cache::forget($this->clientsCacheKey($site?->id, 100));
+        Cache::forget($this->clientsCacheKey($site?->id, 10));
+        Cache::forget($this->clientsCacheKey($site?->id, 1));
+
+        return response()->json([
+            'message' => $routerRemoved
+                ? 'Client removed and voucher invalidated.'
+                : 'Client removed locally and voucher invalidated. Router session removal may need the next router sync.',
+            'router_removed' => $routerRemoved,
+        ]);
+    }
+
     private function clientsCacheKey(?int $siteId, int $limit): string
     {
         $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
@@ -177,9 +298,9 @@ class ClientController extends Controller
 
         if (!$force) {
             $latestSeenQuery = DB::connection('tenant')->table('hotspot_users');
-            if (Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
+            if (!$this->siteUsesDedicatedDatabase($site) && Schema::connection('tenant')->hasColumn('hotspot_users', 'site_id')) {
                 $latestSeenQuery->where('site_id', $site->id);
-            } elseif (Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+            } elseif (!$this->siteUsesDedicatedDatabase($site) && Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
                 $latestSeenQuery->where('router_name', $site->name);
             }
 
@@ -286,9 +407,9 @@ class ClientController extends Controller
         DB::connection('tenant')->transaction(function () use ($site, $routerName, $hasSiteId, $rows) {
             $delete = DB::connection('tenant')->table('hotspot_users');
 
-            if ($hasSiteId) {
+            if ($hasSiteId && !$this->siteUsesDedicatedDatabase($site)) {
                 $delete->where('site_id', $site->id);
-            } elseif (Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
+            } elseif (!$this->siteUsesDedicatedDatabase($site) && Schema::connection('tenant')->hasColumn('hotspot_users', 'router_name')) {
                 $delete->where('router_name', $routerName);
             }
 
@@ -309,6 +430,14 @@ class ClientController extends Controller
     private function resolveSiteRouter($site): ?MikrotikRouter
     {
         return $this->snapshots->routerForSite($site);
+    }
+
+    private function siteUsesDedicatedDatabase($site): bool
+    {
+        $tenant = app()->bound('tenant') ? app('tenant') : null;
+
+        return filled($site?->database_name)
+            && (!$tenant || (string) $site->database_name !== (string) $tenant->database_name);
     }
 
     private function parseMikrotikDuration(string $duration): int

@@ -244,6 +244,7 @@ export const generateVouchers = (data: Record<string, unknown>) => post('/vouche
 export const createManualVoucher = (data: Record<string, unknown>) => post('/vouchers/manual', data);
 export const getVoucherTypes = () => get('/vouchers/types');
 export const getVoucherGroups = () => get('/vouchers/groups');
+export const deleteVoucherGroup = (id: number) => del(`/vouchers/groups/${id}`);
 export const getVoucherStatistics = (params?: { sales_point_id?: number }) => {
   let endpoint = '/vouchers/statistics';
   const searchParams = new URLSearchParams();
@@ -270,6 +271,14 @@ export const updateRouter = (id: number, data: Record<string, unknown>) => put(`
 export const deleteRouter = (id: number) => del(`/routers/${id}`);
 export const testRouterConnection = (id: number) => post(`/routers/${id}/test-connection`);
 export const getRouterActiveUsers = (id: number) => get(`/routers/${id}/active-users`);
+export const getClients = (params?: { limit?: number; refresh?: boolean }) => {
+  const searchParams = new URLSearchParams();
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+  if (params?.refresh) searchParams.set('refresh', '1');
+  return get(`/clients${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
+};
+export const getInactiveClients = () => get('/clients/inactive');
+export const invalidateClient = (id: number) => del(`/clients/${id}`);
 export const getRouterIpBindings = (refresh = false) => get(`/routers/ip-bindings${refresh ? '?refresh=1' : ''}`);
 export const createRouterIpBinding = (data: Record<string, unknown>) => post('/routers/ip-bindings', data);
 export const getRouterDhcpLeases = (refresh = false) => get(`/routers/dhcp/leases${refresh ? '?refresh=1' : ''}`);

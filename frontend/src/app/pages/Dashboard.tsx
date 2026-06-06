@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, RefreshCw, Users, User, ArrowRight, Server, Activity, Cpu, HardDrive, ArrowUp, ArrowDown, CalendarDays } from 'lucide-react';
+import { DollarSign, TrendingUp, RefreshCw, Users, User, ArrowRight, Server, Activity, Cpu, HardDrive, ArrowUp, ArrowDown, CalendarDays, Smartphone } from 'lucide-react';
 import { Link } from 'react-router';
 import { StatsCard } from '../components/StatsCard';
 import { useAuth } from '../context/AuthContext';
@@ -103,7 +103,6 @@ export function Dashboard() {
     totalEarnings: 0,
     voucherAmount: 0,
     mobileMoneyAmount: 0,
-    accountBalance: 0,
   });
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState<DateFilter>('today');
@@ -200,7 +199,6 @@ export function Dashboard() {
         totalEarnings: canViewFinancials ? totalEarnings : 0,
         voucherAmount: canManageVouchers ? voucherAmount : 0,
         mobileMoneyAmount: canViewTransactions ? mobileMoneyAmount : 0,
-        accountBalance: canViewTransactions ? Number(statsRes.balance ?? statsRes.total_revenue ?? 0) : 0,
       });
 
       const groupedSites = transactions.reduce((acc: Record<string, SiteStat>, tx: TxRow) => {
@@ -373,10 +371,10 @@ export function Dashboard() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
         <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings)} icon={DollarSign} trend={{ value: periodLabel, isPositive: true }} />
         <StatsCard title="Vouchers" value={fmt(summary.voucherAmount)} icon={Users} trend={{ value: periodLabel, isPositive: true }} />
-        <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: periodLabel, isPositive: true }} note={`Available balance: ${fmt(summary.accountBalance)}`} />
+        <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: periodLabel, isPositive: true }} />
       </div>
 
       {/* Per-site cards (admin sees all, user sees their own) */}
@@ -415,15 +413,12 @@ export function Dashboard() {
             <div className="flex items-center gap-2">
               <User className="w-5 h-5 text-primary" />
               <div>
-                <h2 className="text-lg font-semibold text-card-foreground">Active Clients ({clients.length})</h2>
+                <h2 className="text-lg font-semibold text-card-foreground">Active Clients ({deviceStats.total_clients})</h2>
                 <p className="text-xs text-muted-foreground">
                   {lastUpdated ? `Last updated ${lastUpdated.toLocaleTimeString()}; refreshes every 5 minutes` : 'Refreshing every 5 minutes'}
                 </p>
               </div>
             </div>
-            <Link to="/clients" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
-              View all <ArrowRight className="w-4 h-4" />
-            </Link>
           </div>
 
           <div className="max-h-[400px] overflow-y-auto">
@@ -465,13 +460,18 @@ export function Dashboard() {
               </div>
             )}
           </div>
+          {deviceStats.total_clients > clients.length && (
+            <Link to="/clients" className="mt-4 flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-sm text-primary hover:bg-muted transition-colors">
+              View all {deviceStats.total_clients} clients <ArrowRight className="w-4 h-4" />
+            </Link>
+          )}
         </div>
 
         {/* Recent Transactions */}
         <div className="bg-card border border-border rounded-lg p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-primary" />
+              <Smartphone className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold text-card-foreground">Recent Transactions</h2>
             </div>
             <Link to="/transactions" className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 transition-colors">
@@ -479,45 +479,39 @@ export function Dashboard() {
             </Link>
           </div>
 
-          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+          <div className="max-h-[400px] overflow-y-auto">
             {txs.length === 0 ? (
               <div className="py-8 text-center">
                 <DollarSign className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">No transactions found</p>
               </div>
             ) : (
-              txs.slice(0, 10).map((tx, i) => (
-                <div
-                  key={`${tx.id}-${i}`}
-                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      tx.status === 'success' ? 'bg-emerald-500/10' : 
-                      tx.status === 'pending' ? 'bg-yellow-500/10' : 'bg-destructive/10'
-                    }`}>
-                      <DollarSign className={`w-5 h-5 ${
-                        tx.status === 'success' ? 'text-emerald-500' : 
-                        tx.status === 'pending' ? 'text-yellow-500' : 'text-destructive'
-                      }`} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-card-foreground">{tx.msisdn}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {tx.voucher_code || 'No voucher'} - {tx.origin_site || 'Unknown'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-card-foreground">
-                      {fmt(parseFloat(tx.amount))}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(tx.created_at).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}
-                    </p>
-                  </div>
+              <div className="min-w-0">
+                <div className="grid grid-cols-[2.2rem_1.2fr_1fr_1fr] gap-3 border-b border-border px-3 pb-2 text-[11px] font-semibold uppercase text-muted-foreground">
+                  <span />
+                  <span>Number</span>
+                  <span>Voucher Code</span>
+                  <span className="text-right">Amount</span>
                 </div>
-              ))
+                <div className="divide-y divide-border/60">
+                  {txs.slice(0, 10).map((tx, i) => (
+                    <div key={`${tx.id}-${i}`} className="grid grid-cols-[2.2rem_1.2fr_1fr_1fr] gap-3 px-3 py-3 hover:bg-muted/40 transition-colors">
+                      <span className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                        tx.status === 'success' ? 'bg-emerald-500/10 text-emerald-500' :
+                        tx.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-destructive/10 text-destructive'
+                      }`}>
+                        <Smartphone className="w-4 h-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-card-foreground">{tx.msisdn}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</p>
+                      </div>
+                      <span className="truncate text-sm text-primary">{tx.voucher_code || ''}</span>
+                      <span className="text-right text-sm font-semibold text-card-foreground">{fmt(parseFloat(tx.amount || '0'))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>

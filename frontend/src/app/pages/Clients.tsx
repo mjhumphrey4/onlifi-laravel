@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Users, RefreshCw, Wifi, HardDrive, Clock, TrendingUp, TrendingDown, Activity, User } from 'lucide-react';
+import { Users, RefreshCw, Wifi, HardDrive, Clock, TrendingUp, TrendingDown, Activity, User, Trash2 } from 'lucide-react';
 import { useSite } from '../context/SiteContext';
-import { API_BASE, collectRouterTelemetry, getRouters } from '../utils/api';
+import { API_BASE, collectRouterTelemetry, getInactiveClients, getRouters, invalidateClient } from '../utils/api';
 
 interface Client {
   id: number;
@@ -56,6 +56,10 @@ function displayVoucher(client: Client): string {
 export function Clients() {
   const { selectedSite } = useSite();
   const [clients, setClients] = useState<Client[]>([]);
+  const [inactiveClients, setInactiveClients] = useState<Client[]>([]);
+  const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
+  const [totalClients, setTotalClients] = useState(0);
+  const [invalidatingId, setInvalidatingId] = useState<number | null>(null);
   const [routers, setRouters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,6 +90,7 @@ export function Clients() {
       if (response.ok) {
         const data = await response.json();
         setClients((data.clients || data.data || []).map(normalizeClient));
+        setTotalClients(Number(data.total || 0));
         setTelemetryMessage(data.router_error || data.message || '');
         setLastUpdated(new Date());
       }
@@ -94,6 +99,16 @@ export function Clients() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const loadInactiveClients = async () => {
+    try {
+      const data = await getInactiveClients();
+      setInactiveClients((data.clients || data.data || []).map(normalizeClient));
+    } catch (error) {
+      console.error('Failed to load inactive clients:', error);
+      setInactiveClients([]);
     }
   };
 
@@ -128,10 +143,31 @@ export function Clients() {
 
   useEffect(() => {
     loadClients(false, false);
+    loadInactiveClients();
     loadRouters();
-    const interval = setInterval(() => loadClients(true, false), 300000);
+    const interval = setInterval(() => {
+      loadClients(true, false);
+      loadInactiveClients();
+    }, 300000);
     return () => clearInterval(interval);
   }, [selectedSite?.id]);
+
+  const invalidateActiveClient = async (client: Client) => {
+    const voucher = displayVoucher(client);
+    if (!confirm(`Remove this active client${voucher ? ` and invalidate voucher ${voucher}` : ''}?`)) return;
+
+    setInvalidatingId(client.id);
+    try {
+      const response = await invalidateClient(client.id);
+      setTelemetryMessage(response.message || 'Client removed and voucher invalidated.');
+      await Promise.all([loadClients(true, false), loadInactiveClients()]);
+    } catch (error: any) {
+      console.error('Failed to invalidate active client:', error);
+      setTelemetryMessage(error.message || 'Failed to remove active client.');
+    } finally {
+      setInvalidatingId(null);
+    }
+  };
 
   const formatUptime = (value: number | string | null | undefined) => {
     const seconds = toNumber(value);
@@ -189,7 +225,7 @@ export function Clients() {
         <div>
           <h1 className="text-2xl sm:text-3xl text-foreground mb-1 flex items-center gap-2">
             <Users className="w-8 h-8 text-primary" />
-            Active Clients
+            Clients
           </h1>
           <p className="text-sm text-muted-foreground">
             Real-time monitoring of connected devices on your MikroTik network
@@ -235,7 +271,7 @@ export function Clients() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total Clients</p>
-              <p className="text-2xl font-bold text-card-foreground">{clients.length}</p>
+              <p className="text-2xl font-bold text-card-foreground">{totalClients}</p>
             </div>
             <Wifi className="w-8 h-8 text-primary" />
           </div>
@@ -280,6 +316,20 @@ export function Clients() {
 
       {/* Clients Table */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-border bg-muted/20 p-3">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${activeTab === 'active' ? 'bg-primary text-primary-foreground' : 'text-card-foreground hover:bg-muted'}`}
+          >
+            Active Clients ({totalClients})
+          </button>
+          <button
+            onClick={() => setActiveTab('inactive')}
+            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${activeTab === 'inactive' ? 'bg-primary text-primary-foreground' : 'text-card-foreground hover:bg-muted'}`}
+          >
+            Inactive Clients ({inactiveClients.length})
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-muted/50 border-b border-border">
@@ -294,18 +344,18 @@ export function Clients() {
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Uptime</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Upload</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Download</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Router</th>
+                <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {clients.length === 0 ? (
+              {(activeTab === 'active' ? clients : inactiveClients).length === 0 ? (
                 <tr>
                   <td colSpan={11} className="py-8 text-center text-muted-foreground">
-                    No active clients found
+                    No {activeTab} clients found
                   </td>
                 </tr>
               ) : (
-                clients.map((client) => (
+                (activeTab === 'active' ? clients : inactiveClients).map((client) => (
                   <tr key={client.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
@@ -361,8 +411,19 @@ export function Clients() {
                         {formatBytes(client.data_downloaded_mb)}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">
-                      {client.router_name}
+                    <td className="py-3 px-4 text-right">
+                      {activeTab === 'active' ? (
+                        <button
+                          onClick={() => invalidateActiveClient(client)}
+                          disabled={invalidatingId === client.id}
+                          className="inline-flex items-center justify-center rounded-lg p-2 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          title="Remove active user and invalidate voucher"
+                        >
+                          <Trash2 className={`w-4 h-4 ${invalidatingId === client.id ? 'animate-pulse' : ''}`} />
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Not active</span>
+                      )}
                     </td>
                   </tr>
                 ))

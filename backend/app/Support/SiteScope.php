@@ -197,6 +197,10 @@ class SiteScope
 
     public static function applyToTenantTable(Builder $query, string $table, ?Site $site, ?string $siteNameColumn = null): Builder
     {
+        if ($site && self::siteUsesDedicatedDatabase($site)) {
+            return $query;
+        }
+
         if ($site && Schema::connection('tenant')->hasColumn($table, 'site_id')) {
             return $query->where("{$table}.site_id", $site->id);
         }
@@ -210,6 +214,14 @@ class SiteScope
         }
 
         return $query;
+    }
+
+    private static function siteUsesDedicatedDatabase(?Site $site): bool
+    {
+        $tenant = app()->bound('tenant') ? app('tenant') : null;
+
+        return filled($site?->database_name)
+            && (!$tenant || (string) $site->database_name !== (string) $tenant->database_name);
     }
 
     public static function tenantCompatColumns(string $table, array $data): array

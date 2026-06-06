@@ -4,16 +4,21 @@
 // Set timezone to East Africa Time (EAT) - UTC+3
 date_default_timezone_set('Africa/Nairobi');
 
-// Database configuration
-define('DB_HOST', '10.200.1.254');
-define('DB_PORT', 3306);
-define('DB_NAME', 'onlifi_1_1_stk');
-define('DB_USER', 'yo');
-define('DB_PASS', 'password');
+// Site/database configuration. The active entry is selected from the deployed
+// folder name, e.g. /stk/initiate.php uses "stk" and /ranken/initiate.php uses
+// "ranken". Keep each site pointed at the same DB and site id used in OnLiFi.
+$manualPaymentSite = manualPaymentSiteConfig();
+
+define('DB_HOST', $manualPaymentSite['db_host']);
+define('DB_PORT', $manualPaymentSite['db_port']);
+define('DB_NAME', $manualPaymentSite['db_name']);
+define('DB_USER', $manualPaymentSite['db_user']);
+define('DB_PASS', $manualPaymentSite['db_pass']);
 
 // Site using this manual payment provider.
-define('ONLIFI_SITE_ID', 1);
-define('ONLIFI_DEFAULT_PROFILE', 'default');
+define('ONLIFI_SITE_ID', $manualPaymentSite['site_id']);
+define('ONLIFI_DEFAULT_PROFILE', $manualPaymentSite['default_profile']);
+define('ONLIFI_SITE_KEY', $manualPaymentSite['site_key']);
 
 // YO! Uganda API Configuration - Use these names for YoAPI class
 define('YOAPI_USERNAME', '100812171094'); // Replace with your Yo! API Username
@@ -35,6 +40,47 @@ function currentSiteUrl(): string {
   }
 
   return 'https://' . $host . $directory . '/';
+}
+
+function currentSiteKey(): string {
+  $script = $_SERVER['SCRIPT_NAME'] ?? '/stk/initiate.php';
+  $directory = trim(str_replace('\\', '/', dirname($script)), '/');
+
+  if ($directory === '' || $directory === '.') {
+    return 'stk';
+  }
+
+  $parts = explode('/', $directory);
+  $key = strtolower(trim((string) end($parts)));
+
+  return $key ?: 'stk';
+}
+
+function manualPaymentSiteConfig(): array {
+  $base = [
+    'db_host' => '10.200.1.254',
+    'db_port' => 3306,
+    'db_user' => 'yo',
+    'db_pass' => 'password',
+    'default_profile' => 'default',
+  ];
+
+  $sites = [
+    'stk' => [
+      'db_name' => 'onlifi_1_1_stk',
+      'site_id' => 1,
+    ],
+    'ranken' => [
+      'db_name' => 'onlifi_5_5_ranken',
+      'site_id' => 5,
+    ],
+  ];
+
+  $siteKey = currentSiteKey();
+  $config = $sites[$siteKey] ?? $sites['stk'];
+  $config['site_key'] = $siteKey;
+
+  return array_merge($base, $config);
 }
 
 function sendCorsHeaders(): void {

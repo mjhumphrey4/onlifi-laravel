@@ -198,6 +198,8 @@ Route::middleware(['tenant'])->group(function () {
     Route::middleware('tenant.permission:view_clients')->prefix('clients')->group(function () {
         Route::get('/', [\App\Http\Controllers\ClientController::class, 'index']);
         Route::get('/refresh', [\App\Http\Controllers\ClientController::class, 'refresh']);
+        Route::get('/inactive', [\App\Http\Controllers\ClientController::class, 'inactive']);
+        Route::delete('/{id}', [\App\Http\Controllers\ClientController::class, 'destroy']);
         Route::get('/{id}', [\App\Http\Controllers\ClientController::class, 'show']);
     });
 
@@ -231,6 +233,7 @@ Route::middleware(['tenant'])->group(function () {
         Route::put('/types/{id}', [VoucherController::class, 'updateType']);
         Route::delete('/types/{id}', [VoucherController::class, 'destroyType']);
         Route::get('/groups', [VoucherController::class, 'getGroups']);
+        Route::delete('/groups/{id}', [VoucherController::class, 'destroyGroup']);
         Route::get('/groups/{id}/export-pdf', [VoucherController::class, 'exportGroupPdf']);
         Route::post('/generate-batch', [VoucherController::class, 'generateBatch']);
         Route::post('/manual', [VoucherController::class, 'createManual']);

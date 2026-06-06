@@ -230,6 +230,10 @@ class TransactionController extends Controller
             return;
         }
 
+        if ($this->siteUsesDedicatedDatabase($site)) {
+            return;
+        }
+
         $hasSiteId = Schema::connection('tenant')->hasColumn('transactions', 'site_id');
         $hasOriginSite = Schema::connection('tenant')->hasColumn('transactions', 'origin_site');
 

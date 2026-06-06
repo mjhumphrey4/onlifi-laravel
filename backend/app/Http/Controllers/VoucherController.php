@@ -940,6 +940,45 @@ class VoucherController extends Controller
         return response()->json($groups);
     }
 
+    public function destroyGroup(Request $request, $id)
+    {
+        $site = $this->resolveVoucherSite($request);
+        if (!$site) {
+            abort(404);
+        }
+
+        $groupQuery = VoucherGroup::query();
+        SiteScope::applyToTenantTable($groupQuery, 'voucher_groups', $site);
+        $this->hideManualPaymentGroups($groupQuery);
+        $group = $groupQuery->findOrFail($id);
+
+        $voucherCodes = Voucher::where('group_id', $group->id)
+            ->pluck('voucher_code')
+            ->filter()
+            ->values();
+
+        DB::connection('tenant')->transaction(function () use ($group, $voucherCodes) {
+            if ($voucherCodes->isNotEmpty()) {
+                if (Schema::connection('tenant')->hasTable('radcheck')) {
+                    DB::connection('tenant')->table('radcheck')->whereIn('username', $voucherCodes)->delete();
+                }
+                if (Schema::connection('tenant')->hasTable('radreply')) {
+                    DB::connection('tenant')->table('radreply')->whereIn('username', $voucherCodes)->delete();
+                }
+                if (Schema::connection('tenant')->hasTable('hotspot_users')) {
+                    DB::connection('tenant')->table('hotspot_users')->whereIn('username', $voucherCodes)->delete();
+                }
+            }
+
+            Voucher::where('group_id', $group->id)->delete();
+            $group->delete();
+        });
+
+        return response()->json([
+            'message' => 'Voucher group deleted successfully',
+        ]);
+    }
+
     public function exportGroupPdf(Request $request, $id)
     {
         $site = $this->resolveVoucherSite($request);

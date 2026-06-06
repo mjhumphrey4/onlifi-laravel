@@ -120,6 +120,7 @@ export function Layout() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [ticketUnreadCount, setTicketUnreadCount] = useState(0);
+  const [activeClientCount, setActiveClientCount] = useState(0);
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteDescription, setNewSiteDescription] = useState('');
@@ -204,16 +205,21 @@ export function Layout() {
         const token = localStorage.getItem('tenant_token');
         if (!token) return;
         
-        const headers = {
+        const headers: Record<string, string> = {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json',
         };
+        const siteId = localStorage.getItem('selected_site_id');
+        if (siteId) headers['X-Site-ID'] = siteId;
 
-        const [response, ticketResponse] = await Promise.all([
+        const [response, ticketResponse, clientsResponse] = await Promise.all([
           fetch(`${API_BASE}/announcements/active`, {
             headers,
           }),
           fetch(`${API_BASE}/tenant/support-tickets/notifications`, {
+            headers,
+          }),
+          fetch(`${API_BASE}/clients?limit=1`, {
             headers,
           }),
         ]);
@@ -233,6 +239,11 @@ export function Layout() {
           ];
         }
 
+        if (clientsResponse.ok) {
+          const clientsData = await clientsResponse.json();
+          setActiveClientCount(Number(clientsData.total || 0));
+        }
+
         setAnnouncements(items);
 
         // Count unread (check localStorage for read IDs)
@@ -250,7 +261,7 @@ export function Layout() {
     // Refresh ticket notifications quickly while still carrying announcements.
     const interval = setInterval(fetchAnnouncements, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedSite?.id]);
 
   const markAsRead = (id: number | string) => {
     const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
@@ -402,6 +413,11 @@ export function Layout() {
                         <div className="flex items-center gap-3">
                           <Icon className="w-5 h-5 flex-shrink-0" />
                           <span className="text-sm">{item.label}</span>
+                          {item.path === '/clients' && (
+                            <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/15 px-1 text-[10px] font-semibold text-primary">
+                              {activeClientCount > 99 ? '99+' : activeClientCount}
+                            </span>
+                          )}
                           {item.path === '/support-tickets' && ticketUnreadCount > 0 && (
                             <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
                               {ticketUnreadCount > 9 ? '9+' : ticketUnreadCount}
@@ -451,6 +467,11 @@ export function Layout() {
                     >
                       <Icon className="w-5 h-5 flex-shrink-0" />
                       <span className="text-sm">{item.label}</span>
+                      {item.path === '/clients' && (
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/15 px-1 text-[10px] font-semibold text-primary">
+                          {activeClientCount > 99 ? '99+' : activeClientCount}
+                        </span>
+                      )}
                       {item.path === '/support-tickets' && ticketUnreadCount > 0 && (
                         <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
                           {ticketUnreadCount > 9 ? '9+' : ticketUnreadCount}
