@@ -6,15 +6,6 @@ import { useAuth } from '../context/AuthContext';
 import { useSite } from '../context/SiteContext';
 import { API_BASE, apiStats, getPerformanceAnalytics, getTelemetryStats, getVoucherStatistics } from '../utils/api';
 
-interface SiteStat {
-  total_amount: number;
-  today_amount: number;
-  week_amount: number;
-  withdrawn: number;
-  pending_withdraw: number;
-  total_sales: number;
-}
-
 interface TxRow {
   id: string;
   msisdn: string;
@@ -103,22 +94,17 @@ const TOUR_STEPS = [
   },
 ];
 
-const SITE_COLORS: Record<string, string> = {
-  Enock:   'from-blue-600 to-blue-700',
-  Richard: 'from-emerald-600 to-emerald-700',
-  STK:     'from-purple-600 to-purple-700',
-  Remmy:   'from-orange-500 to-orange-600',
-  Guma:    'from-teal-600 to-teal-700',
-};
+const DASHBOARD_CLIENT_PREVIEW_LIMIT = 10;
+const DASHBOARD_CLIENT_FETCH_LIMIT = 1000;
+const DASHBOARD_TRANSACTION_PREVIEW_LIMIT = 10;
 
 function fmt(n: number) {
   return 'UGX ' + Math.round(n).toLocaleString();
 }
 
 export function Dashboard() {
-  const { user, isAdmin } = useAuth();
+  const { user } = useAuth();
   const { selectedSite } = useSite();
-  const [sites, setSites] = useState<Record<string, SiteStat>>({});
   const [txs, setTxs] = useState<TxRow[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [topSalesAgents, setTopSalesAgents] = useState<TopSalesAgent[]>([]);
@@ -181,7 +167,10 @@ export function Dashboard() {
       const headers = getAuthHeaders();
       
       const range = getDateRange(dateFilter);
-      const params = new URLSearchParams({ per_page: '10', status: 'success', ...range });
+      const params = new URLSearchParams({ per_page: String(DASHBOARD_TRANSACTION_PREVIEW_LIMIT), status: 'success' });
+      Object.entries(range).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
       const performancePeriod = dateFilter === 'all'
         ? 'six_months'
         : dateFilter === 'week'
@@ -226,26 +215,13 @@ export function Dashboard() {
         mobileMoneyAmount: canViewTransactions ? mobileMoneyAmount : 0,
       });
 
-      const groupedSites = transactions.reduce((acc: Record<string, SiteStat>, tx: TxRow) => {
-        const site = tx.origin_site || 'Default Site';
-        const amount = tx.status === 'success' ? parseFloat(tx.amount || '0') : 0;
-        if (!acc[site]) {
-          acc[site] = { total_amount: 0, today_amount: 0, week_amount: 0, withdrawn: 0, pending_withdraw: 0, total_sales: 0 };
-        }
-        acc[site].total_amount += amount;
-        acc[site].today_amount += amount;
-        acc[site].total_sales += tx.status === 'success' ? 1 : 0;
-        return acc;
-      }, {});
-      setSites(Object.keys(groupedSites).length ? groupedSites : (statsRes.sites ?? {}));
-
       // Fetch active clients from the router snapshot path.
       let activeClientCount = 0;
       try {
         if (!canViewClients) {
           setClients([]);
         } else {
-          const clientsRes = await fetch(`${API_BASE}/clients?limit=10`, { headers });
+          const clientsRes = await fetch(`${API_BASE}/clients?limit=${DASHBOARD_CLIENT_FETCH_LIMIT}`, { headers });
         
           if (clientsRes.ok) {
             const clientsData = await clientsRes.json();
@@ -264,7 +240,7 @@ export function Dashboard() {
             }));
           
             activeClientCount = Number(clientsData.total ?? activeClients.length);
-            setClients(activeClients);
+            setClients(activeClients.slice(0, DASHBOARD_CLIENT_PREVIEW_LIMIT));
           } else {
             setClients([]);
           }
@@ -322,7 +298,6 @@ export function Dashboard() {
     setShowTour(false);
   };
 
-  const siteList = Object.entries(sites);
   const periodLabel = DATE_FILTERS.find((f) => f.id === dateFilter)?.label || 'Period';
 
   if (loading) {
@@ -423,30 +398,6 @@ export function Dashboard() {
         <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: periodLabel, isPositive: true }} action={{ label: 'View Transactions', to: '/transactions' }} />
       </div>
 
-      {/* Per-site cards (admin sees all, user sees their own) */}
-      {siteList.length > 0 && (
-        <div className="mb-6 sm:mb-8">
-          {isAdmin() && <h2 className="text-lg text-foreground mb-4">Site Performance</h2>}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-            {siteList.map(([site, stat]) => (
-              <div
-                key={site}
-                className={`bg-gradient-to-br ${SITE_COLORS[site] ?? 'from-slate-600 to-slate-700'} rounded-xl p-5 text-white`}
-              >
-                <p className="text-sm font-semibold opacity-80 mb-1">{site}</p>
-                <p className="text-2xl font-bold mb-3">{fmt(stat.total_amount)}</p>
-                <div className="space-y-1 text-xs bg-white/10 rounded-lg p-3">
-                  <div className="flex justify-between">
-                    <span className="opacity-80">{periodLabel}</span>
-                    <span className="font-semibold">{fmt(stat.today_amount)}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Clients and Recent Transactions - Side by Side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* Active Clients */}
@@ -457,7 +408,7 @@ export function Dashboard() {
               <div>
                 <h2 className="text-lg font-semibold text-card-foreground">Active Clients ({deviceStats.total_clients})</h2>
                 <p className="text-xs text-muted-foreground">
-                  {lastUpdated ? `Last updated ${lastUpdated.toLocaleTimeString()}; refreshes every 5 minutes` : 'Refreshing every 5 minutes'}
+                  {lastUpdated ? `Last updated ${lastUpdated.toLocaleTimeString()}` : 'Loading...'}
                 </p>
               </div>
             </div>
@@ -477,7 +428,7 @@ export function Dashboard() {
                   <span>IP Address</span>
                 </div>
                 <div className="divide-y divide-border/60">
-                  {clients.slice(0, 10).map((client, i) => {
+                  {clients.slice(0, DASHBOARD_CLIENT_PREVIEW_LIMIT).map((client, i) => {
                     const voucher = String(client.voucher_code || client.username || '').trim();
 
                     return (
@@ -512,7 +463,12 @@ export function Dashboard() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Smartphone className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold text-card-foreground">Recent Transactions</h2>
+              <div>
+                <h2 className="text-lg font-semibold text-card-foreground">Recent Transactions</h2>
+                <p className="text-xs text-muted-foreground">
+                  {lastUpdated ? `Last updated ${lastUpdated.toLocaleTimeString()}` : 'Loading...'}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -531,7 +487,7 @@ export function Dashboard() {
                   <span className="text-right">Amount</span>
                 </div>
                 <div className="divide-y divide-border/60">
-                  {txs.slice(0, 10).map((tx, i) => (
+                  {txs.slice(0, DASHBOARD_TRANSACTION_PREVIEW_LIMIT).map((tx, i) => (
                     <div key={`${tx.id}-${i}`} className="grid grid-cols-[2.2rem_1.2fr_1fr_1fr] gap-3 px-3 py-3 hover:bg-muted/40 transition-colors">
                       <span className={`flex h-8 w-8 items-center justify-center rounded-full ${
                         tx.status === 'success' ? 'bg-emerald-500/10 text-emerald-500' :

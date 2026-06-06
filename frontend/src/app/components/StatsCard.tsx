@@ -32,7 +32,7 @@ export function StatsCard({ title, value, icon: Icon, trend, note, action }: Sta
           {action && (
             <Link
               to={action.to}
-              className="mt-3 inline-flex items-center rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-muted transition-colors"
+              className="mt-3 inline-flex items-center rounded-md border border-orange-300/60 bg-orange-500/10 px-2.5 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-500/15 transition-colors"
             >
               {action.label}
             </Link>
