@@ -860,7 +860,7 @@ Expected:
 - Secret matches `RADIUS_SHARED_SECRET`.
 - Hotspot profile uses `use-radius=yes`.
 - Hotspot profile uses `radius-accounting=yes`.
-- Hotspot profile uses `login-by=http-pap`.
+- Hotspot profile uses `login-by=cookie,http-pap,mac-cookie`.
 - WireGuard interface `onlifi-wg` exists.
 - WireGuard peer endpoint is `89.167.42.53:51820`.
 - WireGuard address matches the admin-assigned site private IP, for example `10.10.1.10/32`.

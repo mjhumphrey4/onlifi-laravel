@@ -742,16 +742,16 @@ class NasController extends Controller
 # Hotspot profile and server
 :do {
   :if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
-    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-pap
+    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,http-pap,mac-cookie http-cookie-lifetime=7d mac-cookie-timeout=7d
   } else={
-    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-pap
+    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName html-directory=hotspot use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,http-pap,mac-cookie http-cookie-lifetime=7d mac-cookie-timeout=7d
   }
 } on-error={
   :log warning "OnLiFi hotspot profile failed with html-directory; retrying basic profile"
   :if ([:len [/ip hotspot profile find name=\$hotspotProfile]] = 0) do={
-    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-pap
+    /ip hotspot profile add name=\$hotspotProfile hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,http-pap,mac-cookie http-cookie-lifetime=7d mac-cookie-timeout=7d
   } else={
-    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=http-pap
+    /ip hotspot profile set [find name=\$hotspotProfile] hotspot-address=\$lanGateway dns-name=\$hotspotDnsName use-radius=yes radius-accounting=yes radius-interim-update=1m login-by=cookie,http-pap,mac-cookie http-cookie-lifetime=7d mac-cookie-timeout=7d
   }
 }
 

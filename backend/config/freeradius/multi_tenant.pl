@@ -127,6 +127,14 @@ sub normalize_mac {
     return lc($mac);
 }
 
+sub site_uses_dedicated_db {
+    my ($tenant) = @_;
+
+    return 0 unless defined $tenant->{site_database_name};
+    return 0 if ($tenant->{site_database_name} // '') eq '';
+    return ($tenant->{site_database_name} // '') ne ($tenant->{tenant_database_name} // '');
+}
+
 sub start_voucher_timer {
     my ($dbh, $username) = @_;
 
@@ -254,7 +262,9 @@ sub authorize {
         return RLM_MODULE_NOTFOUND;
     }
 
-    if (defined $tenant->{site_id} && defined $voucher->{site_id} && $voucher->{site_id} ne $tenant->{site_id}) {
+    my $scope_site_id = site_uses_dedicated_db($tenant) ? undef : $tenant->{site_id};
+
+    if (defined $scope_site_id && defined $voucher->{site_id} && $voucher->{site_id} ne $scope_site_id) {
         &radiusd::radlog(1, "PERL REJECT: Voucher $username belongs to site_id=$voucher->{site_id}, expected site_id=$tenant->{site_id}");
         $dbh->disconnect();
         return RLM_MODULE_REJECT;
@@ -285,7 +295,7 @@ sub authorize {
     
     &radiusd::radlog(1, "PERL: Executing radcheck query for user: $username");
     
-    $sth->execute($username, $tenant->{site_id}, $tenant->{site_id});
+    $sth->execute($username, $scope_site_id, $scope_site_id);
     
     my $found = 0;
     while (my $row = $sth->fetchrow_hashref()) {

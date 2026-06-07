@@ -37,7 +37,7 @@ The provisioning script uses:
 
 - `/system identity set name=<nas.router_identifier>`
 - `/radius add service=hotspot,login address=<radius_server_ip> secret=<radius_shared_secret>`
-- `/ip hotspot profile ... use-radius=yes radius-accounting=yes login-by=http-pap`
+- `/ip hotspot profile ... use-radius=yes radius-accounting=yes login-by=cookie,http-pap,mac-cookie`
 
 ## FreeRADIUS Installation
 
@@ -228,7 +228,7 @@ Expected:
 
 - Identity equals the site router identifier shown in OnLiFi.
 - `/radius` has the FreeRADIUS server IP, ports `1812/1813`, and global secret.
-- Hotspot profile has `use-radius=yes`, `radius-accounting=yes`, and `login-by=http-pap`.
+- Hotspot profile has `use-radius=yes`, `radius-accounting=yes`, and `login-by=cookie,http-pap,mac-cookie`.
 
 ## Direct Test From FreeRADIUS Server
 
