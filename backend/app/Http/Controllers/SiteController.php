@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
+use App\Models\SupportTicket;
 use App\Models\SystemSetting;
 use App\Models\Tenant;
 use App\Support\SiteScope;
@@ -65,6 +66,7 @@ class SiteController extends Controller
             ],
             'description' => 'nullable|string|max:255',
             'site_type' => 'nullable|string|in:mikrotik,omada',
+            'omada_site_name' => 'nullable|required_if:site_type,omada|string|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -87,13 +89,22 @@ class SiteController extends Controller
                 'message' => 'Please sign in as a tenant before creating a site.',
             ], 422);
         }
+        $siteType = $request->input('site_type', 'mikrotik');
+        if (!$this->tenantAllowsSiteType($request, $siteType)) {
+            return response()->json([
+                'error' => 'Site type not enabled',
+                'message' => 'Your account is not enabled for this site type.',
+            ], 403);
+        }
 
         $site = Site::create([
             'tenant_id' => $tenantId,
             'name' => $request->name,
             'slug' => Site::uniqueSlug($request->name),
             'description' => $request->description,
-            'site_type' => $request->input('site_type', 'mikrotik'),
+            'site_type' => $siteType,
+            'omada_site_name' => $siteType === 'omada' ? trim((string) $request->input('omada_site_name')) : null,
+            'omada_link_status' => $siteType === 'omada' ? 'pending_admin' : 'not_required',
             'is_active' => true,
             'vpn_username' => Str::slug($request->name),
             'vpn_password' => Str::random(24),
@@ -108,6 +119,7 @@ class SiteController extends Controller
         }
 
         $this->ensureNasForSite($site);
+        $this->ensureOmadaLinkTicket($request, $site->fresh());
 
         return response()->json([
             'message' => 'Site created successfully',
@@ -137,6 +149,7 @@ class SiteController extends Controller
             ],
             'description' => 'nullable|string|max:255',
             'site_type' => 'sometimes|string|in:mikrotik,omada',
+            'omada_site_name' => 'nullable|required_if:site_type,omada|string|max:100',
             'is_active' => 'sometimes|boolean',
         ]);
 
@@ -147,7 +160,31 @@ class SiteController extends Controller
             ], 422);
         }
 
-        $site->update($request->only(['name', 'description', 'site_type', 'is_active']));
+        $updates = $request->only(['name', 'description', 'site_type', 'is_active', 'omada_site_name']);
+        $nextType = $updates['site_type'] ?? $site->site_type ?? 'mikrotik';
+
+        if (!$this->tenantAllowsSiteType($request, $nextType)) {
+            return response()->json([
+                'error' => 'Site type not enabled',
+                'message' => 'Your account is not enabled for this site type.',
+            ], 403);
+        }
+
+        if ($nextType === 'omada') {
+            $updates['omada_site_name'] = trim((string) ($updates['omada_site_name'] ?? $site->omada_site_name ?? $site->name));
+            if ($site->site_type !== 'omada' || !$site->omada_site_id) {
+                $updates['omada_link_status'] = 'pending_admin';
+                $updates['omada_linked_at'] = null;
+            }
+        } else {
+            $updates['omada_site_name'] = null;
+            $updates['omada_site_id'] = null;
+            $updates['omada_controller_id'] = null;
+            $updates['omada_link_status'] = 'not_required';
+            $updates['omada_linked_at'] = null;
+        }
+
+        $site->update($updates);
 
         if ($request->has('name')) {
             $site->slug = Site::uniqueSlug($request->name, $site->id);
@@ -155,6 +192,7 @@ class SiteController extends Controller
         }
 
         $this->ensureNasForSite($site->fresh());
+        $this->ensureOmadaLinkTicket($request, $site->fresh());
 
         return response()->json([
             'message' => 'Site updated successfully',
@@ -196,6 +234,10 @@ class SiteController extends Controller
 
     private function ensureNasForSite(Site $site): void
     {
+        if ($site->site_type === 'omada') {
+            return;
+        }
+
         if (!$site->tenant_id) {
             return;
         }
@@ -274,6 +316,64 @@ class SiteController extends Controller
         return $request->user()?->tenant_id
             ?? $request->attributes->get('tenant')?->id
             ?? (app()->bound('tenant') ? app('tenant')->id : null);
+    }
+
+    private function tenantAllowsSiteType(Request $request, string $siteType): bool
+    {
+        $routerTypes = $request->user()?->tenant?->settings['router_types'] ?? ['mikrotik'];
+
+        return in_array($siteType, $routerTypes ?: ['mikrotik'], true);
+    }
+
+    private function ensureOmadaLinkTicket(Request $request, ?Site $site): void
+    {
+        if (!$site || $site->site_type !== 'omada' || !$site->tenant_id || $site->omada_site_id) {
+            return;
+        }
+
+        if (!Schema::connection('central')->hasTable('support_tickets')) {
+            return;
+        }
+
+        $subject = "Link Omada site: {$site->name}";
+        $existing = SupportTicket::where('tenant_id', $site->tenant_id)
+            ->where('category', 'omada')
+            ->where('subject', $subject)
+            ->whereIn('status', ['open', 'pending_admin', 'pending_customer'])
+            ->first();
+
+        if ($existing) {
+            return;
+        }
+
+        DB::connection('central')->transaction(function () use ($request, $site, $subject) {
+            $ticket = SupportTicket::create([
+                'tenant_id' => $site->tenant_id,
+                'tenant_user_id' => $request->user()?->id,
+                'subject' => $subject,
+                'category' => 'omada',
+                'priority' => 'high',
+                'status' => 'open',
+                'last_reply_by' => 'system',
+                'unread_for_admin' => true,
+                'unread_for_tenant' => false,
+                'last_message_at' => now(),
+            ]);
+
+            $ticket->messages()->create([
+                'sender_type' => 'system',
+                'sender_id' => null,
+                'body' => implode("\n", [
+                    'A tenant created an Omada-backed site and needs administrator linking.',
+                    '',
+                    "OnLiFi site: {$site->name}",
+                    "Requested Omada site name: " . ($site->omada_site_name ?: $site->name),
+                    "Site ID in OnLiFi: {$site->id}",
+                    '',
+                    'Please confirm the routers are adopted by omada.onlifi.net, then map the correct Omada controller/site ID onto this OnLiFi site.',
+                ]),
+            ]);
+        });
     }
 
     private function ensureSiteDefaults(Site $site): void

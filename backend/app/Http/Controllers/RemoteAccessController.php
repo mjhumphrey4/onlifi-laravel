@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Site;
+use App\Models\SupportTicket;
 use App\Models\SystemSetting;
 use App\Models\Tenant;
 use App\Support\SiteScope;
@@ -86,6 +87,10 @@ class RemoteAccessController extends Controller
             'vpn_last_seen_at' => 'nullable|date',
             'router_api_port' => 'nullable|integer|min:1|max:65535',
             'remote_access_notes' => 'nullable|string|max:5000',
+            'omada_site_name' => 'nullable|string|max:100',
+            'omada_site_id' => 'nullable|string|max:100',
+            'omada_controller_id' => 'nullable|string|max:100',
+            'omada_link_status' => 'nullable|string|in:not_required,pending_admin,linked,failed',
         ]);
 
         if ($validator->fails()) {
@@ -104,11 +109,26 @@ class RemoteAccessController extends Controller
             'vpn_last_seen_at',
             'router_api_port',
             'remote_access_notes',
+            'omada_site_name',
+            'omada_site_id',
+            'omada_controller_id',
+            'omada_link_status',
         ]);
         $updates['vpn_public_port'] = Site::defaultVpnPublicPort();
         $updates['vpn_public_host'] = $updates['vpn_public_host'] ?? '89.167.42.53';
 
+        if ($site->site_type === 'omada') {
+            $updates['omada_site_name'] = trim((string) ($updates['omada_site_name'] ?? $site->omada_site_name ?? $site->name));
+            $updates['omada_link_status'] = $updates['omada_link_status'] ?? ($updates['omada_site_id'] ? 'linked' : 'pending_admin');
+            $updates['omada_linked_at'] = $updates['omada_link_status'] === 'linked' && !empty($updates['omada_site_id'])
+                ? now()
+                : null;
+        } else {
+            unset($updates['omada_site_name'], $updates['omada_site_id'], $updates['omada_controller_id'], $updates['omada_link_status']);
+        }
+
         $site->update($updates);
+        $this->resolveOmadaLinkTickets($site->fresh());
 
         $this->syncTenantRouterRecord($tenant, $site->fresh());
 
@@ -120,6 +140,10 @@ class RemoteAccessController extends Controller
 
     private function syncTenantRouterRecord(Tenant $tenant, Site $site): void
     {
+        if ($site->site_type === 'omada') {
+            return;
+        }
+
         if (!$site->vpn_private_ip || $tenant->status !== 'approved') {
             return;
         }
@@ -166,6 +190,26 @@ class RemoteAccessController extends Controller
         }
     }
 
+    private function resolveOmadaLinkTickets(Site $site): void
+    {
+        if ($site->site_type !== 'omada' || !$site->omada_site_id || ($site->omada_link_status !== 'linked')) {
+            return;
+        }
+
+        SupportTicket::where('tenant_id', $site->tenant_id)
+            ->where('category', 'omada')
+            ->where('subject', "Link Omada site: {$site->name}")
+            ->whereIn('status', ['open', 'pending_admin'])
+            ->update([
+                'status' => 'pending_customer',
+                'last_reply_by' => 'admin',
+                'unread_for_admin' => false,
+                'unread_for_tenant' => true,
+                'last_message_at' => now(),
+                'updated_at' => now(),
+            ]);
+    }
+
     private function formatSite(Site $site): array
     {
         return [
@@ -174,6 +218,12 @@ class RemoteAccessController extends Controller
             'name' => $site->name,
             'slug' => $site->slug,
             'description' => $site->description,
+            'site_type' => $site->site_type ?: 'mikrotik',
+            'omada_site_name' => $site->omada_site_name,
+            'omada_site_id' => $site->omada_site_id,
+            'omada_controller_id' => $site->omada_controller_id,
+            'omada_link_status' => $site->omada_link_status ?: ($site->site_type === 'omada' ? 'pending_admin' : 'not_required'),
+            'omada_linked_at' => $site->omada_linked_at?->toIso8601String(),
             'vpn_private_ip' => $site->vpn_private_ip,
             'vpn_username' => $site->vpn_username ?: $this->defaultVpnUsername($site),
             'vpn_password' => $site->vpn_password,

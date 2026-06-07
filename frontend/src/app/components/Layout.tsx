@@ -125,6 +125,7 @@ export function Layout() {
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteDescription, setNewSiteDescription] = useState('');
   const [newSiteType, setNewSiteType] = useState<'mikrotik' | 'omada'>('mikrotik');
+  const [newOmadaSiteName, setNewOmadaSiteName] = useState('');
   const [savingSite, setSavingSite] = useState(false);
   const [applicationTime, setApplicationTime] = useState('');
 
@@ -151,6 +152,9 @@ export function Layout() {
           name: newSiteName.trim(),
           description: newSiteDescription.trim() || null,
           site_type: newSiteType,
+          omada_site_name: newSiteType === 'omada'
+            ? (newOmadaSiteName.trim() || newSiteName.trim())
+            : null,
         }),
       });
 
@@ -163,6 +167,7 @@ export function Layout() {
         setNewSiteName('');
         setNewSiteDescription('');
         setNewSiteType('mikrotik');
+        setNewOmadaSiteName('');
       } else {
         const error = await readJson(response);
         alert(error.message || error.error || 'Failed to create site');
@@ -708,8 +713,28 @@ export function Layout() {
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">Omada is tracked for admin setup now; controller integration comes later.</p>
+                <p className="text-xs text-muted-foreground mt-2">Omada sites use controller APIs after an administrator links the Omada Site ID.</p>
               </div>
+              {newSiteType === 'omada' && (
+                <div className="space-y-3 rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-950">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      Omada Site Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={newOmadaSiteName}
+                      onChange={(e) => setNewOmadaSiteName(e.target.value)}
+                      placeholder="Exact site name in Omada Controller"
+                      className="w-full px-3 py-2 bg-background border border-orange-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 text-foreground"
+                    />
+                  </div>
+                  <p className="text-xs leading-relaxed">
+                    Omada routers must be linked to omada.onlifi.net before API data can appear. If they are not linked yet,
+                    open a support ticket and an administrator will help map the Omada Site ID.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="p-6 border-t border-border flex gap-3">
               <button
@@ -718,6 +743,7 @@ export function Layout() {
                   setNewSiteName('');
                   setNewSiteDescription('');
                   setNewSiteType('mikrotik');
+                  setNewOmadaSiteName('');
                 }}
                 className="flex-1 px-4 py-2 border border-border text-card-foreground rounded-lg hover:bg-muted transition-colors"
               >
@@ -725,7 +751,7 @@ export function Layout() {
               </button>
               <button
                 onClick={handleAddSite}
-                disabled={!newSiteName.trim() || savingSite}
+                disabled={!newSiteName.trim() || (newSiteType === 'omada' && !newOmadaSiteName.trim()) || savingSite}
                 className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {savingSite ? 'Creating...' : 'Create Site'}

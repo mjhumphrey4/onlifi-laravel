@@ -865,6 +865,10 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
             vpn_status: site.vpn_status || 'active',
             router_api_port: site.router_api_port || 8728,
             remote_access_notes: site.remote_access_notes || '',
+            omada_site_name: site.omada_site_name || site.name || '',
+            omada_site_id: site.omada_site_id || '',
+            omada_controller_id: site.omada_controller_id || '',
+            omada_link_status: site.omada_link_status || (site.site_type === 'omada' ? 'pending_admin' : 'not_required'),
           };
         });
         setForms(nextForms);
@@ -922,8 +926,52 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
             <div key={site.id} className="rounded-xl border border-slate-700 p-4 space-y-4">
               <div>
                 <h3 className="font-semibold text-white">{site.name}</h3>
-                <p className="text-xs text-slate-400">{site.slug}</p>
+                <p className="text-xs text-slate-400">{site.slug} · {site.site_type === 'omada' ? 'TP-Link Omada' : 'MikroTik'}</p>
               </div>
+              {site.site_type === 'omada' && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-semibold text-amber-200">Omada Controller Link</h4>
+                      <p className="text-xs text-amber-100/80 mt-1">
+                        Controller version 5.15.24.19. Enter the Omada identifiers after confirming the routers are adopted by omada.onlifi.net.
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      forms[site.id]?.omada_link_status === 'linked'
+                        ? 'bg-emerald-500/20 text-emerald-200'
+                        : 'bg-amber-500/20 text-amber-100'
+                    }`}>
+                      {forms[site.id]?.omada_link_status === 'linked' ? 'Linked' : 'Pending'}
+                    </span>
+                  </div>
+                  <div className="grid md:grid-cols-4 gap-3">
+                    <label className="block text-sm">
+                      <span className="text-slate-300">Omada site name</span>
+                      <input value={forms[site.id]?.omada_site_name || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], omada_site_name: e.target.value } })} placeholder="Customer site name in Omada" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="text-slate-300">Controller ID</span>
+                      <input value={forms[site.id]?.omada_controller_id || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], omada_controller_id: e.target.value } })} placeholder="Omada controller ID" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="text-slate-300">Omada site ID</span>
+                      <input value={forms[site.id]?.omada_site_id || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], omada_site_id: e.target.value } })} placeholder="Site ID from Omada API" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="text-slate-300">Link status</span>
+                      <select value={forms[site.id]?.omada_link_status || 'pending_admin'} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], omada_link_status: e.target.value } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white">
+                        <option value="pending_admin">Pending admin</option>
+                        <option value="linked">Linked</option>
+                        <option value="failed">Failed</option>
+                      </select>
+                    </label>
+                  </div>
+                  {site.omada_linked_at && (
+                    <p className="text-xs text-emerald-200">Linked at {new Date(site.omada_linked_at).toLocaleString()}</p>
+                  )}
+                </div>
+              )}
               <div className="grid md:grid-cols-4 gap-3">
                 <label className="block text-sm">
                   <span className="text-slate-300">VPN private IP</span>

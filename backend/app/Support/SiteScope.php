@@ -153,6 +153,11 @@ class SiteScope
             $table->string('slug', 100);
             $table->string('description', 255)->nullable();
             $table->string('site_type', 32)->default('mikrotik');
+            $table->string('omada_site_name', 100)->nullable();
+            $table->string('omada_site_id', 100)->nullable();
+            $table->string('omada_controller_id', 100)->nullable();
+            $table->string('omada_link_status', 32)->default('not_required')->index();
+            $table->timestamp('omada_linked_at')->nullable();
             $table->boolean('is_active')->default(true);
             $table->string('api_token', 64)->unique();
             $table->string('database_name')->nullable();

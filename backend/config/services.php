@@ -36,4 +36,14 @@ return [
         'default_username' => env('MIKROTIK_DEFAULT_USERNAME', 'admin'),
         'default_password' => env('MIKROTIK_DEFAULT_PASSWORD', 'admin'),
     ],
+
+    'omada' => [
+        'host' => env('OMADA_HOST', '10.200.1.253'),
+        'port' => env('OMADA_PORT', 8043),
+        'controller_id' => env('OMADA_CONTROLLER_ID'),
+        'operator_username' => env('OMADA_OPERATOR_USERNAME'),
+        'operator_password' => env('OMADA_OPERATOR_PASSWORD'),
+        'verify_tls' => env('OMADA_VERIFY_TLS', false),
+        'timeout' => env('OMADA_TIMEOUT', 10),
+    ],
 ];

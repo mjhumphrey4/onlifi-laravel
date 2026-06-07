@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use App\Models\TenantUser;
 use App\Models\SystemSetting;
 use App\Models\Site;
+use App\Models\SupportTicket;
 use App\Support\SiteScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -86,9 +87,12 @@ class TenantService
         if ($existing) {
             if (!$existing->database_name && $this->tenantReadyForSiteDatabase($tenant)) {
                 $existing->provisionDatabase($tenant);
-                return $existing->fresh();
+                $existing = $existing->fresh();
+                $this->ensureOmadaLinkTicket($tenant, $existing);
+                return $existing;
             }
 
+            $this->ensureOmadaLinkTicket($tenant, $existing);
             return $existing;
         }
 
@@ -100,6 +104,8 @@ class TenantService
             'name' => $name,
             'description' => 'Default site created during signup.',
             'site_type' => $siteType ?: $this->defaultSiteType($tenant->settings['router_types'] ?? ['mikrotik']),
+            'omada_site_name' => ($siteType ?: $this->defaultSiteType($tenant->settings['router_types'] ?? ['mikrotik'])) === 'omada' ? $name : null,
+            'omada_link_status' => ($siteType ?: $this->defaultSiteType($tenant->settings['router_types'] ?? ['mikrotik'])) === 'omada' ? 'pending_admin' : 'not_required',
             'is_active' => true,
             'api_token' => Str::random(64),
             'vpn_username' => $slug,
@@ -114,7 +120,56 @@ class TenantService
             $site = $site->fresh();
         }
 
+        $this->ensureOmadaLinkTicket($tenant, $site);
+
         return $site;
+    }
+
+    private function ensureOmadaLinkTicket(Tenant $tenant, Site $site): void
+    {
+        if ($site->site_type !== 'omada' || $site->omada_site_id) {
+            return;
+        }
+
+        $subject = "Link Omada site: {$site->name}";
+        $existing = SupportTicket::where('tenant_id', $tenant->id)
+            ->where('category', 'omada')
+            ->where('subject', $subject)
+            ->whereIn('status', ['open', 'pending_admin', 'pending_customer'])
+            ->first();
+
+        if ($existing) {
+            return;
+        }
+
+        $tenantUserId = $tenant->users()->orderBy('id')->value('id');
+        $ticket = SupportTicket::create([
+            'tenant_id' => $tenant->id,
+            'tenant_user_id' => $tenantUserId,
+            'subject' => $subject,
+            'category' => 'omada',
+            'priority' => 'high',
+            'status' => 'open',
+            'last_reply_by' => 'system',
+            'unread_for_admin' => true,
+            'unread_for_tenant' => false,
+            'last_message_at' => now(),
+        ]);
+
+        $ticket->messages()->create([
+            'sender_type' => 'system',
+            'sender_id' => null,
+            'body' => implode("\n", [
+                'An Omada-backed tenant/site was created and needs administrator linking.',
+                '',
+                "Tenant: {$tenant->name}",
+                "OnLiFi site: {$site->name}",
+                "Requested Omada site name: " . ($site->omada_site_name ?: $site->name),
+                "Site ID in OnLiFi: {$site->id}",
+                '',
+                'Please confirm the routers are adopted by omada.onlifi.net, then map the correct Omada controller/site ID onto this OnLiFi site.',
+            ]),
+        ]);
     }
 
     private function tenantReadyForSiteDatabase(Tenant $tenant): bool

@@ -9,6 +9,10 @@ export interface Site {
   slug: string;
   description?: string | null;
   site_type?: 'mikrotik' | 'omada';
+  omada_site_name?: string | null;
+  omada_site_id?: string | null;
+  omada_controller_id?: string | null;
+  omada_link_status?: 'not_required' | 'pending_admin' | 'linked' | string;
   is_active?: boolean;
   api_token?: string;
 }

@@ -274,6 +274,13 @@ Route::middleware(['tenant'])->group(function () {
         Route::post('/telemetry/ingest', [MikrotikController::class, 'ingestTelemetry']);
     });
 
+    Route::middleware('tenant.permission:view_routers')->prefix('omada')->group(function () {
+        Route::get('/status', [\App\Http\Controllers\OmadaController::class, 'status']);
+        Route::get('/devices', [\App\Http\Controllers\OmadaController::class, 'devices']);
+        Route::get('/clients', [\App\Http\Controllers\OmadaController::class, 'clients']);
+        Route::get('/vouchers', [\App\Http\Controllers\OmadaController::class, 'vouchers']);
+    });
+
     Route::middleware('tenant.permission:view_routers')->prefix('pppoe')->group(function () {
         Route::get('/clients', [PppoeClientController::class, 'index']);
         Route::post('/clients', [PppoeClientController::class, 'store']);

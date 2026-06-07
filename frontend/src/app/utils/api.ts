@@ -286,6 +286,10 @@ export const getRouterDhcpPools = (refresh = false) => get(`/routers/dhcp/pools$
 export const getRouterSystemUsers = (refresh = false) => get(`/routers/system-users${refresh ? '?refresh=1' : ''}`);
 export const createRouterSystemUser = (data: Record<string, unknown>) => post('/routers/system-users', data);
 export const updateRouterSystemUserStatus = (data: Record<string, unknown>) => post('/routers/system-users/status', data);
+export const getOmadaStatus = () => get('/omada/status');
+export const getOmadaDevices = () => get('/omada/devices');
+export const getOmadaClients = () => get('/omada/clients');
+export const getOmadaVouchers = () => get('/omada/vouchers');
 
 // ============ PPPOE CLIENTS (Tenant) ============
 export const getPppoeClients = (refresh = false) => get(`/pppoe/clients${refresh ? '?refresh=1' : ''}`);
