@@ -393,9 +393,27 @@ export function Dashboard() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
-        <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings)} icon={DollarSign} trend={{ value: periodLabel, isPositive: true }} action={{ label: 'View Statistics', to: '/performance' }} />
-        <StatsCard title="Vouchers" value={fmt(summary.voucherAmount)} icon={Users} trend={{ value: periodLabel, isPositive: true }} action={{ label: 'Create Vouchers', to: '/vouchers' }} />
-        <StatsCard title="Mobile Money" value={fmt(summary.mobileMoneyAmount)} icon={TrendingUp} trend={{ value: periodLabel, isPositive: true }} action={{ label: 'View Transactions', to: '/transactions' }} />
+        <StatsCard title="Total Earnings" value={fmt(summary.totalEarnings)} icon={DollarSign} trend={{ value: periodLabel, isPositive: true }} action={{ label: 'View Statistics', to: '/performance?period=today' }} />
+        <StatsCard
+          title="Vouchers"
+          value={fmt(summary.voucherAmount)}
+          icon={Users}
+          trend={{ value: periodLabel, isPositive: true }}
+          actions={[
+            { label: 'Create Vouchers', to: '/vouchers' },
+            { label: 'Show Voucher Stats', to: '/performance?period=today&tab=vouchers' },
+          ]}
+        />
+        <StatsCard
+          title="Mobile Money"
+          value={fmt(summary.mobileMoneyAmount)}
+          icon={TrendingUp}
+          trend={{ value: periodLabel, isPositive: true }}
+          actions={[
+            { label: 'View Transactions', to: '/transactions' },
+            { label: 'Show Stats', to: '/performance?period=today&tab=mobile_money' },
+          ]}
+        />
       </div>
 
       {/* Clients and Recent Transactions - Side by Side */}

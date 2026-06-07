@@ -14,9 +14,15 @@ interface StatsCardProps {
     label: string;
     to: string;
   };
+  actions?: {
+    label: string;
+    to: string;
+  }[];
 }
 
-export function StatsCard({ title, value, icon: Icon, trend, note, action }: StatsCardProps) {
+export function StatsCard({ title, value, icon: Icon, trend, note, action, actions }: StatsCardProps) {
+  const cardActions = actions || (action ? [action] : []);
+
   return (
     <div className="bg-card border border-border rounded-lg p-4 sm:p-6 hover:border-primary/50 transition-colors">
       <div className="flex items-start justify-between">
@@ -29,13 +35,18 @@ export function StatsCard({ title, value, icon: Icon, trend, note, action }: Sta
             </p>
           )}
           {note && <p className="text-xs text-muted-foreground mt-1">{note}</p>}
-          {action && (
-            <Link
-              to={action.to}
-              className="mt-3 inline-flex items-center rounded-md border border-orange-300/60 bg-orange-500/10 px-2.5 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-500/15 transition-colors"
-            >
-              {action.label}
-            </Link>
+          {cardActions.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {cardActions.map((item) => (
+                <Link
+                  key={`${item.label}-${item.to}`}
+                  to={item.to}
+                  className="inline-flex items-center rounded-md bg-orange-500 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 transition-colors"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           )}
         </div>
         <div className="w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">

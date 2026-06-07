@@ -26,6 +26,12 @@ define('YOAPI_PASSWORD', 'BUid-ZAmO-b2M0-vF6n-CzBK-PBaL-8qJK-6SOf'); // Replace 
 // Use 'sandbox' for testing, 'production' for live
 define('YOAPI_MODE', 'production'); // Change to 'production' when ready to go live
 
+// SMS configuration for voucher delivery.
+define('SMS_USERNAME', 'humphreympairwe');
+define('SMS_API_KEY', '32ccb38b175de8d61ce05263e9cadfd522f258bac05f931d');
+define('SMS_SENDER_ID', 'ONLIFI');
+define('SMS_BRAND_NAME', 'ONLIFI WiFi');
+
 // Public URL for callbacks. This follows the deployed folder, e.g.
 // https://pay.onlifi.net/ranken/ when the project is hosted at /ranken.
 define('SITE_URL', currentSiteUrl());
@@ -186,7 +192,7 @@ function tableExists(PDO $pdo, string $table): bool {
   return !empty(tableColumns($pdo, $table));
 }
 
-function tableColumns(PDO $pdo, string $table): array {
+function tableColumns(PDO $pdo, string $table, bool $refresh = false): array {
   static $cache = [];
 
   if (!isValidIdentifier($table)) {
@@ -195,7 +201,7 @@ function tableColumns(PDO $pdo, string $table): array {
 
   $key = spl_object_hash($pdo) . ':' . $table;
 
-  if (array_key_exists($key, $cache)) {
+  if (!$refresh && array_key_exists($key, $cache)) {
     return $cache[$key];
   }
 
@@ -213,6 +219,10 @@ function tableColumns(PDO $pdo, string $table): array {
   }
 
   return $cache[$key];
+}
+
+function forgetTableColumns(PDO $pdo, string $table): void {
+  tableColumns($pdo, $table, true);
 }
 
 function ensureManualPaymentSchema(PDO $pdo): void {
@@ -275,6 +285,7 @@ function ensureManualPaymentSchema(PDO $pdo): void {
   foreach ($columns as $column => $definition) {
     if (!columnExists($pdo, 'transactions', $column)) {
       $pdo->exec("ALTER TABLE transactions ADD COLUMN `$column` $definition");
+      forgetTableColumns($pdo, 'transactions');
     }
   }
 

@@ -29,7 +29,7 @@ class ClientController extends Controller
 
         if ($request->boolean('refresh')) {
             $refreshResult = $this->refreshFromRouter($request, true);
-            Cache::forget($cacheKey);
+            $this->forgetClientCaches($site?->id);
         } elseif ($cached = Cache::get($cacheKey)) {
             $cached['cache']['source'] = 'redis';
             return response()->json($cached);
@@ -153,7 +153,7 @@ class ClientController extends Controller
     {
         $this->refreshFromRouter($request, true);
         $site = SiteScope::selectedOrDefaultSite($request);
-        Cache::forget($this->clientsCacheKey($site?->id, (int) $request->input('limit', 100)));
+        $this->forgetClientCaches($site?->id);
         return $this->index($request);
     }
 
@@ -264,9 +264,7 @@ class ClientController extends Controller
         }
 
         DB::connection('tenant')->table('hotspot_users')->where('id', $client->id)->delete();
-        Cache::forget($this->clientsCacheKey($site?->id, 100));
-        Cache::forget($this->clientsCacheKey($site?->id, 10));
-        Cache::forget($this->clientsCacheKey($site?->id, 1));
+        $this->forgetClientCaches($site?->id);
 
         return response()->json([
             'message' => $routerRemoved
@@ -280,6 +278,13 @@ class ClientController extends Controller
     {
         $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
         return "tenant:{$tenantId}:site:" . ($siteId ?: 'default') . ":clients:limit:{$limit}";
+    }
+
+    private function forgetClientCaches(?int $siteId): void
+    {
+        foreach ([1, 10, 100, 1000] as $limit) {
+            Cache::forget($this->clientsCacheKey($siteId, $limit));
+        }
     }
 
     private function refreshFromRouter(Request $request, bool $force): array

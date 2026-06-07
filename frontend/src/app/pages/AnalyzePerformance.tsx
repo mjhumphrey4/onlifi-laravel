@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Calendar, RefreshCw, Smartphone, Ticket, TrendingUp, Trophy, Users } from 'lucide-react';
+import { useSearchParams } from 'react-router';
 import { getPerformanceAnalytics, getVoucherStatistics } from '../utils/api';
 import { useSite } from '../context/SiteContext';
 
@@ -30,6 +31,30 @@ interface SalesPointStats {
   revenue: number;
 }
 
+interface VoucherDetailRow {
+  id: number;
+  voucher_code: string;
+  voucher_type: string;
+  status: string;
+  price: number;
+  mac_address?: string;
+  ip_address?: string;
+  first_used_at?: string;
+  last_used_at?: string;
+  expires_at?: string;
+}
+
+interface MobileMoneyDetailRow {
+  id: number | string;
+  msisdn: string;
+  voucher_code?: string;
+  voucher_type?: string;
+  amount: number;
+  external_ref?: string;
+  transaction_ref?: string;
+  created_at?: string;
+}
+
 const PERIODS: { id: Period; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'yesterday', label: 'Yesterday' },
@@ -43,6 +68,18 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#14b
 
 function fmt(n: number) {
   return 'UGX ' + Math.round(Number(n || 0)).toLocaleString();
+}
+
+function fmtDate(value?: string) {
+  return value ? new Date(value).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+}
+
+function isPeriod(value: string | null): value is Period {
+  return Boolean(value && PERIODS.some((item) => item.id === value));
+}
+
+function isChannel(value: string | null): value is Channel {
+  return value === 'mobile_money' || value === 'vouchers';
 }
 
 function MetricCard({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
@@ -61,8 +98,15 @@ function MetricCard({ icon: Icon, label, value }: { icon: any; label: string; va
 
 export function AnalyzePerformance() {
   const { selectedSite } = useSite();
-  const [activeTab, setActiveTab] = useState<Channel>('mobile_money');
-  const [period, setPeriod] = useState<Period>('today');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Channel>(() => {
+    const tab = searchParams.get('tab');
+    return isChannel(tab) ? tab : 'mobile_money';
+  });
+  const [period, setPeriod] = useState<Period>(() => {
+    const selectedPeriod = searchParams.get('period');
+    return isPeriod(selectedPeriod) ? selectedPeriod : 'today';
+  });
   const [loading, setLoading] = useState(true);
   const [breakdown, setBreakdown] = useState<BreakdownRow[]>([]);
   const [summary, setSummary] = useState({
@@ -74,6 +118,8 @@ export function AnalyzePerformance() {
   });
   const [topVoucherTypes, setTopVoucherTypes] = useState<VoucherTypeRow[]>([]);
   const [topSalesPoints, setTopSalesPoints] = useState<SalesPointStats[]>([]);
+  const [voucherRows, setVoucherRows] = useState<VoucherDetailRow[]>([]);
+  const [mobileMoneyRows, setMobileMoneyRows] = useState<MobileMoneyDetailRow[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,6 +131,8 @@ export function AnalyzePerformance() {
       setSummary(analytics.summary || {});
       setBreakdown(analytics.breakdown || []);
       setTopVoucherTypes(analytics.top_voucher_types || []);
+      setVoucherRows(analytics.vouchers || []);
+      setMobileMoneyRows(analytics.mobile_money_rows || []);
       setTopSalesPoints([...(voucherStats.by_sales_point || [])]
         .sort((a: SalesPointStats, b: SalesPointStats) => Number(b.revenue || 0) - Number(a.revenue || 0))
         .slice(0, 5));
@@ -93,6 +141,8 @@ export function AnalyzePerformance() {
       setBreakdown([]);
       setTopVoucherTypes([]);
       setTopSalesPoints([]);
+      setVoucherRows([]);
+      setMobileMoneyRows([]);
     } finally {
       setLoading(false);
     }
@@ -101,6 +151,10 @@ export function AnalyzePerformance() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setSearchParams({ period, tab: activeTab }, { replace: true });
+  }, [activeTab, period, setSearchParams]);
 
   const chartData = useMemo(() => breakdown.map((row) => ({
     label: row.label,
@@ -225,6 +279,86 @@ export function AnalyzePerformance() {
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4 sm:p-6 mb-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-card-foreground">
+              {activeTab === 'mobile_money' ? 'Mobile Money Transactions' : 'Voucher Usage'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {PERIODS.find((item) => item.id === period)?.label || 'Selected period'} detail for {selectedSite?.name || 'the active site'}.
+            </p>
+          </div>
+          <span className="text-xs rounded-full bg-muted px-2.5 py-1 text-muted-foreground">
+            {(activeTab === 'mobile_money' ? mobileMoneyRows.length : voucherRows.length).toLocaleString()} rows
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          {activeTab === 'mobile_money' ? (
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
+                  <th className="py-3 pr-4 font-semibold">Number</th>
+                  <th className="py-3 pr-4 font-semibold">Voucher</th>
+                  <th className="py-3 pr-4 font-semibold">Type</th>
+                  <th className="py-3 pr-4 font-semibold text-right">Amount</th>
+                  <th className="py-3 pr-4 font-semibold">Reference</th>
+                  <th className="py-3 font-semibold">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {mobileMoneyRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">No mobile money transactions in this period.</td>
+                  </tr>
+                ) : mobileMoneyRows.map((row) => (
+                  <tr key={`${row.id}-${row.external_ref}`} className="hover:bg-muted/30">
+                    <td className="py-3 pr-4 text-card-foreground">{row.msisdn}</td>
+                    <td className="py-3 pr-4 text-primary">{row.voucher_code || ''}</td>
+                    <td className="py-3 pr-4 text-muted-foreground">{row.voucher_type || ''}</td>
+                    <td className="py-3 pr-4 text-right font-semibold text-card-foreground">{fmt(Number(row.amount || 0))}</td>
+                    <td className="py-3 pr-4 font-mono text-xs text-muted-foreground">{row.external_ref || row.transaction_ref || ''}</td>
+                    <td className="py-3 text-muted-foreground">{fmtDate(row.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase text-muted-foreground">
+                  <th className="py-3 pr-4 font-semibold">Voucher</th>
+                  <th className="py-3 pr-4 font-semibold">Type</th>
+                  <th className="py-3 pr-4 font-semibold">Status</th>
+                  <th className="py-3 pr-4 font-semibold text-right">Price</th>
+                  <th className="py-3 pr-4 font-semibold">MAC</th>
+                  <th className="py-3 pr-4 font-semibold">First Used</th>
+                  <th className="py-3 font-semibold">Last Used</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {voucherRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">No vouchers were used in this period.</td>
+                  </tr>
+                ) : voucherRows.map((row) => (
+                  <tr key={row.id} className="hover:bg-muted/30">
+                    <td className="py-3 pr-4 font-semibold text-primary">{row.voucher_code}</td>
+                    <td className="py-3 pr-4 text-card-foreground">{row.voucher_type || ''}</td>
+                    <td className="py-3 pr-4 capitalize text-muted-foreground">{row.status}</td>
+                    <td className="py-3 pr-4 text-right font-semibold text-card-foreground">{fmt(Number(row.price || 0))}</td>
+                    <td className="py-3 pr-4 font-mono text-xs text-muted-foreground">{row.mac_address || ''}</td>
+                    <td className="py-3 pr-4 text-muted-foreground">{fmtDate(row.first_used_at)}</td>
+                    <td className="py-3 text-muted-foreground">{fmtDate(row.last_used_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>

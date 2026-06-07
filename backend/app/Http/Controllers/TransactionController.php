@@ -160,6 +160,51 @@ class TransactionController extends Controller
                 'revenue' => (float) $row->revenue,
             ]);
 
+        $voucherRowsQuery = (clone $voucherQuery)->leftJoin('voucher_groups', 'vouchers.group_id', '=', 'voucher_groups.id');
+        $voucherRows = $voucherRowsQuery
+            ->selectRaw('
+                vouchers.id,
+                vouchers.voucher_code,
+                vouchers.status,
+                vouchers.price,
+                vouchers.used_by_mac,
+                vouchers.used_by_ip,
+                vouchers.first_used_at,
+                vouchers.last_used_at,
+                vouchers.expires_at,
+                COALESCE(voucher_groups.group_name, vouchers.profile_name, "Voucher") as voucher_type
+            ')
+            ->orderByDesc('vouchers.first_used_at')
+            ->limit(500)
+            ->get()
+            ->map(fn ($row) => [
+                'id' => (int) $row->id,
+                'voucher_code' => $row->voucher_code,
+                'voucher_type' => $row->voucher_type,
+                'status' => $row->status,
+                'price' => (float) $row->price,
+                'mac_address' => $row->used_by_mac,
+                'ip_address' => $row->used_by_ip,
+                'first_used_at' => $row->first_used_at,
+                'last_used_at' => $row->last_used_at,
+                'expires_at' => $row->expires_at,
+            ]);
+
+        $mobileMoneyRows = (clone $transactionQuery)
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get()
+            ->map(fn ($transaction) => [
+                'id' => $transaction->id,
+                'msisdn' => $transaction->msisdn,
+                'voucher_code' => $transaction->voucher_code,
+                'voucher_type' => $transaction->voucher_type,
+                'amount' => (float) $transaction->amount,
+                'external_ref' => $transaction->external_ref,
+                'transaction_ref' => $transaction->transaction_ref,
+                'created_at' => $transaction->created_at,
+            ]);
+
         return response()->json([
             'period' => $period,
             'bucket' => $bucket,
@@ -172,6 +217,8 @@ class TransactionController extends Controller
             ],
             'breakdown' => $breakdown,
             'top_voucher_types' => $topVoucherTypes,
+            'vouchers' => $voucherRows,
+            'mobile_money_rows' => $mobileMoneyRows,
         ]);
     }
 
@@ -180,12 +227,12 @@ class TransactionController extends Controller
         $now = now();
 
         return match ($period) {
-            'yesterday' => [$now->copy()->subDay()->subHours(11)->startOfHour(), $now->copy()->subDay()->endOfHour(), 'hour'],
+            'yesterday' => [$now->copy()->subDay()->startOfDay(), $now->copy()->subDay()->endOfDay(), 'hour'],
             'week' => [$now->copy()->startOfWeek(), $now, 'day'],
             'month' => [$now->copy()->startOfMonth(), $now, 'day'],
             'three_months' => [$now->copy()->subMonths(3)->startOfDay(), $now, 'month'],
             'six_months' => [$now->copy()->subMonths(6)->startOfDay(), $now, 'month'],
-            default => [$now->copy()->subHours(11)->startOfHour(), $now, 'hour'],
+            default => [$now->copy()->startOfDay(), $now, 'hour'],
         };
     }
 

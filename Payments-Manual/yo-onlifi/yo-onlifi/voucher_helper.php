@@ -70,10 +70,13 @@ function createPaidVouchers(string $externalRef, int $count, ?PDO $pdo = null): 
         $pdo->commit();
 
         $transaction['voucher_code'] = $codes[0] ?? null;
+        if (function_exists('logIPN')) {
+            logIPN("Voucher database rows committed for external_ref: $externalRef - Codes: " . implode(', ', $codes), 'VOUCHER_COMMITTED');
+        }
         $sms = sendTransactionVoucherSms($pdo, $transaction, $codes);
 
         return ['success' => true, 'voucherCodes' => $codes, 'sms' => $sms];
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
@@ -125,17 +128,23 @@ function sendTransactionVoucherSms(PDO $pdo, array $transaction, array $codes): 
         } else {
             $result = ['success' => false, 'message' => 'SMS helper is not loaded'];
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         $result = ['success' => false, 'message' => 'SMS error: ' . $e->getMessage()];
     }
 
     $success = !empty($result['success']);
-    updateTransaction($pdo, $externalRef, [
-        'sms_sent_at' => $success ? date('Y-m-d H:i:s') : null,
-        'sms_status' => $success ? 'sent' : 'failed',
-        'sms_error' => $success ? null : substr((string) ($result['message'] ?? 'SMS sending failed'), 0, 255),
-        'updated_at' => date('Y-m-d H:i:s'),
-    ]);
+    try {
+        updateTransaction($pdo, $externalRef, [
+            'sms_sent_at' => $success ? date('Y-m-d H:i:s') : null,
+            'sms_status' => $success ? 'sent' : 'failed',
+            'sms_error' => $success ? null : substr((string) ($result['message'] ?? 'SMS sending failed'), 0, 255),
+            'updated_at' => date('Y-m-d H:i:s'),
+        ]);
+    } catch (Throwable $e) {
+        if (function_exists('logSmsEvent')) {
+            logSmsEvent("Could not update SMS status for $externalRef: " . $e->getMessage(), 'SMS_ERROR');
+        }
+    }
 
     return $result;
 }

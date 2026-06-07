@@ -369,7 +369,9 @@ class RouterSnapshotService
             return;
         }
 
-        foreach ([10, 100] as $limit) {
+        $total = $this->hotspotClientQuery($site, $routerName)->count();
+
+        foreach ([1, 10, 100, 1000] as $limit) {
             $clients = $this->hotspotClientQuery($site, $routerName)
                 ->orderBy('last_seen', 'desc')
                 ->limit($limit)
@@ -377,7 +379,7 @@ class RouterSnapshotService
 
             Cache::put($this->clientsCacheKey($site, $limit), [
                 'clients' => $clients,
-                'total' => $clients->count(),
+                'total' => $total,
                 'refreshed_at' => $clients->max('last_seen'),
                 'cache' => [
                     'source' => 'redis',
