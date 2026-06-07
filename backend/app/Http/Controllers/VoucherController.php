@@ -10,6 +10,7 @@ use App\Services\FreeRadiusService;
 use App\Services\VoucherService;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -1198,6 +1199,18 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
             ]);
         }
         $salesPointId = $request->integer('sales_point_id') ?: null;
+        $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
+        $cacheKey = sprintf(
+            'tenant:%s:site:%s:vouchers:statistics:sales_point:%s:v2',
+            $tenantId,
+            $site->id,
+            $salesPointId ?: 'all'
+        );
+
+        if (!$request->boolean('refresh') && ($cached = Cache::get($cacheKey))) {
+            $cached['cache'] = ['source' => 'redis', 'ttl_seconds' => 300];
+            return response()->json($cached);
+        }
 
         if ($salesPointId && Schema::connection('tenant')->hasColumn('voucher_sales_points', 'site_id')) {
             $belongsToSite = DB::connection('tenant')->table('voucher_sales_points')
@@ -1304,6 +1317,9 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
             // If query fails (no data or table issues), return empty array
             $stats['by_sales_point'] = [];
         }
+
+        $stats['cache'] = ['source' => 'database', 'ttl_seconds' => 300];
+        Cache::put($cacheKey, $stats, now()->addMinutes(5));
 
         return response()->json($stats);
     }

@@ -186,7 +186,7 @@ export function Dashboard() {
 
       // Fetch stats and filtered transactions
       const [statsRes, txResponse, performanceStats, voucherStats] = await Promise.all([
-        apiStats(),
+        dateFilter === 'all' ? apiStats() : Promise.resolve({ total_revenue: 0 }),
         canViewTransactions ? fetch(`${API_BASE}/transactions?${params.toString()}`, { headers }) : Promise.resolve(null),
         canViewFinancials ? getPerformanceAnalytics(performancePeriod) : Promise.resolve({ summary: {} }),
         canManageVouchers ? getVoucherStatistics() : Promise.resolve({ by_sales_point: [] }),

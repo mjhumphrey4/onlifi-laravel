@@ -7,6 +7,7 @@ use App\Models\PlatformFee;
 use App\Models\Voucher;
 use App\Support\SiteScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -71,6 +72,19 @@ class TransactionController extends Controller
         $query = Transaction::query();
         $site = SiteScope::selectedSite($request);
         $this->applyTransactionSiteScope($query, $site);
+        $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
+        $cacheKey = sprintf(
+            'tenant:%s:site:%s:transactions:statistics:%s:%s:v2',
+            $tenantId,
+            $site?->id ?: 'default',
+            $request->query('from_date', 'none'),
+            $request->query('to_date', 'none')
+        );
+
+        if (!$request->boolean('refresh') && ($cached = Cache::get($cacheKey))) {
+            $cached['cache'] = ['source' => 'redis', 'ttl_seconds' => 300];
+            return response()->json($cached);
+        }
 
         if ($request->has('from_date')) {
             $query->whereDate('created_at', '>=', $request->from_date);
@@ -108,6 +122,9 @@ class TransactionController extends Controller
                 ->get(),
         ];
 
+        $stats['cache'] = ['source' => 'database', 'ttl_seconds' => 300];
+        Cache::put($cacheKey, $stats, now()->addMinutes(5));
+
         return response()->json($stats);
     }
 
@@ -129,6 +146,18 @@ class TransactionController extends Controller
         $period = $request->query('period', 'today');
         [$start, $end, $bucket] = $this->resolvePerformancePeriod($period);
         $site = SiteScope::selectedSite($request);
+        $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
+        $cacheKey = sprintf(
+            'tenant:%s:site:%s:transactions:performance:%s:v2',
+            $tenantId,
+            $site?->id ?: 'default',
+            $period
+        );
+
+        if (!$request->boolean('refresh') && ($cached = Cache::get($cacheKey))) {
+            $cached['cache'] = ['source' => 'redis', 'ttl_seconds' => 300];
+            return response()->json($cached);
+        }
 
         $transactionQuery = Transaction::query()
             ->where('status', 'success')
@@ -139,6 +168,7 @@ class TransactionController extends Controller
             ->whereNotNull('first_used_at')
             ->whereBetween('first_used_at', [$start, $end]);
         SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
+        $this->hideManualPaymentVouchers($voucherQuery);
 
         $mobileTotal = (clone $transactionQuery)->sum('amount');
         $mobileCount = (clone $transactionQuery)->count();
@@ -205,7 +235,7 @@ class TransactionController extends Controller
                 'created_at' => $transaction->created_at,
             ]);
 
-        return response()->json([
+        $payload = [
             'period' => $period,
             'bucket' => $bucket,
             'summary' => [
@@ -219,7 +249,12 @@ class TransactionController extends Controller
             'top_voucher_types' => $topVoucherTypes,
             'vouchers' => $voucherRows,
             'mobile_money_rows' => $mobileMoneyRows,
-        ]);
+            'cache' => ['source' => 'database', 'ttl_seconds' => 300],
+        ];
+
+        Cache::put($cacheKey, $payload, now()->addMinutes(5));
+
+        return response()->json($payload);
     }
 
     private function resolvePerformancePeriod(string $period): array
@@ -269,6 +304,26 @@ class TransactionController extends Controller
             $transaction->setAttribute('net_amount', $netAmount);
             $transaction->setAttribute('fee_percentage', $fee?->fee_percentage !== null ? (float) $fee->fee_percentage : null);
         }
+    }
+
+    private function hideManualPaymentVouchers($query)
+    {
+        $hasCreatedBy = Schema::connection('tenant')->hasColumn('voucher_groups', 'created_by');
+        $hasDescription = Schema::connection('tenant')->hasColumn('voucher_groups', 'description');
+
+        if (!Schema::connection('tenant')->hasTable('voucher_groups') || (!$hasCreatedBy && !$hasDescription)) {
+            return $query;
+        }
+
+        return $query->whereDoesntHave('group', function ($groupQuery) use ($hasCreatedBy, $hasDescription) {
+            if ($hasCreatedBy) {
+                $groupQuery->where('created_by', 'manual-payment');
+            }
+
+            if ($hasDescription) {
+                $groupQuery->orWhere('description', 'like', '%Auto-created by manual payment%');
+            }
+        });
     }
 
     private function applyTransactionSiteScope($query, $site): void

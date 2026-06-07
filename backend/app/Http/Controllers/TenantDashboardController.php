@@ -26,7 +26,7 @@ class TenantDashboardController extends Controller
     {
         $site = SiteScope::selectedSite($request);
         $tenantId = app()->bound('tenant') ? app('tenant')->id : 'unknown';
-        $cacheKey = "tenant:{$tenantId}:site:" . ($site?->id ?: 'default') . ':dashboard:realtime-stats';
+        $cacheKey = "tenant:{$tenantId}:site:" . ($site?->id ?: 'default') . ':dashboard:realtime-stats:v2';
 
         if (!$request->boolean('refresh') && ($cached = Cache::get($cacheKey))) {
             $cached['cache'] = [
@@ -72,6 +72,7 @@ class TenantDashboardController extends Controller
 
         $voucherQuery = Voucher::query();
         SiteScope::applyToTenantTable($voucherQuery, 'vouchers', $site);
+        $this->hideManualPaymentVouchers($voucherQuery);
         $activeVouchers = (clone $voucherQuery)->whereIn('status', ['reserved', 'in_use'])->count();
         $unusedVouchers = (clone $voucherQuery)->where('status', 'unused')->count();
         $vouchersSold = (clone $voucherQuery)->whereNotNull('first_used_at')->count();
@@ -100,6 +101,26 @@ class TenantDashboardController extends Controller
         Cache::put($cacheKey, $payload, now()->addMinutes(5));
 
         return response()->json($payload);
+    }
+
+    private function hideManualPaymentVouchers($query)
+    {
+        $hasCreatedBy = Schema::connection('tenant')->hasColumn('voucher_groups', 'created_by');
+        $hasDescription = Schema::connection('tenant')->hasColumn('voucher_groups', 'description');
+
+        if (!Schema::connection('tenant')->hasTable('voucher_groups') || (!$hasCreatedBy && !$hasDescription)) {
+            return $query;
+        }
+
+        return $query->whereDoesntHave('group', function ($groupQuery) use ($hasCreatedBy, $hasDescription) {
+            if ($hasCreatedBy) {
+                $groupQuery->where('created_by', 'manual-payment');
+            }
+
+            if ($hasDescription) {
+                $groupQuery->orWhere('description', 'like', '%Auto-created by manual payment%');
+            }
+        });
     }
 
     public function getActiveUsers(Request $request)
