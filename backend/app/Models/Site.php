@@ -44,6 +44,7 @@ class Site extends Model
         'wireguard_preshared_key',
         'router_api_port',
         'remote_access_notes',
+        'assigned_device_ip_range',
     ];
 
     protected $casts = [

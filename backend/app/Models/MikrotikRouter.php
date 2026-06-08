@@ -25,6 +25,12 @@ class MikrotikRouter extends Model
         'last_memory_used_mb',
         'memory_total_mb',
         'last_active_connections',
+        'latitude',
+        'longitude',
+        'installed_by_user_id',
+        'installed_at',
+        'installer_submission_id',
+        'uptime_kuma_monitor_id',
     ];
 
     protected $hidden = [
@@ -41,6 +47,10 @@ class MikrotikRouter extends Model
         'last_memory_used_mb' => 'integer',
         'memory_total_mb' => 'integer',
         'last_active_connections' => 'integer',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
+        'installed_by_user_id' => 'integer',
+        'installed_at' => 'datetime',
     ];
 
 

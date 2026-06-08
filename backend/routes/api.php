@@ -37,6 +37,11 @@ Route::post('/tenant/login', [TenantAuthController::class, 'login']);
 Route::post('/tenant/forgot-password', [TenantAuthController::class, 'forgotPassword']);
 Route::post('/tenant/reset-password', [TenantAuthController::class, 'resetPassword']);
 
+Route::prefix('installer')->group(function () {
+    Route::post('/login', [\App\Http\Controllers\InstallerController::class, 'login']);
+    Route::middleware('auth:sanctum')->post('/devices', [\App\Http\Controllers\InstallerController::class, 'storeDevice']);
+});
+
 Route::get('/system/settings/public', [SystemSettingController::class, 'publicSettings']);
 Route::get('/announcements/active', [AnnouncementController::class, 'activeAnnouncements']);
 Route::post('/billing/ipn', [SubscriptionBillingController::class, 'ipn']);

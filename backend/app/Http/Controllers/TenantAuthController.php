@@ -63,6 +63,13 @@ class TenantAuthController extends Controller
             ], 403);
         }
 
+        if ($user->role === 'installer') {
+            return response()->json([
+                'error' => 'Installer app required',
+                'message' => 'Installer accounts can only sign in through the ONLIFI Installer app.',
+            ], 403);
+        }
+
         // Check if tenant is active
         $tenant = $user->tenant;
         if (!$tenant || !$tenant->is_active) {

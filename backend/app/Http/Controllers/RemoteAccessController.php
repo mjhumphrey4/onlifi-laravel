@@ -87,6 +87,7 @@ class RemoteAccessController extends Controller
             'vpn_last_seen_at' => 'nullable|date',
             'router_api_port' => 'nullable|integer|min:1|max:65535',
             'remote_access_notes' => 'nullable|string|max:5000',
+            'assigned_device_ip_range' => 'nullable|string|max:64',
             'omada_site_name' => 'nullable|string|max:100',
             'omada_site_id' => 'nullable|string|max:100',
             'omada_controller_id' => 'nullable|string|max:100',
@@ -109,6 +110,7 @@ class RemoteAccessController extends Controller
             'vpn_last_seen_at',
             'router_api_port',
             'remote_access_notes',
+            'assigned_device_ip_range',
             'omada_site_name',
             'omada_site_id',
             'omada_controller_id',
@@ -240,6 +242,7 @@ class RemoteAccessController extends Controller
             'vpn_last_seen_at' => $site->vpn_last_seen_at?->toIso8601String(),
             'router_api_port' => $site->router_api_port ?: 8728,
             'remote_access_notes' => $site->remote_access_notes,
+            'assigned_device_ip_range' => $site->assigned_device_ip_range,
         ];
     }
 

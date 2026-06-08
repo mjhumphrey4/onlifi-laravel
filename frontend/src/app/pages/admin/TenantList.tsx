@@ -865,6 +865,7 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
             vpn_status: site.vpn_status || 'active',
             router_api_port: site.router_api_port || 8728,
             remote_access_notes: site.remote_access_notes || '',
+            assigned_device_ip_range: site.assigned_device_ip_range || '',
             omada_site_name: site.omada_site_name || site.name || '',
             omada_site_id: site.omada_site_id || '',
             omada_controller_id: site.omada_controller_id || '',
@@ -996,6 +997,10 @@ function RemoteAccessModal({ tenant, onClose }: { tenant: Tenant; onClose: () =>
                 <label className="block text-sm">
                   <span className="text-slate-300">Router API port</span>
                   <input type="number" value={forms[site.id]?.router_api_port || 8728} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], router_api_port: Number(e.target.value) } })} className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-slate-300">Assigned device IP range</span>
+                  <input value={forms[site.id]?.assigned_device_ip_range || ''} onChange={(e) => setForms({ ...forms, [site.id]: { ...forms[site.id], assigned_device_ip_range: e.target.value } })} placeholder="192.168.15.0/24" className="mt-1 w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white" />
                 </label>
                 <label className="block text-sm">
                   <span className="text-slate-300">Public host</span>

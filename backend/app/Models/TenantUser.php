@@ -66,6 +66,11 @@ class TenantUser extends Authenticatable
         return $this->role === 'sub_user';
     }
 
+    public function isInstaller(): bool
+    {
+        return $this->role === 'installer';
+    }
+
     public function canUsePermission(string $permission): bool
     {
         return $this->isAdmin() || in_array($permission, $this->permissions ?: [], true);
