@@ -175,6 +175,7 @@ class SiteScope
             $table->unsignedInteger('router_api_port')->nullable();
             $table->unsignedInteger('remote_access_port')->nullable()->index();
             $table->text('remote_access_notes')->nullable();
+            $table->string('assigned_device_ip_range', 64)->nullable();
             $table->timestamps();
 
             $table->unique(['tenant_id', 'slug']);

@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 interface SiteOption {
   id: number;
   name: string;
+  assigned_device_ip_range?: string | null;
 }
 
 interface SubUser {
@@ -13,6 +14,7 @@ interface SubUser {
   name: string;
   email: string;
   is_active: boolean;
+  role: 'sub_user' | 'installer';
   allowed_site_ids: number[];
   permissions: string[];
   allowed_sites?: SiteOption[];
@@ -29,6 +31,7 @@ const emptyForm = {
   name: '',
   email: '',
   password: '',
+  role: 'sub_user' as 'sub_user' | 'installer',
   is_active: true,
   allowed_site_ids: [] as number[],
   permissions: ['view_clients', 'view_routers'] as string[],
@@ -79,6 +82,7 @@ export function SubUsers() {
       email: user.email,
       password: '',
       is_active: user.is_active,
+      role: user.role || 'sub_user',
       allowed_site_ids: user.allowed_site_ids || [],
       permissions: user.permissions || [],
     });
@@ -146,6 +150,13 @@ export function SubUsers() {
             <span className="text-sm text-muted-foreground">{editing ? 'New password' : 'Password'}</span>
             <input required={!editing} type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
           </label>
+          <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">Profile</span>
+            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as 'sub_user' | 'installer', permissions: e.target.value === 'installer' ? ['installer:devices:create'] : ['view_clients', 'view_routers'] })} className="w-full px-3 py-2 bg-background border border-input rounded-lg">
+              <option value="sub_user">Dashboard user</option>
+              <option value="installer">Installer app user</option>
+            </select>
+          </label>
           <label className="flex items-center gap-2 pt-6 text-sm text-card-foreground">
             <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
             Active
@@ -159,12 +170,18 @@ export function SubUsers() {
               {sites.map((site) => (
                 <label key={site.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">
                   <input type="checkbox" checked={form.allowed_site_ids.includes(site.id)} onChange={() => toggleNumber('allowed_site_ids', site.id)} />
-                  {site.name}
+                  <span>
+                    {site.name}
+                    {site.assigned_device_ip_range && <span className="block text-xs text-muted-foreground">{site.assigned_device_ip_range}</span>}
+                  </span>
                 </label>
               ))}
             </div>
+            {form.role === 'installer' && (
+              <p className="mt-2 text-xs text-muted-foreground">Installer profiles use the first selected site only and receive its assigned device IP range in the mobile app.</p>
+            )}
           </div>
-          <div>
+          {form.role === 'sub_user' && <div>
             <p className="text-sm font-medium text-card-foreground mb-2">Permissions</p>
             <div className="grid sm:grid-cols-2 gap-2">
               {permissionOptions.map((permission) => (
@@ -174,12 +191,12 @@ export function SubUsers() {
                 </label>
               ))}
             </div>
-          </div>
+          </div>}
         </div>
 
         <div className="flex justify-end gap-2">
           {editing && <button type="button" onClick={reset} className="px-4 py-2 rounded-lg border border-border hover:bg-muted">Cancel</button>}
-          <button disabled={saving || form.allowed_site_ids.length === 0 || form.permissions.length === 0} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
+          <button disabled={saving || form.allowed_site_ids.length === 0 || (form.role === 'sub_user' && form.permissions.length === 0)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
             {editing ? 'Update account user' : 'Create account user'}
           </button>
@@ -196,6 +213,7 @@ export function SubUsers() {
               <tr>
                 <th className="px-5 py-3 font-medium">User</th>
                 <th className="px-5 py-3 font-medium">Sites</th>
+                <th className="px-5 py-3 font-medium">Profile</th>
                 <th className="px-5 py-3 font-medium">Permissions</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium text-right">Actions</th>
@@ -209,21 +227,23 @@ export function SubUsers() {
                     <p className="text-xs text-muted-foreground">{user.email}</p>
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">All sites</td>
+                  <td className="px-5 py-3 text-muted-foreground">Owner</td>
                   <td className="px-5 py-3 text-muted-foreground">Owner privileges</td>
                   <td className="px-5 py-3">Owner</td>
                   <td className="px-5 py-3 text-right text-xs text-muted-foreground">Locked</td>
                 </tr>
               )}
               {subUsers.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">No additional account users yet.</td></tr>
+                <tr><td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">No additional account users yet.</td></tr>
               ) : subUsers.map((accountUser) => (
                 <tr key={accountUser.id} className="border-b border-border/70 last:border-0">
                   <td className="px-5 py-3">
                     <p className="font-medium text-card-foreground">{accountUser.name}</p>
                     <p className="text-xs text-muted-foreground">{accountUser.email}</p>
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{accountUser.allowed_sites?.map((site) => site.name).join(', ') || '-'}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{accountUser.permissions.join(', ')}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{accountUser.allowed_sites?.map((site) => `${site.name}${site.assigned_device_ip_range ? ` (${site.assigned_device_ip_range})` : ''}`).join(', ') || '-'}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{accountUser.role === 'installer' ? 'Installer' : 'Dashboard user'}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{accountUser.role === 'installer' ? 'Installer device uploads' : accountUser.permissions.join(', ')}</td>
                   <td className="px-5 py-3">{accountUser.is_active ? 'Active' : 'Disabled'}</td>
                   <td className="px-5 py-3 text-right">
                     <button onClick={() => edit(accountUser)} className="p-2 rounded-lg hover:bg-muted"><Edit2 className="w-4 h-4" /></button>
