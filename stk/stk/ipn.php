@@ -1,0 +1,186 @@
+<?php
+// ipn.php
+
+// Set timezone to East Africa Time (EAT) - UTC+3
+date_default_timezone_set('Africa/Nairobi');
+
+require './YoAPI.php';
+require_once 'config.php';
+require_once 'voucher_helper.php';
+require_once 'sms_helper.php';
+
+// Only accept POST requests
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('HTTP/1.1 405 Method Not Allowed');
+    header('Allow: POST');
+    exit;
+}
+
+// Set header immediately to acknowledge receipt
+header('HTTP/1.1 200 OK');
+
+// Function to log to a dedicated file in ./logs/
+function logIPN($message, $type = 'INFO') {
+    $logFile = './logs/ipn_log_' . date('Y-m-d') . '.txt'; // Store in ./logs/ subdirectory
+    // Ensure logs directory exists relative to script location
+    $logDir = dirname($logFile);
+    if (!is_dir($logDir)) {
+        // Create the logs directory with appropriate permissions (e.g., 0755)
+        // The third parameter 'true' allows creating parent directories recursively if needed
+        if (!mkdir($logDir, 0755, true)) {
+            // If directory creation fails, log to error log as fallback
+            error_log("IPN: Failed to create logs directory: $logDir");
+            return; // Exit if we can't create the directory
+        }
+    }
+    $timestamp = date('Y-m-d H:i:s');
+    $logEntry = "[$timestamp] [$type] $message\n";
+    // Use FILE_APPEND flag to add to the file, LOCK_EX for thread safety
+    file_put_contents($logFile, $logEntry, FILE_APPEND | LOCK_EX);
+}
+
+// Log that IPN was called
+logIPN("Received POST request - Data: " . print_r($_POST, true), 'RECEIVED');
+
+if (isset($_POST)) {
+    // Use credentials and mode from config.php
+    $username = YOAPI_USERNAME;
+    $password = YOAPI_PASSWORD;
+    $mode = YOAPI_MODE;
+
+    $yoAPI = new YoAPI($username, $password, $mode);
+    $response = $yoAPI->receive_payment_notification();
+
+    if ($response['is_verified']) {
+        logIPN("VERIFIED SUCCESS for external_ref: " . $response['external_ref'], 'VERIFIED');
+
+        $msisdn = $response['msisdn'];
+        $dateTime = $response['date_time'];
+        $narrative = $response['narrative'];
+        $amount = $response['amount'];
+        $networkRef = $response['network_ref'];
+        $externalRef = $response['external_ref'];
+
+        // Optional: Log the received details
+        logIPN("Details - MSISDN: $msisdn, Amount: $amount, NetworkRef: $networkRef", 'DETAILS');
+
+        // Get database connection
+        try {
+            $pdo = getDB();
+        } catch (Exception $e) {
+            $errorMessage = "Database connection failed: " . $e->getMessage();
+            error_log("IPN: $errorMessage"); // Still log to server error log
+            logIPN($errorMessage, 'ERROR'); // Also log to file
+            exit;
+        }
+
+        // Check if this is the first successful transaction today for this origin_site
+        $platformFee = 0;
+        try {
+            // Get the origin_site for this transaction
+            $siteStmt = $pdo->prepare("SELECT origin_site FROM transactions WHERE external_ref = ?");
+            $siteStmt->execute([$externalRef]);
+            $originSite = $siteStmt->fetchColumn();
+            
+            if ($originSite) {
+                // Check if there are any successful transactions today for this origin_site
+                $checkStmt = $pdo->prepare("
+                    SELECT COUNT(*) as count 
+                    FROM transactions 
+                    WHERE origin_site = ? 
+                    AND status = 'success' 
+                    AND DATE(created_at) = CURDATE()
+                ");
+                $checkStmt->execute([$originSite]);
+                $todayCount = $checkStmt->fetchColumn();
+                
+                // If this is the first transaction today, apply platform fee
+                if ($todayCount == 0) {
+                    $platformFee = 2000;
+                    logIPN("First transaction today for $originSite - applying platform fee: $platformFee", 'PLATFORM_FEE');
+                }
+            }
+        } catch (PDOException $e) {
+            logIPN("Error checking platform fee: " . $e->getMessage(), 'ERROR');
+        }
+
+        // Update the transaction status in the DB
+        try {
+            updateTransaction($pdo, $externalRef, [
+                'status' => 'success',
+                'status_message' => $narrative,
+                'network_ref' => $networkRef,
+                'telecom_fee' => round(((float) $amount) * 0.03, 2),
+                'platform_fee' => $platformFee,
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            $transaction = fetchTransactionBy($pdo, 'external_ref', $externalRef);
+
+            if ($transaction) {
+                logIPN("Database updated successfully for external_ref: $externalRef", 'SUCCESS');
+                
+                // Check if this is the special 10,000/= 7-day voucher package
+                // Fetch transaction details to check amount and voucher type
+                $txnDetails = $transaction;
+                
+                $isSpecialPackage = ($txnDetails && $txnDetails['amount'] == 10000 && $txnDetails['voucher_type'] == '7days');
+                
+                if ($isSpecialPackage) {
+                    // Special handling: Assign TWO vouchers for 10,000/= 7-day package
+                    logIPN("Detected special 10,000/= 7-day package. Assigning TWO vouchers for external_ref: $externalRef", 'VOUCHER_ASSIGNMENT');
+                    $voucherResult = assignTwoVouchersToTransaction($externalRef, $pdo);
+                    
+                    if ($voucherResult['success']) {
+                        logIPN("TWO vouchers assigned successfully: " . implode(', ', $voucherResult['voucherCodes']) . " for external_ref: $externalRef", 'VOUCHER_SUCCESS');
+
+                        $smsResult = $voucherResult['sms'] ?? ['success' => false, 'message' => 'SMS result unavailable'];
+                        if (!empty($smsResult['success'])) {
+                            logIPN("SMS sent successfully to $msisdn with 2 vouchers: " . implode(', ', $voucherResult['voucherCodes']), 'SMS_SUCCESS');
+                        } else {
+                            logIPN("SMS sending failed for $msisdn - Error: " . ($smsResult['message'] ?? 'Unknown SMS error'), 'SMS_ERROR');
+                        }
+                    } else {
+                        logIPN("TWO vouchers assignment failed for external_ref: $externalRef - Error: " . $voucherResult['error'], 'VOUCHER_ERROR');
+                    }
+                } else {
+                    // Normal handling: Assign ONE voucher for all other packages
+                    logIPN("Attempting to assign voucher for external_ref: $externalRef", 'VOUCHER_ASSIGNMENT');
+                    $voucherResult = assignVoucherToTransaction($externalRef, $pdo);
+                    
+                    if ($voucherResult['success']) {
+                        logIPN("Voucher assigned successfully: " . $voucherResult['voucherCode'] . " for external_ref: $externalRef", 'VOUCHER_SUCCESS');
+
+                        $smsResult = $voucherResult['sms'] ?? ['success' => false, 'message' => 'SMS result unavailable'];
+                        if (!empty($smsResult['success'])) {
+                            logIPN("SMS sent successfully to $msisdn with voucher: " . $voucherResult['voucherCode'], 'SMS_SUCCESS');
+                        } else {
+                            logIPN("SMS sending failed for $msisdn - Error: " . ($smsResult['message'] ?? 'Unknown SMS error'), 'SMS_ERROR');
+                        }
+                    } else {
+                        logIPN("Voucher assignment failed for external_ref: $externalRef - Error: " . $voucherResult['error'], 'VOUCHER_ERROR');
+                    }
+                }
+            } else {
+                logIPN("WARNING - No rows updated for external_ref: $externalRef", 'WARNING');
+            }
+        } catch (PDOException $e) {
+            $errorMessage = "Database update error: " . $e->getMessage();
+            error_log("IPN: $errorMessage"); // Still log to server error log
+            logIPN($errorMessage, 'ERROR'); // Also log to file
+        }
+
+        // Optional: Trigger an SMS response back to the user via Yo!
+        // $message = "Thank you for your payment!";
+        // echo 'narrative=' . urlencode($message);
+
+    } else {
+        logIPN("VERIFICATION FAILED. POST  " . print_r($_POST, true), 'VERIFICATION_FAILED');
+        // Do NOT update the database if verification fails.
+    }
+} else {
+    logIPN("Received request with no POST data.", 'NO_POST_DATA');
+}
+
+exit;
+?>

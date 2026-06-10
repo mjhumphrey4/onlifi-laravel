@@ -18,6 +18,7 @@ interface VoucherGroup {
   unused_count: number;
   used_count: number;
   in_use_count?: number;
+  consumed_count?: number;
 }
 
 interface VoucherGroupCardProps {
@@ -32,8 +33,9 @@ export function VoucherGroupCard({ group, onDelete, isDeleting, toneClassName = 
   const [showVoucherList, setShowVoucherList] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
+  const consumedCount = group.consumed_count ?? ((group.in_use_count || 0) + group.used_count);
   const usagePercent = group.total_vouchers > 0 
-    ? ((group.used_count + (group.in_use_count || 0)) / group.total_vouchers) * 100
+    ? (consumedCount / group.total_vouchers) * 100
     : 0;
 
   const formatCurrency = (amount: number) => {
@@ -97,7 +99,7 @@ export function VoucherGroupCard({ group, onDelete, isDeleting, toneClassName = 
           <p className="text-xs text-muted-foreground">Total</p>
         </div>
         <div className="text-center">
-          <p className="text-2xl font-bold text-yellow-500">{group.in_use_count || 0}</p>
+          <p className="text-2xl font-bold text-yellow-500">{consumedCount}</p>
           <p className="text-xs text-muted-foreground">Used</p>
         </div>
         <div className="text-center">

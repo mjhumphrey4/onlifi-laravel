@@ -6,16 +6,16 @@ android {
     namespace = "net.onlifi.manager"
     compileSdk = 35
 
-    def hasReleaseSigning = project.findProperty("ONLIFI_RELEASE_STORE_FILE") != null
-            && project.findProperty("ONLIFI_RELEASE_STORE_PASSWORD") != null
-            && project.findProperty("ONLIFI_RELEASE_KEY_ALIAS") != null
-            && project.findProperty("ONLIFI_RELEASE_KEY_PASSWORD") != null
+    def hasReleaseSigning = project.findProperty("onlustech_apps.jks") != null
+            && project.findProperty("##12345678Aa") != null
+            && project.findProperty("key0") != null
+            && project.findProperty("##12345678Aa") != null
 
     defaultConfig {
-        applicationId = "net.onlifi.manager"
+        applicationId = "com.onlifimanager.app"
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
+        versionCode = 3
         versionName = "1.0.0"
 
         buildConfigField "String", "ONLIFI_API_BASE_URL", "\"${project.findProperty("onlifiApiBaseUrl") ?: "https://api.onlifi.net/api"}\""
@@ -32,10 +32,10 @@ android {
 
     signingConfigs {
         release {
-            def storeFilePath = project.findProperty("ONLIFI_RELEASE_STORE_FILE")
-            def storePasswordValue = project.findProperty("ONLIFI_RELEASE_STORE_PASSWORD")
-            def keyAliasValue = project.findProperty("ONLIFI_RELEASE_KEY_ALIAS")
-            def keyPasswordValue = project.findProperty("ONLIFI_RELEASE_KEY_PASSWORD")
+            def storeFilePath = project.findProperty("onlustech_apps.jks")
+            def storePasswordValue = project.findProperty("##12345678Aa")
+            def keyAliasValue = project.findProperty("key0")
+            def keyPasswordValue = project.findProperty("##12345678Aa")
 
             if (storeFilePath != null) {
                 storeFile file(storeFilePath)

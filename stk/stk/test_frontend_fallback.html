@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Fallback UI</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        
+        #paymentStatus {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 500;
+            display: none;
+        }
+        
+        #paymentStatus.backup {
+            background: rgba(251, 191, 36, 0.1);
+            color: #f59e0b;
+            border: 2px solid rgba(251, 191, 36, 0.3);
+            display: block;
+        }
+        
+        #paymentStatus.info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #2a5298;
+            border: 2px solid rgba(42, 82, 152, 0.3);
+            display: block;
+        }
+        
+        #paymentStatus.error {
+            background: rgba(255, 107, 53, 0.1);
+            color: #ff6b35;
+            border: 2px solid rgba(255, 107, 53, 0.3);
+            display: block;
+        }
+        
+        .spinner {
+            border: 2px solid #e0e7ee;
+            border-top: 2px solid #f59e0b;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .btn-test {
+            background: #f59e0b;
+            color: white;
+        }
+        
+        .btn-reset {
+            background: #6b7280;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Fallback UI Test</h1>
+    <p>This tests if your frontend correctly displays the backup service message.</p>
+    
+    <button class="btn-test" onclick="testStatus2()">Test Status 2 (Backup Service)</button>
+    <button class="btn-test" onclick="testStatus0()">Test Status 0 (Pending)</button>
+    <button class="btn-test" onclick="testStatus1()">Test Status 1 (Success)</button>
+    <button class="btn-test" onclick="testStatusNegative()">Test Status -1 (Failed)</button>
+    <button class="btn-reset" onclick="resetStatus()">Reset</button>
+    
+    <div id="paymentStatus">
+        <span id="statusText"></span>
+        <span id="statusSpinner" class="spinner" style="display: none;"></span>
+    </div>
+    
+    <script>
+        function testStatus2() {
+            // Simulate status 2 - Retrying with backup service
+            document.getElementById('paymentStatus').className = 'backup';
+            document.getElementById('statusText').innerHTML = '<strong>🔄 Trying again with our backup payment service...</strong><br>Please enter PIN if prompted, checking status... (15s)';
+            document.getElementById('statusSpinner').style.display = 'inline-block';
+            console.log('Testing status 2 - Backup service retry');
+        }
+        
+        function testStatus0() {
+            // Simulate status 0 - Pending
+            document.getElementById('paymentStatus').className = 'info';
+            document.getElementById('statusText').innerHTML = '<strong>⏳ Waiting for payment confirmation...</strong><br>(10s)';
+            document.getElementById('statusSpinner').style.display = 'inline-block';
+            console.log('Testing status 0 - Pending');
+        }
+        
+        function testStatus1() {
+            // Simulate status 1 - Success
+            document.getElementById('paymentStatus').className = 'info';
+            document.getElementById('statusText').innerHTML = '<strong>✅ Payment confirmed.</strong><br>Assigning voucher...';
+            document.getElementById('statusSpinner').style.display = 'none';
+            console.log('Testing status 1 - Success');
+        }
+        
+        function testStatusNegative() {
+            // Simulate status -1 - Failed
+            document.getElementById('paymentStatus').className = 'error';
+            document.getElementById('statusText').innerHTML = '<strong>Payment failed. Please try again.</strong>';
+            document.getElementById('statusSpinner').style.display = 'none';
+            console.log('Testing status -1 - Failed');
+        }
+        
+        function resetStatus() {
+            document.getElementById('paymentStatus').style.display = 'none';
+            document.getElementById('statusText').innerHTML = '';
+            document.getElementById('statusSpinner').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

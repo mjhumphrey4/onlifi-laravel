@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Ticket, Filter, Search, Printer } from 'lucide-react';
 import { getDefaultVoucherTemplate, getVouchers } from '../utils/api';
+import { useSite } from '../context/SiteContext';
 
 interface Voucher {
   id: number;
@@ -8,6 +9,7 @@ interface Voucher {
   status: 'unused' | 'reserved' | 'in_use' | 'used' | 'expired' | 'disabled';
   price: number;
   validity_hours: number;
+  validity_minutes?: number | null;
   first_used_at: string | null;
   expires_at: string | null;
   used_by_mac: string | null;
@@ -22,6 +24,7 @@ interface VoucherGroup {
   group_name: string;
   price: number;
   validity_hours: number;
+  validity_minutes?: number | null;
 }
 
 interface VoucherListDialogProps {
@@ -50,6 +53,7 @@ interface VoucherTemplate {
 }
 
 export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
+  const { selectedSite } = useSite();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [template, setTemplate] = useState<VoucherTemplate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,16 +131,15 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
     const design = (activeTemplate as any).design || {};
     const style = design.style || 'blue-strip';
     const number = String(vouchers.findIndex((item) => item.id === voucher.id) + 1).padStart(4, '0');
-    const duration = voucher.validity_hours ? `${voucher.validity_hours}h` : `${group.validity_hours}h`;
+    const duration = formatDuration(voucher.validity_minutes, voucher.validity_hours || group.validity_hours, group.validity_minutes);
     const price = `UGX ${Number(voucher.price || group.price).toLocaleString()}`;
 
     return `
       <div class="voucher-card style-${escapeHtml(style)}">
         <div class="voucher-header">
           ${(design.numbering ?? true) !== false ? `<span class="voucher-number">#${escapeHtml(number)}</span>` : ''}
-          <span>${escapeHtml(activeTemplate.header_text || 'WIFI NAME')}</span>
+          <span>${escapeHtml(activeTemplate.header_text && !['WIFI NAME', 'STK WIFI POINT'].includes(activeTemplate.header_text) ? activeTemplate.header_text : (selectedSite?.name || 'WIFI NAME'))}</span>
         </div>
-        <div class="wifi-name">${escapeHtml(group.group_name || activeTemplate.name || 'WiFi Access')}</div>
         <div class="voucher-body">
           ${activeTemplate.logo_url ? `<img class="voucher-logo" src="${escapeHtml(activeTemplate.logo_url)}" alt="Logo" />` : ''}
           <div class="voucher-code-panel">
@@ -154,7 +157,6 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
         <div class="voucher-footer-block">
           ${activeTemplate.instructions ? `<div class="voucher-instructions">${escapeHtml(activeTemplate.instructions)}</div>` : ''}
           ${activeTemplate.footer_text ? `<div class="voucher-footer">${escapeHtml(activeTemplate.footer_text)}</div>` : ''}
-          <div class="powered">Powered by onlifi.net</div>
         </div>
       </div>
     `;
@@ -170,8 +172,8 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       accent_color: '#3b82f6',
       show_voucher_code: true,
       show_voucher_type: true,
-      show_sales_point: true,
-      show_duration: true,
+      show_sales_point: false,
+      show_duration: false,
       show_price: true,
       show_expiry: false,
       show_qr_code: false,
@@ -213,8 +215,6 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
           .style-modern-blue .voucher-header { background: #064fe0; text-align: left; padding-left: ${dense ? '2mm' : '7mm'}; }
           .voucher-number { position: absolute; left: ${dense ? '1mm' : '2mm'}; top: 50%; transform: translateY(-50%); font-size: ${dense ? '4.5px' : '8.5px'}; background: rgba(255,255,255,.24); padding: 1px 4px; border-radius: 3px; }
           .style-blue-strip .voucher-number, .style-modern-blue .voucher-number { left: auto; right: ${dense ? '1mm' : '2mm'}; }
-          .wifi-name { text-align: center; font-size: ${dense ? '4.8px' : '10px'}; font-weight: 800; color: ${escapeHtml(activeTemplate.accent_color)}; padding: ${dense ? '0.8mm 0' : '1.2mm 0'}; background: rgba(46,204,113,.06); }
-          .style-blue-strip .wifi-name, .style-modern-blue .wifi-name { color: #1e8449; background: #fff; }
           .voucher-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: ${dense ? '.8mm' : '1.5mm'}; padding: ${dense ? '1mm 1.5mm' : '2mm 2.8mm'}; }
           .voucher-logo { align-self: center; max-height: ${dense ? '5mm' : '9mm'}; max-width: ${dense ? '12mm' : '22mm'}; object-fit: contain; margin-bottom: ${dense ? '.3mm' : '.6mm'}; }
           .style-modern-blue .voucher-body { padding-top: ${dense ? '1.2mm' : '3mm'}; }
@@ -231,7 +231,6 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
           .voucher-footer-block { flex: 0 0 auto; margin: ${dense ? '.5mm 1.5mm 1mm' : '1mm 2.8mm 1.6mm'}; padding-top: ${dense ? '.5mm' : '1mm'}; border-top: 1px solid rgba(15,23,42,.12); text-align: center; }
           .voucher-instructions { margin-bottom: ${dense ? '.3mm' : '.8mm'}; font-size: ${dense ? '4px' : '7px'}; line-height: 1.15; color: #666; }
           .voucher-footer { margin-bottom: ${dense ? '.2mm' : '.5mm'}; font-size: ${dense ? '4px' : '7px'}; line-height: 1.15; color: #666; }
-          .powered { color: ${escapeHtml(activeTemplate.accent_color)}; font-size: ${dense ? '3.8px' : '7px'}; font-weight: 700; line-height: 1.15; }
           @media print { .print-toolbar, h1 { display: none; } .voucher-card { page-break-inside: avoid; } }
         </style>
       </head>
@@ -247,6 +246,32 @@ export function VoucherListDialog({ group, onClose }: VoucherListDialogProps) {
       </body>
       </html>
     `;
+  };
+
+  const formatDuration = (minutes?: number | null, hours?: number | null, fallbackMinutes?: number | null) => {
+    const totalMinutes = Number(minutes || fallbackMinutes || 0);
+
+    if (totalMinutes > 0) {
+      if (totalMinutes % 1440 === 0) {
+        const days = totalMinutes / 1440;
+        return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+      }
+
+      if (totalMinutes % 60 === 0) {
+        const formattedHours = totalMinutes / 60;
+        return `${formattedHours} ${formattedHours === 1 ? 'Hour' : 'Hours'}`;
+      }
+
+      return `${totalMinutes} mins`;
+    }
+
+    const formattedHours = Number(hours || 0);
+    if (formattedHours >= 24 && formattedHours % 24 === 0) {
+      const days = formattedHours / 24;
+      return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+    }
+
+    return `${formattedHours} ${formattedHours === 1 ? 'Hour' : 'Hours'}`;
   };
 
   const printTemplateVouchers = (vouchersToPrint: Voucher[], heading: string) => {

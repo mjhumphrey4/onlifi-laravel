@@ -929,6 +929,10 @@ class VoucherController extends Controller
                 },
                 'vouchers as in_use_count' => function ($query) use ($site) {
                     SiteScope::applyToTenantTable($query, 'vouchers', $site);
+                    $query->where('status', 'in_use');
+                },
+                'vouchers as consumed_count' => function ($query) use ($site) {
+                    SiteScope::applyToTenantTable($query, 'vouchers', $site);
                     $query->whereIn('status', ['in_use', 'used', 'expired']);
                 }
             ])
@@ -1004,7 +1008,7 @@ class VoucherController extends Controller
 
         $vouchers = $voucherQuery->orderBy('id')->limit(5000)->get();
         $template = $this->activeVoucherTemplate($site);
-        $html = $this->voucherPdfHtml($group, $vouchers, $template);
+        $html = $this->voucherPdfHtml($group, $vouchers, $template, $site);
 
         $options = new \Dompdf\Options();
         $options->set('isRemoteEnabled', true);
@@ -1036,7 +1040,17 @@ class VoucherController extends Controller
         $template = (clone $query)->where('is_default', true)->first()
             ?: (clone $query)->orderBy('name')->first();
 
-        return $template?->toArray() ?: [
+        if ($template) {
+            $data = $template->toArray();
+
+            if (in_array($data['header_text'] ?? null, ['WIFI NAME', 'STK WIFI POINT', null, ''], true)) {
+                $data['header_text'] = $site?->name ?: 'WIFI NAME';
+            }
+
+            return $data;
+        }
+
+        return [
             'name' => 'Default Blue Strip',
             'layout' => 'grid-2x4',
             'paper_size' => 'A4',
@@ -1046,18 +1060,18 @@ class VoucherController extends Controller
             'accent_color' => '#0444cf',
             'show_voucher_code' => true,
             'show_voucher_type' => true,
-            'show_sales_point' => true,
-            'show_duration' => true,
+            'show_sales_point' => false,
+            'show_duration' => false,
             'show_price' => true,
             'show_expiry' => false,
             'show_qr_code' => false,
-            'header_text' => 'WIFI NAME',
-            'footer_text' => 'Support: +256 700 000 000',
-            'instructions' => 'One device per voucher.',
+            'header_text' => $site?->name ?: 'WIFI NAME',
+            'footer_text' => '',
+            'instructions' => '',
         ];
     }
 
-    private function voucherPdfHtml(VoucherGroup $group, $vouchers, array $template): string
+    private function voucherPdfHtml(VoucherGroup $group, $vouchers, array $template, $site = null): string
     {
         $design = is_array($template['design'] ?? null) ? $template['design'] : [];
         $style = $design['style'] ?? 'blue-strip';
@@ -1075,16 +1089,14 @@ class VoucherController extends Controller
         $accent = e($template['accent_color'] ?? '#0444cf');
         $text = e($template['text_color'] ?? '#1f2937');
         $background = e($template['background_color'] ?? '#ffffff');
-        $header = e($template['header_text'] ?? 'WIFI NAME');
+        $header = e($template['header_text'] ?: ($site?->name ?? 'WIFI NAME'));
         $footer = e($template['footer_text'] ?? '');
         $instructions = e($template['instructions'] ?? '');
         $gradient = $style === 'modern-blue' ? "linear-gradient(90deg, {$accent}, #0666ff)" : $accent;
 
         $cards = $vouchers->values()->map(function (Voucher $voucher, int $index) use ($template, $group, $style, $header, $footer, $instructions, $design) {
             $number = '#' . str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT);
-            $duration = $voucher->validity_minutes
-                ? $voucher->validity_minutes . ' mins'
-                : ($voucher->validity_hours ?: $group->validity_hours) . 'h';
+            $duration = $this->formatVoucherDuration($voucher->validity_minutes, $voucher->validity_hours ?: $group->validity_hours);
             $price = 'UGX ' . number_format((float) ($voucher->price ?: $group->price));
             $salesPoint = $voucher->salesPoint?->name ?: $group->salesPoint?->name;
             $code = e($voucher->voucher_code);
@@ -1108,7 +1120,6 @@ class VoucherController extends Controller
                     <div class="voucher-footer-block">
                         ' . ($instructions ? '<div class="voucher-instructions">' . $instructions . '</div>' : '') . '
                         ' . ($footer ? '<div class="voucher-footer">' . $footer . '</div>' : '') . '
-                        <div class="powered">Powered by onlifi.net</div>
                     </div>
                 </div>
             ';
@@ -1170,13 +1181,44 @@ body { margin: 0; font-family: DejaVu Sans, Arial, sans-serif; color: ' . $text 
 .voucher-footer-block { margin: ' . ($dense ? '2px 3px 3px' : '6px 10px 8px') . '; padding-top: ' . ($dense ? '1px' : '4px') . '; border-top: 1px solid rgba(15,23,42,.16); text-align: center; }
 .voucher-instructions { margin: 0 0 ' . ($dense ? '1px' : '4px') . '; font-size: ' . ($dense ? '4.5px' : '8px') . '; line-height: 1.15; opacity: .78; }
 .voucher-footer { margin: 0 0 ' . ($dense ? '1px' : '3px') . '; font-size: ' . ($dense ? '4.8px' : '8px') . '; line-height: 1.15; opacity: .72; }
-.powered { color: ' . $accent . '; font-size: ' . ($dense ? '4.5px' : '8px') . '; line-height: 1.15; text-align: center; font-weight: 700; }
 </style>
 </head>
 <body>
 <div class="voucher-grid" style="columns: ' . $columns . ';">' . $cards . '</div>
 </body>
 </html>';
+    }
+
+    private function formatVoucherDuration($minutes, $hours): string
+    {
+        $minutes = (int) ($minutes ?: 0);
+
+        if ($minutes > 0) {
+            if ($minutes % 1440 === 0) {
+                $days = (int) ($minutes / 1440);
+                return $days . ' ' . $this->pluralUnit('day', $days);
+            }
+
+            if ($minutes % 60 === 0) {
+                $hours = (int) ($minutes / 60);
+                return $hours . ' ' . $this->pluralUnit('hour', $hours);
+            }
+
+            return $minutes . ' mins';
+        }
+
+        $hours = (int) ($hours ?: 0);
+        if ($hours >= 24 && $hours % 24 === 0) {
+            $days = (int) ($hours / 24);
+            return $days . ' ' . $this->pluralUnit('day', $days);
+        }
+
+        return $hours . ' ' . $this->pluralUnit('hour', $hours);
+    }
+
+    private function pluralUnit(string $unit, int $value): string
+    {
+        return $value === 1 ? $unit : $unit . 's';
     }
 
     public function statistics(Request $request)

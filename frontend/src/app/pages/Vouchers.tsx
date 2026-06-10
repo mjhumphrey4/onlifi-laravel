@@ -23,6 +23,7 @@ interface VoucherGroup {
   unused_count: number;
   used_count: number;
   in_use_count: number;
+  consumed_count?: number;
 }
 
 interface VoucherStats {

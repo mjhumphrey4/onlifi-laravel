@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feature Payment</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 400px;
+      width: 100%;
+    }
+    
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 30px;
+      font-size: 24px;
+    }
+    
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    label {
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 5px;
+      display: block;
+    }
+    
+    select, input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+    
+    select:focus, input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px;
+      border: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    }
+    
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    #status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 500;
+      display: none;
+    }
+    
+    #status.info {
+      background: #e3f2fd;
+      color: #1976d2;
+      display: block;
+    }
+    
+    #status.success {
+      background: #e8f5e9;
+      color: #388e3c;
+      display: block;
+    }
+    
+    #status.error {
+      background: #ffebee;
+      color: #c62828;
+      display: block;
+    }
+    
+    #featureContent {
+      display: none;
+      margin-top: 30px;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 12px;
+      color: white;
+      text-align: center;
+    }
+    
+    #featureContent h2 {
+      margin-bottom: 10px;
+    }
+    
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+      display: none;
+    }
+    
+    #status.info .spinner {
+      display: block;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .phone-hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎯 Feature Payment</h1>
+
+    <form id="paymentForm">
+      <div>
+        <label for="feature">Select Feature:</label>
+        <select id="feature" required>
+          <option value="200">Feature A - UGX 200</option>
+          <option value="1000">Feature B - UGX 1,000</option>
+          <option value="2000">Feature C - UGX 2,000</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="phone">Phone Number:</label>
+        <input type="tel" id="phone" placeholder="256771234567" pattern="256[0-9]{9}" required>
+        <div class="phone-hint">Format: 256XXXXXXXXX (e.g., 256771234567)</div>
+      </div>
+
+      <button type="submit" id="submitBtn">Pay Now</button>
+    </form>
+
+    <div id="status">
+      <div class="spinner"></div>
+      <span id="statusText"></span>
+    </div>
+
+    <div id="featureContent">
+      <h2>🎉 Feature Unlocked!</h2>
+      <p>You now have access to premium content!</p>
+    </div>
+  </div>
+
+  <script>
+    // ****** CRITICAL: Define the origin site identifier HERE ******
+    // This is the only part that changes between Site A, Site B, Site C deployments.
+    const CURRENT_ORIGIN_SITE = 'SiteA'; // <-- Change this value for each site: 'SiteA', 'SiteB', 'SiteC'
+    // ****** END CRITICAL SECTION ******
+
+    const form = document.getElementById('paymentForm');
+    const statusDiv = document.getElementById('status');
+    const statusText = document.getElementById('statusText');
+    const submitBtn = document.getElementById('submitBtn');
+    const featureContent = document.getElementById('featureContent');
+    let pollInterval;
+    let pollCount = 0;
+    const MAX_POLLS = 25; // 2 minutes
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const amount = parseFloat(document.getElementById('feature').value); // Ensure it's a number
+      const msisdn = document.getElementById('phone').value.trim(); // Trim whitespace
+      // Get the origin site ID - defined at the top of this script
+      const originSite = CURRENT_ORIGIN_SITE;
+
+      // Validate phone number format (frontend check)
+      if (!/^256\d{9}$/.test(msisdn)) {
+          showError('Invalid phone number format. Use 256XXXXXXXXX (e.g., 256771234567).');
+          return;
+      }
+
+      // Validate origin site (optional, depends on your validation rules)
+      if (!originSite) {
+          showError('Missing origin site identifier.');
+          return;
+      }
+
+      // Disable form
+      submitBtn.disabled = true;
+      statusDiv.className = 'info';
+      statusText.textContent = 'Initiating payment...';
+      featureContent.style.display = 'none';
+      pollCount = 0;
+
+      // Clear any previous intervals
+      if (pollInterval) {
+          clearInterval(pollInterval);
+      }
+
+      try {
+        // Include origin_site in the JSON payload sent to initiate.php
+        const initRes = await fetch('initiate.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount, msisdn, origin_site: originSite }) // Send origin_site
+        });
+
+        const initData = await initRes.json();
+        console.log('Initiate response:', initData); // Debug log
+
+        if (initData.status === -1) {
+          // Error from initiate.php
+          showError(initData.errorMessage || 'Payment initiation failed');
+        } else if (initData.status === 1) {
+          // Pending - start polling using the transactionReference returned by YoAPI
+          statusText.textContent = '📱 Check your phone to confirm payment. Waiting for confirmation...';
+          const ref = initData.transactionReference; // Use the Yo! Transaction Reference
+
+          if (!ref) {
+            console.error('No transactionReference returned from initiate.php:', initData);
+            showError('Payment initiation error: Missing reference.');
+            submitBtn.disabled = false; // Re-enable button
+            return;
+          }
+
+          console.log('Starting polling for Yo! ref:', ref, 'from origin site:', originSite);
+          pollStatus(ref);
+        } else {
+          // Unexpected status, handle gracefully
+          console.warn('Unexpected status from initiate.php:', initData.status);
+          showError('Payment initiation returned unexpected status. Please try again.');
+          submitBtn.disabled = false; // Re-enable button
+        }
+      } catch (err) {
+        console.error('Network error during initiation:', err);
+        showError('Network error during initiation. Please try again.');
+        submitBtn.disabled = false; // Re-enable button
+      }
+    });
+
+    function pollStatus(ref) {
+      pollInterval = setInterval(async () => {
+        pollCount++;
+        console.log(`Polling attempt ${pollCount}/${MAX_POLLS} for ref: ${ref}`);
+
+        if (pollCount > MAX_POLLS) {
+          clearInterval(pollInterval);
+          showError('Payment confirmation timeout. Please contact support if you were charged.');
+          return;
+        }
+
+        try {
+          // Add cache busting parameter to avoid browser caching issues
+          const checkRes = await fetch(`check_status.php?ref=${encodeURIComponent(ref)}&t=${Date.now()}`);
+          const checkData = await checkRes.json();
+          console.log('Status check response:', checkData); // Debug log
+
+          if (checkData.transactionStatus === 1) {
+            // Success!
+            clearInterval(pollInterval);
+            showSuccess();
+          } else if (checkData.transactionStatus < 0) {
+            // Failed
+            clearInterval(pollInterval);
+            showError(checkData.errorMessage || 'Payment failed');
+          } else {
+            // Still pending, update message
+            statusText.textContent = `⏳ Waiting for payment confirmation... (${pollCount * 5}s)`;
+          }
+        } catch (err) {
+          console.error('Polling error:', err);
+          // Don't stop polling on network errors, might be temporary
+          statusText.textContent = `⏳ Network issue during check... retrying (${pollCount * 5}s)`;
+        }
+      }, 5000); // Poll every 5 seconds
+    }
+
+    function showSuccess() {
+      statusDiv.className = 'success';
+      statusText.textContent = '✅ Payment successful! Feature unlocked.';
+      featureContent.style.display = 'block';
+      submitBtn.disabled = false;
+
+      // Optional: Play success sound
+      try {
+        const audio = new Audio('audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZSA0PVKzn77BdGAg+ltryxnMpBSh+zPLaizsIGGS56+ihUBELTqXh8bllHAU2jdXzzn0vBSF1xe/glEILElyx6OyrWBUIQ5zd8sFuJAUuhM/y1YU2Bhxqvu7mnEoODlOq5O+zYBoGPJPY88p2KwUme8rx3I4+CRZiturqpVITC0mi4PG8aB8GM4vU8tGAMQYfcsLu45ZFDBFYr+ftrVoXCECY3PLEcSYELYPP8tmLOQcYZbzs6aFRDAo=');
+        audio.play();
+      } catch (e) {
+        // Ignore audio errors
+      }
+    }
+
+    function showError(message) {
+      statusDiv.className = 'error';
+      statusText.textContent = `❌ ${message}`;
+      submitBtn.disabled = false;
+    }
+  </script>
+</body>
+</html>

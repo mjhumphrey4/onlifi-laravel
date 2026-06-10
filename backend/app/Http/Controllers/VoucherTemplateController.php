@@ -272,11 +272,14 @@ class VoucherTemplateController extends Controller
                     'accent_color' => '#3b82f6',
                     'show_voucher_code' => true,
                     'show_voucher_type' => true,
-                    'show_sales_point' => true,
-                    'show_duration' => true,
+                    'show_sales_point' => false,
+                    'show_duration' => false,
                     'show_price' => true,
                     'show_expiry' => false,
                     'show_qr_code' => false,
+                    'header_text' => $site?->name ?: 'WIFI NAME',
+                    'footer_text' => '',
+                    'instructions' => '',
                 ],
             ]);
         }
@@ -294,8 +297,36 @@ class VoucherTemplateController extends Controller
 
         $hasDefault = (clone $query)->where('is_default', true)->exists();
 
-        foreach ($this->presetTemplates() as $index => $preset) {
-            if ((clone $query)->where('name', $preset['name'])->exists()) {
+        foreach ($this->presetTemplates($site?->name ?: 'WIFI NAME') as $index => $preset) {
+            $existing = (clone $query)->where('name', $preset['name'])->first();
+
+            if ($existing) {
+                $updates = [];
+
+                if (in_array($existing->header_text, ['WIFI NAME', 'STK WIFI POINT', null, ''], true)) {
+                    $updates['header_text'] = $site?->name ?: 'WIFI NAME';
+                }
+
+                if (in_array($existing->footer_text, ['Support: +256 700 000 000', 'Powered by onlifi.net'], true)) {
+                    $updates['footer_text'] = '';
+                }
+
+                if (in_array($existing->instructions, ['One device per voucher.', 'Use this voucher on one device only.', 'Connect to WiFi and enter the code.', 'Terms apply. One device per voucher.'], true)) {
+                    $updates['instructions'] = '';
+                }
+
+                $updates['show_voucher_code'] = true;
+                $updates['show_voucher_type'] = true;
+                $updates['show_sales_point'] = false;
+                $updates['show_duration'] = false;
+                $updates['show_price'] = true;
+                $updates['show_expiry'] = false;
+                $updates['show_qr_code'] = false;
+
+                if ($updates) {
+                    $existing->update($updates);
+                }
+
                 continue;
             }
 
@@ -313,7 +344,7 @@ class VoucherTemplateController extends Controller
         }
     }
 
-    private function presetTemplates(): array
+    private function presetTemplates(string $siteName): array
     {
         return [
             [
@@ -327,14 +358,14 @@ class VoucherTemplateController extends Controller
                 'accent_color' => '#0444cf',
                 'show_voucher_code' => true,
                 'show_voucher_type' => true,
-                'show_sales_point' => true,
-                'show_duration' => true,
+                'show_sales_point' => false,
+                'show_duration' => false,
                 'show_price' => true,
                 'show_expiry' => false,
                 'show_qr_code' => false,
-                'header_text' => 'WIFI NAME',
-                'footer_text' => 'Support: +256 700 000 000',
-                'instructions' => 'One device per voucher.',
+                'header_text' => $siteName,
+                'footer_text' => '',
+                'instructions' => '',
             ],
             [
                 'name' => 'Green Numbered',
@@ -347,14 +378,14 @@ class VoucherTemplateController extends Controller
                 'accent_color' => '#2ecc71',
                 'show_voucher_code' => true,
                 'show_voucher_type' => true,
-                'show_sales_point' => true,
-                'show_duration' => true,
+                'show_sales_point' => false,
+                'show_duration' => false,
                 'show_price' => true,
                 'show_expiry' => false,
                 'show_qr_code' => false,
-                'header_text' => 'WIFI NAME',
-                'footer_text' => 'Support: +256 700 000 000',
-                'instructions' => 'Use this voucher on one device only.',
+                'header_text' => $siteName,
+                'footer_text' => '',
+                'instructions' => '',
             ],
             [
                 'name' => 'Standard',
@@ -367,14 +398,14 @@ class VoucherTemplateController extends Controller
                 'accent_color' => '#2563eb',
                 'show_voucher_code' => true,
                 'show_voucher_type' => true,
-                'show_sales_point' => true,
-                'show_duration' => true,
+                'show_sales_point' => false,
+                'show_duration' => false,
                 'show_price' => true,
                 'show_expiry' => false,
                 'show_qr_code' => false,
-                'header_text' => 'WIFI NAME',
-                'footer_text' => 'Support: +256 700 000 000',
-                'instructions' => 'Connect to WiFi and enter the code.',
+                'header_text' => $siteName,
+                'footer_text' => '',
+                'instructions' => '',
             ],
             [
                 'name' => 'Modern Blue Card',
@@ -387,14 +418,14 @@ class VoucherTemplateController extends Controller
                 'accent_color' => '#0444cf',
                 'show_voucher_code' => true,
                 'show_voucher_type' => true,
-                'show_sales_point' => true,
-                'show_duration' => true,
+                'show_sales_point' => false,
+                'show_duration' => false,
                 'show_price' => true,
                 'show_expiry' => false,
                 'show_qr_code' => false,
-                'header_text' => 'WIFI NAME',
-                'footer_text' => 'Support: +256 700 000 000',
-                'instructions' => 'Terms apply. One device per voucher.',
+                'header_text' => $siteName,
+                'footer_text' => '',
+                'instructions' => '',
             ],
         ];
     }

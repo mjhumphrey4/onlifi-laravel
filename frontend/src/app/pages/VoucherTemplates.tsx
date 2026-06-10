@@ -60,8 +60,8 @@ const DEFAULT_SKINS = [
       text_color: '#1f2937',
       accent_color: '#0444cf',
       header_text: 'WIFI NAME',
-      footer_text: 'Support: +256 700 000 000',
-      instructions: 'One device per voucher.',
+      footer_text: '',
+      instructions: '',
     }
   },
   {
@@ -75,8 +75,8 @@ const DEFAULT_SKINS = [
       text_color: '#14532d',
       accent_color: '#2ecc71',
       header_text: 'WIFI NAME',
-      footer_text: 'Support: +256 700 000 000',
-      instructions: 'Use this voucher on one device only.',
+      footer_text: '',
+      instructions: '',
     }
   },
   {
@@ -90,8 +90,8 @@ const DEFAULT_SKINS = [
       text_color: '#164e63',
       accent_color: '#2563eb',
       header_text: 'WIFI NAME',
-      footer_text: 'Support: +256 700 000 000',
-      instructions: 'Connect to WiFi and enter the code.',
+      footer_text: '',
+      instructions: '',
     }
   },
   {
@@ -105,8 +105,8 @@ const DEFAULT_SKINS = [
       text_color: '#111827',
       accent_color: '#0444cf',
       header_text: 'WIFI NAME',
-      footer_text: 'Support: +256 700 000 000',
-      instructions: 'Terms apply. One device per voucher.',
+      footer_text: '',
+      instructions: '',
     }
   },
 ];
@@ -120,6 +120,7 @@ export function VoucherTemplates() {
   const [previewTemplate, setPreviewTemplate] = useState<VoucherTemplate | null>(null);
   const [selectedSkin, setSelectedSkin] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const siteHeaderText = selectedSite?.name || 'WIFI NAME';
 
   const [formData, setFormData] = useState<{
     name: string;
@@ -154,12 +155,12 @@ export function VoucherTemplates() {
     design: { style: 'blue-strip', numbering: true },
     show_voucher_code: true,
     show_voucher_type: true,
-    show_sales_point: true,
-    show_duration: true,
+    show_sales_point: false,
+    show_duration: false,
     show_price: true,
     show_expiry: false,
     show_qr_code: false,
-    header_text: '',
+    header_text: siteHeaderText,
     footer_text: '',
     instructions: '',
     is_default: false,
@@ -311,12 +312,12 @@ export function VoucherTemplates() {
       design: { style: 'blue-strip', numbering: true },
       show_voucher_code: true,
       show_voucher_type: true,
-      show_sales_point: true,
-      show_duration: true,
+      show_sales_point: false,
+      show_duration: false,
       show_price: true,
       show_expiry: false,
       show_qr_code: false,
-      header_text: '',
+      header_text: siteHeaderText,
       footer_text: '',
       instructions: '',
       is_default: false,
@@ -337,6 +338,7 @@ export function VoucherTemplates() {
       setFormData(prev => ({
         ...prev,
         ...skin.settings,
+        header_text: siteHeaderText,
       }));
     }
   };
@@ -351,12 +353,21 @@ export function VoucherTemplates() {
   const sampleVoucher: Voucher = {
     id: 1,
     code: 'WIFI-ABC123',
-    voucher_type: { type_name: '1 Hour', duration_hours: 1, base_amount: 500 },
+    voucher_type: { type_name: '24 Hours', duration_hours: 24, base_amount: 1000 },
     sales_point: { name: 'Main Office' },
     expires_at: new Date(Date.now() + 86400000).toISOString(),
   };
 
   const voucherNumber = (index: number) => `#${String(index + 1).padStart(4, '0')}`;
+
+  const formatDuration = (hours: number) => {
+    if (hours >= 24 && hours % 24 === 0) {
+      const days = hours / 24;
+      return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+    }
+
+    return `${hours} ${hours === 1 ? 'Hour' : 'Hours'}`;
+  };
 
   const renderVoucherCard = (template: VoucherTemplate, voucher: Voucher, index: number, compact = false) => {
     const dense = compact || isDenseLayout(template.layout);
@@ -371,7 +382,7 @@ export function VoucherTemplates() {
         borderColor: template.accent_color,
       }}
     >
-      {template.header_text && (
+      {(template.header_text || siteHeaderText) && (
         <div
           className={`relative text-center font-semibold px-3 py-2 text-white ${headerMargin} ${dense ? 'text-[9px]' : 'text-sm'}`}
           style={{ background: template.design?.style === 'modern-blue' ? '#064fe0' : template.accent_color }}
@@ -381,7 +392,7 @@ export function VoucherTemplates() {
               {voucherNumber(index)}
             </span>
           )}
-          {template.header_text}
+          {template.header_text && !['WIFI NAME', 'STK WIFI POINT'].includes(template.header_text) ? template.header_text : siteHeaderText}
         </div>
       )}
 
@@ -406,7 +417,7 @@ export function VoucherTemplates() {
         {template.show_duration && voucher.voucher_type && (
           <div className="flex justify-between">
             <span className="opacity-70">Duration:</span>
-            <span className="font-medium">{voucher.voucher_type.duration_hours}h</span>
+            <span className="font-medium">{formatDuration(voucher.voucher_type.duration_hours)}</span>
           </div>
         )}
         {template.show_price && voucher.voucher_type && (
@@ -440,9 +451,6 @@ export function VoucherTemplates() {
           {template.footer_text}
         </div>
       )}
-      <div className={`text-center ${dense ? 'text-[7px]' : 'text-[10px]'} mt-1 font-semibold`} style={{ color: template.accent_color }}>
-        Powered by onlifi.net
-      </div>
     </div>
     );
   };
@@ -617,7 +625,7 @@ export function VoucherTemplates() {
                             style={{ backgroundColor: skin.settings.accent_color }}
                           >
                             <span className="absolute left-1 top-1/2 -translate-y-1/2 rounded bg-white/20 px-1 text-[7px]">#0001</span>
-                            {skin.settings.header_text}
+                            {siteHeaderText}
                           </div>
                           <div className="px-2 py-1.5">
                             <div
