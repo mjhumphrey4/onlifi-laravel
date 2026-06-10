@@ -69,17 +69,20 @@ public class MainActivity extends Activity {
     private static final long LOCK_AFTER_BACKGROUND_MS = 5_000L;
     private static final long AUTO_REFRESH_MS = 60_000L;
 
-    private static final int COLOR_BG = Color.rgb(10, 22, 40);
-    private static final int COLOR_CARD = Color.rgb(30, 58, 95);
-    private static final int COLOR_CARD_SOFT = Color.rgb(26, 47, 74);
-    private static final int COLOR_INK = Color.rgb(232, 244, 248);
-    private static final int COLOR_MUTED = Color.rgb(148, 163, 184);
-    private static final int COLOR_PRIMARY = Color.rgb(16, 185, 129);
-    private static final int COLOR_MINT = Color.rgb(52, 211, 153);
-    private static final int COLOR_BLUE = Color.rgb(59, 130, 246);
-    private static final int COLOR_BORDER = Color.argb(60, 52, 211, 153);
-    private static final int COLOR_ORANGE = Color.rgb(245, 158, 11);
-    private static final int COLOR_WARN = Color.rgb(249, 115, 22);
+    private static final int COLOR_BG = Color.rgb(10, 15, 30);
+    private static final int COLOR_BG_DEEP = Color.rgb(6, 10, 20);
+    private static final int COLOR_CARD = Color.rgb(21, 28, 48);
+    private static final int COLOR_CARD_SOFT = Color.rgb(30, 42, 69);
+    private static final int COLOR_INK = Color.WHITE;
+    private static final int COLOR_MUTED = Color.rgb(138, 148, 166);
+    private static final int COLOR_PRIMARY = Color.rgb(0, 229, 160);
+    private static final int COLOR_MINT = Color.rgb(0, 229, 160);
+    private static final int COLOR_BLUE = Color.rgb(0, 102, 255);
+    private static final int COLOR_BORDER = Color.rgb(30, 42, 69);
+    private static final int COLOR_ORANGE = Color.rgb(255, 107, 53);
+    private static final int COLOR_WARN = Color.rgb(255, 184, 0);
+    private static final int COLOR_DANGER = Color.rgb(255, 71, 87);
+    private static final int COLOR_PURPLE = Color.rgb(168, 85, 247);
 
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
     private final android.os.Handler mainHandler = new android.os.Handler();
@@ -388,21 +391,23 @@ public class MainActivity extends Activity {
     private void renderBottomNav() {
         bottomNav.removeAllViews();
         bottomNav.addView(navButton("home", "Home"), new LinearLayout.LayoutParams(0, -1, 1));
+        bottomNav.addView(navButton("users", "Users"), new LinearLayout.LayoutParams(0, -1, 1));
         bottomNav.addView(navButton("vouchers", "Vouchers"), new LinearLayout.LayoutParams(0, -1, 1));
-        bottomNav.addView(navButton("money", "Mobile Money"), new LinearLayout.LayoutParams(0, -1, 1));
+        bottomNav.addView(navButton("balance", "Balance"), new LinearLayout.LayoutParams(0, -1, 1));
         bottomNav.addView(navButton("account", "Account"), new LinearLayout.LayoutParams(0, -1, 1));
     }
 
     private TextView navButton(String tab, String label) {
-        TextView view = text(label, 13, tab.equals(activeTab) ? COLOR_PRIMARY : COLOR_MUTED, true);
+        TextView view = text(label, 11, tab.equals(activeTab) ? COLOR_INK : COLOR_MUTED, true);
         view.setGravity(Gravity.CENTER);
-        view.setBackground(rounded(tab.equals(activeTab) ? Color.argb(38, 16, 185, 129) : Color.TRANSPARENT, 0, Color.TRANSPARENT, dp(8)));
+        view.setBackground(rounded(tab.equals(activeTab) ? Color.argb(46, 0, 102, 255) : Color.TRANSPARENT, 0, Color.TRANSPARENT, dp(12)));
         view.setOnClickListener(v -> {
             activeTab = tab;
             renderBottomNav();
             if ("home".equals(tab)) showHome();
+            if ("users".equals(tab)) showUsers();
             if ("vouchers".equals(tab)) showVouchers();
-            if ("money".equals(tab)) showMobileMoney();
+            if ("balance".equals(tab)) showMobileMoney();
             if ("account".equals(tab)) showAccount();
         });
         return view;
@@ -438,52 +443,65 @@ public class MainActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(0, 0, 0, dp(14));
+        header.setPadding(0, 0, 0, dp(16));
 
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
-        TextView title = text(titleValue, 25, COLOR_INK, true);
+        TextView title = text(titleValue, 22, COLOR_INK, true);
         copy.addView(title, matchWrap());
         header.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
 
         Button refresh = outlineButton("Refresh");
         refresh.setOnClickListener(v -> {
             if ("home".equals(activeTab)) loadDashboard(false);
+            if ("users".equals(activeTab)) showUsers();
             if ("vouchers".equals(activeTab)) showVouchers();
-            if ("money".equals(activeTab)) showMobileMoney();
+            if ("balance".equals(activeTab)) showMobileMoney();
             if ("account".equals(activeTab)) showAccount();
         });
-        header.addView(refresh, new LinearLayout.LayoutParams(dp(96), dp(44)));
+        header.addView(refresh, new LinearLayout.LayoutParams(dp(92), dp(40)));
 
         page.addView(header, matchWrap());
     }
 
     private void addHomeHeader(LinearLayout page) {
-        LinearLayout card = card();
-        card.setOrientation(LinearLayout.HORIZONTAL);
-        card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(dp(12), dp(10), dp(12), dp(10));
-        card.setBackground(rounded(COLOR_CARD, 1, COLOR_BORDER, dp(10)));
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(0, 0, 0, dp(14));
 
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
-        copy.addView(text(userName, 18, COLOR_INK, true), matchWrap());
-        copy.addView(text("Logged in", 11, COLOR_MUTED, true), matchWrapMargin(0, dp(1), 0, 0));
-        card.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView welcome = text("Welcome back", 11, COLOR_MUTED, true);
+        welcome.setAllCaps(true);
+        copy.addView(welcome, matchWrap());
+        copy.addView(text(userName, 21, COLOR_INK, true), matchWrapMargin(0, dp(1), 0, 0));
+        header.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
 
         String now = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
-        TextView time = text(now, 20, COLOR_MINT, true);
-        time.setGravity(Gravity.CENTER);
-        time.setBackground(rounded(Color.argb(32, 16, 185, 129), 1, COLOR_BORDER, dp(8)));
-        card.addView(time, new LinearLayout.LayoutParams(dp(82), dp(44)));
+        LinearLayout timeCard = new LinearLayout(this);
+        timeCard.setOrientation(LinearLayout.VERTICAL);
+        timeCard.setGravity(Gravity.CENTER);
+        timeCard.setPadding(dp(10), dp(7), dp(10), dp(7));
+        timeCard.setBackground(rounded(COLOR_CARD, 1, COLOR_BORDER, dp(14)));
+        timeCard.addView(text(now, 17, COLOR_PRIMARY, true));
+        timeCard.addView(text("Now", 10, COLOR_MUTED, true));
+        header.addView(timeCard, new LinearLayout.LayoutParams(dp(70), dp(48)));
+
+        TextView avatar = text(initials(userName), 13, COLOR_INK, true);
+        avatar.setGravity(Gravity.CENTER);
+        avatar.setBackground(gradient(COLOR_PRIMARY, COLOR_BLUE, GradientDrawable.Orientation.TL_BR, dp(18)));
+        LinearLayout.LayoutParams avatarParams = new LinearLayout.LayoutParams(dp(36), dp(36));
+        avatarParams.setMargins(dp(10), 0, 0, 0);
+        header.addView(avatar, avatarParams);
 
         Button refresh = outlineButton("Refresh");
         refresh.setOnClickListener(v -> loadDashboard(false));
         LinearLayout.LayoutParams refreshParams = new LinearLayout.LayoutParams(dp(86), dp(44));
-        refreshParams.setMargins(dp(8), 0, 0, 0);
-        card.addView(refresh, refreshParams);
+        refreshParams.setMargins(dp(10), 0, 0, 0);
+        header.addView(refresh, refreshParams);
 
-        page.addView(card, matchWrapMargin(0, 0, 0, dp(10)));
+        page.addView(header, matchWrap());
     }
 
     private void addUserTimeCard(LinearLayout page) {
@@ -514,7 +532,7 @@ public class MainActivity extends Activity {
     private void addSitePicker(LinearLayout page) {
         LinearLayout siteCard = card();
         siteCard.setPadding(dp(14), dp(12), dp(14), dp(12));
-        page.addView(siteCard, matchWrapMargin(0, 0, 0, dp(12)));
+        page.addView(siteCard, matchWrapMargin(0, 0, 0, dp(14)));
 
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
@@ -527,6 +545,7 @@ public class MainActivity extends Activity {
 
         siteSpinner = new Spinner(this);
         siteSpinner.setBackgroundColor(Color.TRANSPARENT);
+        siteSpinner.setPadding(0, dp(4), 0, 0);
         siteCard.addView(siteSpinner, matchWrap());
         switchButton.setOnClickListener(v -> siteSpinner.performClick());
         bindSitesToSpinner();
@@ -576,27 +595,38 @@ public class MainActivity extends Activity {
         if (available <= 0) available = optDouble(stats, "available_balance");
         if (available <= 0) available = totalEarnings;
 
-        TextView state = text(cached ? "Showing cached data while refreshing" : "Live ONLIFI data", 12, cached ? COLOR_WARN : COLOR_PRIMARY, true);
-        state.setPadding(0, 0, 0, dp(8));
-        marker.addView(state, matchWrap());
+        marker.addView(statusPill(cached ? "Cached data, refreshing" : "Live ONLIFI data", cached ? COLOR_WARN : COLOR_PRIMARY), matchWrapMargin(0, 0, 0, dp(10)));
+        marker.addView(balanceHero(available, totalEarnings, mobileMoney), matchWrapMargin(0, 0, 0, dp(14)));
 
-        LinearLayout gridA = new LinearLayout(this);
-        gridA.setOrientation(LinearLayout.HORIZONTAL);
-        marker.addView(gridA, matchWrapMargin(0, 0, 0, dp(10)));
-        gridA.addView(metricCard("Active Users", String.valueOf(activeUsers), "cached router snapshot", COLOR_BLUE), new LinearLayout.LayoutParams(0, dp(128), 1));
-        LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, dp(128), 1);
-        second.setMargins(dp(10), 0, 0, 0);
-        gridA.addView(metricCard("Total Earnings", money(totalEarnings), "today", COLOR_PRIMARY), second);
+        int vouchersSold = vouchers == null ? 0 : Math.max(vouchers.optInt("sold_vouchers", 0), vouchers.optInt("used_vouchers", 0));
+        if (vouchersSold == 0 && performanceSummary != null) vouchersSold = performanceSummary.optInt("vouchers_sold", 0);
 
-        LinearLayout gridB = new LinearLayout(this);
-        gridB.setOrientation(LinearLayout.HORIZONTAL);
-        marker.addView(gridB, matchWrapMargin(0, 0, 0, dp(10)));
-        gridB.addView(metricCard("Mobile Money", money(mobileMoney), "successful payments", COLOR_BLUE), new LinearLayout.LayoutParams(0, dp(128), 1));
-        LinearLayout.LayoutParams gridBSecond = new LinearLayout.LayoutParams(0, dp(128), 1);
-        gridBSecond.setMargins(dp(10), 0, 0, 0);
-        gridB.addView(metricCard("Vouchers", money(voucherAmount), "physical voucher value", COLOR_PRIMARY), gridBSecond);
+        LinearLayout statsRow = new LinearLayout(this);
+        statsRow.setOrientation(LinearLayout.HORIZONTAL);
+        marker.addView(statsRow, matchWrapMargin(0, 0, 0, dp(12)));
+        statsRow.addView(metricCard("Active Users", String.valueOf(activeUsers), "connected clients", COLOR_PRIMARY), new LinearLayout.LayoutParams(0, dp(118), 1));
+        LinearLayout.LayoutParams soldParams = new LinearLayout.LayoutParams(0, dp(118), 1);
+        soldParams.setMargins(dp(10), 0, 0, 0);
+        statsRow.addView(metricCard("Vouchers Sold", String.valueOf(vouchersSold), money(voucherAmount), COLOR_ORANGE), soldParams);
 
-        marker.addView(metricCard("Available Balance", money(available), "requires withdrawal endpoint for exact settlement balance", COLOR_WARN), matchWrapMargin(0, 0, 0, dp(14)));
+        LinearLayout moneyRow = new LinearLayout(this);
+        moneyRow.setOrientation(LinearLayout.HORIZONTAL);
+        marker.addView(moneyRow, matchWrapMargin(0, 0, 0, dp(12)));
+        moneyRow.addView(metricCard("Total Earnings", money(totalEarnings), "today", COLOR_BLUE), new LinearLayout.LayoutParams(0, dp(118), 1));
+        LinearLayout.LayoutParams momoParams = new LinearLayout.LayoutParams(0, dp(118), 1);
+        momoParams.setMargins(dp(10), 0, 0, 0);
+        moneyRow.addView(metricCard("Mobile Money", money(mobileMoney), "successful payments", COLOR_PURPLE), momoParams);
+
+        LinearLayout revenue = card();
+        revenue.addView(text("Revenue Overview", 15, COLOR_INK, true), matchWrap());
+        revenue.addView(text("Today across mobile money and vouchers", 12, COLOR_MUTED, false), matchWrapMargin(0, dp(2), 0, dp(10)));
+        JSONArray breakdown = performance == null ? null : performance.optJSONArray("breakdown");
+        if (breakdown != null && breakdown.length() > 0) {
+            addInlineCombinedGraph(revenue, breakdown);
+        } else {
+            revenue.addView(statusPill("Enable performance breakdown in ONLIFI-Laravel for the full graph", COLOR_WARN), matchWrap());
+        }
+        marker.addView(revenue, matchWrapMargin(0, 0, 0, dp(14)));
 
         marker.addView(sectionTitle("Active Users"));
         if (clients == null || clients.length() == 0) {
@@ -644,9 +674,15 @@ public class MainActivity extends Activity {
         addHeader(page, "Vouchers", "Groups, templates, sales points, types, and manual vouchers");
         addSitePicker(page);
 
+        LinearLayout hero = card();
+        hero.setBackground(gradient(COLOR_ORANGE, Color.rgb(138, 62, 21), GradientDrawable.Orientation.TL_BR, dp(18)));
+        hero.addView(text("Voucher Center", 18, COLOR_INK, true), matchWrap());
+        hero.addView(text("Create, print, download PDFs, manage templates, and control sales points.", 12, Color.argb(205, 255, 255, 255), false), matchWrapMargin(0, dp(5), 0, dp(14)));
         Button create = primaryButton("Create New Vouchers");
+        create.setBackground(rounded(COLOR_BLUE, 0, COLOR_BLUE, dp(12)));
         create.setOnClickListener(v -> showCreateVouchersDialog());
-        page.addView(create, matchWrapMargin(0, 0, 0, dp(12)));
+        hero.addView(create, matchWrap());
+        page.addView(hero, matchWrapMargin(0, 0, 0, dp(12)));
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.VERTICAL);
@@ -1045,7 +1081,7 @@ public class MainActivity extends Activity {
     }
 
     private void showMobileMoney() {
-        activeTab = "money";
+        activeTab = "balance";
         renderBottomNav();
         content.removeAllViews();
 
@@ -1054,7 +1090,7 @@ public class MainActivity extends Activity {
         scroll.addView(page);
         content.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
 
-        addHeader(page, "Mobile Money", "Withdrawable balance, earnings, and performance");
+        addHeader(page, "Balance", "Withdrawable balance, earnings, and performance");
         addSitePicker(page);
 
         LinearLayout summary = taggedDetail();
@@ -1063,7 +1099,7 @@ public class MainActivity extends Activity {
         page.addView(summary, matchWrapMargin(0, 0, 0, dp(12)));
 
         Button withdraw = primaryButton("Withdraw Money");
-        withdraw.setBackground(rounded(COLOR_WARN, 0, COLOR_WARN, dp(8)));
+        withdraw.setBackground(rounded(COLOR_ORANGE, 0, COLOR_ORANGE, dp(12)));
         withdraw.setOnClickListener(v -> showWithdrawDialog());
         page.addView(withdraw, matchWrapMargin(0, 0, 0, dp(14)));
 
@@ -1101,6 +1137,39 @@ public class MainActivity extends Activity {
         loadMobileMoneyPerformance(performance, "today");
     }
 
+    private void showUsers() {
+        activeTab = "users";
+        renderBottomNav();
+        content.removeAllViews();
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout page = page();
+        scroll.addView(page);
+        content.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
+
+        addHeader(page, "Users", "");
+        addSitePicker(page);
+
+        LinearLayout live = card();
+        live.setOrientation(LinearLayout.HORIZONTAL);
+        live.setGravity(Gravity.CENTER_VERTICAL);
+        live.addView(iconBadge("U", COLOR_PRIMARY), new LinearLayout.LayoutParams(dp(38), dp(38)));
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.addView(text("Active Users", 16, COLOR_INK, true), matchWrap());
+        copy.addView(text("Live client sessions for " + activeSiteName(), 12, COLOR_MUTED, false), matchWrapMargin(0, dp(2), 0, 0));
+        LinearLayout.LayoutParams copyParams = new LinearLayout.LayoutParams(0, -2, 1);
+        copyParams.setMargins(dp(12), 0, 0, 0);
+        live.addView(copy, copyParams);
+        live.addView(statusPill("Live", COLOR_PRIMARY), new LinearLayout.LayoutParams(dp(70), dp(34)));
+        page.addView(live, matchWrapMargin(0, 0, 0, dp(12)));
+
+        LinearLayout list = taggedDetail();
+        list.addView(emptyText("Loading active clients..."));
+        page.addView(list, matchWrap());
+        loadClientsInto(list, 500);
+    }
+
     private void loadMobileMoneySummary(LinearLayout holder) {
         executor.execute(() -> {
             JSONObject wallet = null;
@@ -1121,9 +1190,14 @@ public class MainActivity extends Activity {
                             : optDouble(finalWallet, "available_balance");
                     double today = optDouble(summary, "mobile_money_total");
                     double pending = finalWallet == null ? 0 : optDouble(finalWallet, "pending_withdrawals");
-                    holder.addView(metricCard("Withdrawable Balance", money(withdrawable), finalWallet == null ? "estimated until wallet endpoint is enabled" : "available now", COLOR_ORANGE), matchWrapMargin(0, 0, 0, dp(10)));
-                    holder.addView(metricCard("Today Earnings", money(today), stats.optInt("today_transactions", 0) + " successful payments", COLOR_PRIMARY), matchWrapMargin(0, 0, 0, dp(10)));
-                    holder.addView(metricCard("Pending Withdrawals", money(pending), "settlement queue", COLOR_BLUE), matchWrap());
+                    holder.addView(balanceHero(withdrawable, today, today), matchWrapMargin(0, 0, 0, dp(12)));
+                    LinearLayout row = new LinearLayout(this);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.addView(metricCard("Today Earnings", money(today), stats.optInt("today_transactions", 0) + " payments", COLOR_PRIMARY), new LinearLayout.LayoutParams(0, dp(118), 1));
+                    LinearLayout.LayoutParams pendingParams = new LinearLayout.LayoutParams(0, dp(118), 1);
+                    pendingParams.setMargins(dp(10), 0, 0, 0);
+                    row.addView(metricCard("Pending", money(pending), finalWallet == null ? "estimated" : "settlement queue", COLOR_WARN), pendingParams);
+                    holder.addView(row, matchWrap());
                 });
             } catch (Exception e) {
                 mainHandler.post(() -> {
@@ -1263,7 +1337,7 @@ public class MainActivity extends Activity {
     }
 
     private void showClientsListScreen() {
-        activeTab = "account";
+        activeTab = "users";
         renderBottomNav();
         content.removeAllViews();
         ScrollView scroll = new ScrollView(this);
@@ -1308,7 +1382,7 @@ public class MainActivity extends Activity {
     }
 
     private void showTransactionsListScreen() {
-        activeTab = "money";
+        activeTab = "balance";
         renderBottomNav();
         content.removeAllViews();
         ScrollView scroll = new ScrollView(this);
@@ -1445,6 +1519,9 @@ public class MainActivity extends Activity {
                         selectedSiteId = nextSite;
                         preferences.edit().putInt(PREF_SELECTED_SITE, selectedSiteId).apply();
                         if ("home".equals(activeTab)) showHome();
+                        if ("users".equals(activeTab)) showUsers();
+                        if ("vouchers".equals(activeTab)) showVouchers();
+                        if ("balance".equals(activeTab)) showMobileMoney();
                         if ("account".equals(activeTab)) showAccount();
                     }
                 }
@@ -1837,7 +1914,7 @@ public class MainActivity extends Activity {
     private LinearLayout page() {
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(16), dp(18), dp(16), dp(20));
+        page.setPadding(dp(18), dp(20), dp(18), dp(22));
         return page;
     }
 
@@ -1845,7 +1922,7 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
-        card.setBackground(rounded(COLOR_CARD, 1, COLOR_BORDER, dp(8)));
+        card.setBackground(rounded(COLOR_CARD, 1, COLOR_BORDER, dp(16)));
         return card;
     }
 
@@ -1858,14 +1935,102 @@ public class MainActivity extends Activity {
 
     private View metricCard(String title, String value, String caption, int accent) {
         LinearLayout card = card();
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView dot = iconBadge(title.isEmpty() ? "" : title.substring(0, 1), accent);
+        top.addView(dot, new LinearLayout.LayoutParams(dp(34), dp(34)));
         TextView titleView = text(title, 12, COLOR_MUTED, true);
-        TextView valueView = text(value, 22, accent, true);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1);
+        titleParams.setMargins(dp(10), 0, 0, 0);
+        top.addView(titleView, titleParams);
+        card.addView(top, matchWrapMargin(0, 0, 0, dp(10)));
+
+        TextView valueView = text(value, 21, COLOR_INK, true);
         valueView.setSingleLine(false);
         TextView captionView = text(caption, 12, COLOR_MUTED, false);
-        card.addView(titleView, matchWrap());
-        card.addView(valueView, matchWrapMargin(0, dp(8), 0, dp(4)));
+        card.addView(valueView, matchWrapMargin(0, 0, 0, dp(4)));
         card.addView(captionView, matchWrap());
         return card;
+    }
+
+    private View balanceHero(double available, double totalEarnings, double mobileMoney) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(18), dp(18), dp(18), dp(14));
+        card.setBackground(gradient(COLOR_BLUE, Color.rgb(0, 31, 122), GradientDrawable.Orientation.TL_BR, dp(18)));
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.addView(iconBadge("B", Color.argb(90, 255, 255, 255)), new LinearLayout.LayoutParams(dp(36), dp(36)));
+        TextView label = text("Available Balance", 12, Color.argb(200, 255, 255, 255), true);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, -2, 1);
+        labelParams.setMargins(dp(10), 0, 0, 0);
+        top.addView(label, labelParams);
+        top.addView(statusPill("Wallet", Color.argb(90, 255, 255, 255)), new LinearLayout.LayoutParams(dp(82), dp(34)));
+        card.addView(top, matchWrapMargin(0, 0, 0, dp(14)));
+
+        card.addView(text(money(available), 31, COLOR_INK, true), matchWrap());
+        card.addView(text("Today: " + money(totalEarnings) + " total, " + money(mobileMoney) + " via mobile money", 12, Color.argb(190, 255, 255, 255), false), matchWrapMargin(0, dp(8), 0, dp(14)));
+
+        TextView line = new TextView(this);
+        line.setBackground(rounded(COLOR_PRIMARY, 0, COLOR_PRIMARY, dp(2)));
+        card.addView(line, new LinearLayout.LayoutParams(-1, dp(3)));
+        return card;
+    }
+
+    private TextView statusPill(String value, int color) {
+        TextView pill = text(value, 11, color == Color.argb(90, 255, 255, 255) ? COLOR_INK : color, true);
+        pill.setGravity(Gravity.CENTER);
+        pill.setPadding(dp(10), dp(6), dp(10), dp(6));
+        int bg = color == Color.argb(90, 255, 255, 255) ? Color.argb(44, 255, 255, 255) : Color.argb(28, Color.red(color), Color.green(color), Color.blue(color));
+        pill.setBackground(rounded(bg, 1, Color.argb(45, Color.red(color), Color.green(color), Color.blue(color)), dp(18)));
+        return pill;
+    }
+
+    private void addInlineCombinedGraph(LinearLayout holder, JSONArray rows) {
+        double max = 0;
+        int count = Math.min(rows.length(), 7);
+        for (int i = 0; i < count; i++) {
+            JSONObject row = rows.optJSONObject(i);
+            max = Math.max(max, optDouble(row, "mobile_money_total") + optDouble(row, "voucher_total"));
+        }
+        for (int i = 0; i < count; i++) {
+            JSONObject row = rows.optJSONObject(i);
+            double mobile = optDouble(row, "mobile_money_total");
+            double vouchers = optDouble(row, "voucher_total");
+            holder.addView(inlineBar(row.optString("label", "Period"), mobile, vouchers, max), matchWrapMargin(0, 0, 0, dp(8)));
+        }
+    }
+
+    private View inlineBar(String label, double mobile, double vouchers, double max) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(0, dp(2), 0, dp(2));
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.addView(text(label, 11, COLOR_MUTED, true), new LinearLayout.LayoutParams(0, -2, 1));
+        top.addView(text(money(mobile + vouchers), 11, COLOR_INK, true));
+        row.addView(top, matchWrapMargin(0, 0, 0, dp(6)));
+
+        LinearLayout track = new LinearLayout(this);
+        track.setOrientation(LinearLayout.HORIZONTAL);
+        track.setBackground(rounded(COLOR_BG_DEEP, 0, COLOR_BG_DEEP, dp(6)));
+        int mobileWeight = max <= 0 ? 0 : Math.max(0, (int) Math.round((mobile / max) * 100));
+        int voucherWeight = max <= 0 ? 0 : Math.max(0, (int) Math.round((vouchers / max) * 100));
+        if (mobileWeight + voucherWeight > 0 && mobileWeight + voucherWeight < 6) mobileWeight = 6;
+        TextView mobileFill = new TextView(this);
+        mobileFill.setBackground(rounded(COLOR_BLUE, 0, COLOR_BLUE, dp(6)));
+        TextView voucherFill = new TextView(this);
+        voucherFill.setBackground(rounded(COLOR_ORANGE, 0, COLOR_ORANGE, dp(6)));
+        track.addView(mobileFill, new LinearLayout.LayoutParams(0, dp(10), mobileWeight));
+        track.addView(voucherFill, new LinearLayout.LayoutParams(0, dp(10), voucherWeight));
+        track.addView(new TextView(this), new LinearLayout.LayoutParams(0, dp(10), Math.max(1, 100 - mobileWeight - voucherWeight)));
+        row.addView(track, matchWrap());
+        return row;
     }
 
     private View clientRow(JSONObject row) {
@@ -1920,7 +2085,7 @@ public class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(10), dp(10), dp(10), dp(10));
-        row.setBackground(rounded(COLOR_CARD_SOFT, 1, COLOR_BORDER, dp(8)));
+        row.setBackground(rounded(COLOR_CARD, 1, COLOR_BORDER, dp(14)));
         return row;
     }
 
@@ -2030,14 +2195,14 @@ public class MainActivity extends Activity {
         TextView view = text(value, 14, COLOR_MUTED, false);
         view.setGravity(Gravity.CENTER);
         view.setPadding(dp(12), dp(24), dp(12), dp(24));
-        view.setBackground(rounded(COLOR_CARD_SOFT, 1, COLOR_BORDER, dp(8)));
+        view.setBackground(rounded(COLOR_CARD, 1, COLOR_BORDER, dp(14)));
         return view;
     }
 
     private TextView errorText(String value) {
         TextView view = text(value == null ? "Request failed." : value, 14, Color.rgb(176, 42, 42), false);
         view.setPadding(dp(12), dp(16), dp(12), dp(16));
-        view.setBackground(rounded(COLOR_CARD_SOFT, 1, COLOR_BORDER, dp(8)));
+        view.setBackground(rounded(COLOR_CARD, 1, COLOR_BORDER, dp(14)));
         return view;
     }
 
@@ -2063,7 +2228,7 @@ public class MainActivity extends Activity {
         input.setTextSize(15);
         input.setSingleLine(!hint.toLowerCase(Locale.US).contains("describe"));
         input.setPadding(dp(12), dp(10), dp(12), dp(10));
-        input.setBackground(rounded(COLOR_BG, 1, COLOR_BORDER, dp(8)));
+        input.setBackground(rounded(COLOR_BG_DEEP, 1, COLOR_BORDER, dp(12)));
         input.setTextColor(COLOR_INK);
         input.setHintTextColor(COLOR_MUTED);
         if (password) input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
@@ -2085,7 +2250,7 @@ public class MainActivity extends Activity {
         button.setTextSize(14);
         button.setTypeface(Typeface.DEFAULT_BOLD);
         button.setAllCaps(false);
-        button.setBackground(rounded(COLOR_PRIMARY, 0, COLOR_PRIMARY, dp(8)));
+        button.setBackground(rounded(COLOR_BLUE, 0, COLOR_BLUE, dp(12)));
         return button;
     }
 
@@ -2096,7 +2261,7 @@ public class MainActivity extends Activity {
         button.setTextSize(14);
         button.setTypeface(Typeface.DEFAULT_BOLD);
         button.setAllCaps(false);
-        button.setBackground(rounded(COLOR_CARD_SOFT, 1, COLOR_BORDER, dp(8)));
+        button.setBackground(rounded(COLOR_CARD, 1, COLOR_BORDER, dp(12)));
         return button;
     }
 
@@ -2106,6 +2271,28 @@ public class MainActivity extends Activity {
         drawable.setCornerRadius(radius);
         if (strokeWidth > 0) drawable.setStroke(strokeWidth, strokeColor);
         return drawable;
+    }
+
+    private GradientDrawable gradient(int startColor, int endColor, GradientDrawable.Orientation orientation, int radius) {
+        GradientDrawable drawable = new GradientDrawable(orientation, new int[]{startColor, endColor});
+        drawable.setCornerRadius(radius);
+        return drawable;
+    }
+
+    private String activeSiteName() {
+        for (Site site : sites) {
+            if (site.id == selectedSiteId) return site.name;
+        }
+        return selectedSiteId == 0 ? "your site" : "Site " + selectedSiteId;
+    }
+
+    private String initials(String value) {
+        String raw = value == null ? "" : value.trim();
+        if (raw.isEmpty()) return "ON";
+        String[] pieces = raw.split("\\s+");
+        String first = pieces[0].substring(0, 1);
+        String second = pieces.length > 1 ? pieces[1].substring(0, 1) : (pieces[0].length() > 1 ? pieces[0].substring(1, 2) : "N");
+        return (first + second).toUpperCase(Locale.US);
     }
 
     private void setLoading(boolean loading) {

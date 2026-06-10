@@ -75,6 +75,7 @@ class PppoeClientController extends Controller
             'profile' => 'nullable|string|max:100',
             'service' => 'nullable|string|max:100',
             'remote_address' => 'nullable|string|max:64',
+            'expires_at' => 'nullable|date',
             'phone' => 'nullable|string|max:32',
             'notes' => 'nullable|string|max:255',
             'is_active' => 'boolean',
@@ -97,7 +98,7 @@ class PppoeClientController extends Controller
             'profile' => $request->profile,
             'service' => $request->service ?: 'pppoe',
             'remote_address' => $request->remote_address,
-            'comment' => $request->notes,
+            'comment' => $this->routerComment($request->notes, $request->expires_at),
             'disabled' => !$request->boolean('is_active', true),
         ]);
 
@@ -123,6 +124,7 @@ class PppoeClientController extends Controller
             'profile' => $request->profile,
             'service' => $request->service,
             'remote_address' => $request->remote_address,
+            'expires_at' => $request->expires_at,
             'phone' => $request->phone,
             'notes' => $request->notes,
             'is_active' => $request->boolean('is_active', true),
@@ -169,6 +171,7 @@ class PppoeClientController extends Controller
             'profile' => 'nullable|string|max:100',
             'service' => 'nullable|string|max:100',
             'remote_address' => 'nullable|string|max:64',
+            'expires_at' => 'nullable|date',
             'phone' => 'nullable|string|max:32',
             'notes' => 'nullable|string|max:255',
             'is_active' => 'sometimes|boolean',
@@ -178,7 +181,7 @@ class PppoeClientController extends Controller
             return response()->json(['error' => 'Validation failed', 'errors' => $validator->errors()], 422);
         }
 
-        $data = $request->only(['name', 'username', 'password', 'profile', 'service', 'remote_address', 'phone', 'notes']);
+        $data = $request->only(['name', 'username', 'password', 'profile', 'service', 'remote_address', 'expires_at', 'phone', 'notes']);
         if ($request->has('is_active')) {
             $data['is_active'] = $request->boolean('is_active');
         }
@@ -200,6 +203,11 @@ class PppoeClientController extends Controller
     public function disable(Request $request, int $id)
     {
         return $this->setActive($request, $id, false);
+    }
+
+    public function deactivate(Request $request, int $id)
+    {
+        return $this->setActive($request, $id, false, true);
     }
 
     public function destroy(Request $request, int $id)
@@ -232,7 +240,69 @@ class PppoeClientController extends Controller
         return response()->json(['message' => 'PPPoE client deleted on router']);
     }
 
-    private function setActive(Request $request, int $id, bool $active)
+    public function active(Request $request)
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$site) {
+            return response()->json(['sessions' => [], 'message' => 'Select a site before viewing active PPPoE sessions.']);
+        }
+
+        $router = $this->snapshots->routerForSite($site);
+        if (!$router) {
+            return response()->json(['sessions' => [], 'message' => 'Router remote access details are not configured for this site.']);
+        }
+
+        $sessions = app(\App\Services\MikrotikService::class)->getPppoeActiveSessions($router);
+
+        return response()->json([
+            'sessions' => $sessions,
+            'site' => ['id' => $site->id, 'name' => $site->name],
+            'source' => 'router',
+        ]);
+    }
+
+    public function profiles(Request $request)
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$site) {
+            return response()->json(['profiles' => [], 'message' => 'Select a site before viewing PPPoE profiles.']);
+        }
+
+        $router = $this->snapshots->routerForSite($site);
+        if (!$router) {
+            return response()->json(['profiles' => [], 'message' => 'Router remote access details are not configured for this site.']);
+        }
+
+        return response()->json([
+            'profiles' => app(\App\Services\MikrotikService::class)->getPppoeProfiles($router),
+            'site' => ['id' => $site->id, 'name' => $site->name],
+            'source' => 'router',
+        ]);
+    }
+
+    public function pools(Request $request)
+    {
+        $site = SiteScope::selectedOrDefaultSite($request);
+
+        if (!$site) {
+            return response()->json(['pools' => [], 'message' => 'Select a site before viewing PPPoE pools.']);
+        }
+
+        $router = $this->snapshots->routerForSite($site);
+        if (!$router) {
+            return response()->json(['pools' => [], 'message' => 'Router remote access details are not configured for this site.']);
+        }
+
+        return response()->json([
+            'pools' => app(\App\Services\MikrotikService::class)->getDhcpPools($router),
+            'site' => ['id' => $site->id, 'name' => $site->name],
+            'source' => 'router',
+        ]);
+    }
+
+    private function setActive(Request $request, int $id, bool $active, bool $kickSession = false)
     {
         $this->ensureTable();
         $site = SiteScope::selectedOrDefaultSite($request);
@@ -256,13 +326,17 @@ class PppoeClientController extends Controller
             return response()->json(['message' => 'Could not update PPPoE client on the router.'], 500);
         }
 
+        if (!$active || $kickSession) {
+            app(\App\Services\MikrotikService::class)->removeActivePppoeSessions($router, $client->username);
+        }
+
         $this->clientQuery($site?->id)->where('id', $id)->update([
             'is_active' => $active,
             'updated_at' => now(),
         ]);
         $this->snapshots->syncSite($site, ['pppoe_clients']);
 
-        return response()->json(['message' => $active ? 'PPPoE client enabled on router' : 'PPPoE client disabled on router']);
+        return response()->json(['message' => $active ? 'PPPoE client enabled on router' : 'PPPoE client disabled and disconnected on router']);
     }
 
     private function clientQuery(?int $siteId)
@@ -279,6 +353,11 @@ class PppoeClientController extends Controller
                     $table->string('router_id', 64)->nullable()->after('site_id');
                 });
             }
+            if (!Schema::connection('tenant')->hasColumn('pppoe_clients', 'expires_at')) {
+                Schema::connection('tenant')->table('pppoe_clients', function (Blueprint $table) {
+                    $table->timestamp('expires_at')->nullable()->after('remote_address')->index();
+                });
+            }
             return;
         }
 
@@ -292,6 +371,7 @@ class PppoeClientController extends Controller
             $table->string('profile', 100)->nullable();
             $table->string('service', 100)->nullable();
             $table->string('remote_address', 64)->nullable();
+            $table->timestamp('expires_at')->nullable()->index();
             $table->string('phone', 32)->nullable();
             $table->string('notes', 255)->nullable();
             $table->boolean('is_active')->default(true)->index();
@@ -299,5 +379,18 @@ class PppoeClientController extends Controller
             $table->timestamps();
             $table->unique(['site_id', 'username']);
         });
+    }
+
+    private function routerComment(?string $notes, ?string $expiresAt): ?string
+    {
+        $parts = [];
+        if ($notes) {
+            $parts[] = $notes;
+        }
+        if ($expiresAt) {
+            $parts[] = 'onlifi_expires_at=' . $expiresAt;
+        }
+
+        return $parts ? implode(' | ', $parts) : null;
     }
 }

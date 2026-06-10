@@ -62,6 +62,11 @@ export function SubUsers() {
   }, []);
 
   const toggleNumber = (field: 'allowed_site_ids', value: number) => {
+    if (form.role === 'installer') {
+      setForm({ ...form, [field]: form[field].includes(value) ? [] : [value] });
+      return;
+    }
+
     const next = form[field].includes(value)
       ? form[field].filter((item) => item !== value)
       : [...form[field], value];
@@ -117,6 +122,19 @@ export function SubUsers() {
     await load();
   };
 
+  const cannotSaveReason = (() => {
+    if (saving) return '';
+    if (form.allowed_site_ids.length === 0) {
+      return form.role === 'installer'
+        ? 'Select the installer assigned site first.'
+        : 'Select at least one site first.';
+    }
+    if (form.role === 'sub_user' && form.permissions.length === 0) {
+      return 'Select at least one dashboard permission first.';
+    }
+    return '';
+  })();
+
   if (loading) {
     return <div className="min-h-screen grid place-items-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
@@ -152,7 +170,15 @@ export function SubUsers() {
           </label>
           <label className="space-y-1">
             <span className="text-sm text-muted-foreground">Profile</span>
-            <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as 'sub_user' | 'installer', permissions: e.target.value === 'installer' ? ['installer:devices:create'] : ['view_clients', 'view_routers'] })} className="w-full px-3 py-2 bg-background border border-input rounded-lg">
+            <select value={form.role} onChange={(e) => {
+              const role = e.target.value as 'sub_user' | 'installer';
+              setForm({
+                ...form,
+                role,
+                allowed_site_ids: role === 'installer' ? form.allowed_site_ids.slice(0, 1) : form.allowed_site_ids,
+                permissions: role === 'installer' ? ['installer:devices:create'] : ['view_clients', 'view_routers'],
+              });
+            }} className="w-full px-3 py-2 bg-background border border-input rounded-lg">
               <option value="sub_user">Dashboard user</option>
               <option value="installer">Installer app user</option>
             </select>
@@ -169,7 +195,7 @@ export function SubUsers() {
             <div className="grid sm:grid-cols-2 gap-2">
               {sites.map((site) => (
                 <label key={site.id} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">
-                  <input type="checkbox" checked={form.allowed_site_ids.includes(site.id)} onChange={() => toggleNumber('allowed_site_ids', site.id)} />
+                  <input type={form.role === 'installer' ? 'radio' : 'checkbox'} checked={form.allowed_site_ids.includes(site.id)} onChange={() => toggleNumber('allowed_site_ids', site.id)} />
                   <span>
                     {site.name}
                     {site.assigned_device_ip_range && <span className="block text-xs text-muted-foreground">{site.assigned_device_ip_range}</span>}
@@ -178,7 +204,10 @@ export function SubUsers() {
               ))}
             </div>
             {form.role === 'installer' && (
-              <p className="mt-2 text-xs text-muted-foreground">Installer profiles use the first selected site only and receive its assigned device IP range in the mobile app.</p>
+              <p className="mt-2 text-xs text-muted-foreground">Installer profiles use one assigned site only and receive its assigned device IP range in the mobile app.</p>
+            )}
+            {sites.length === 0 && (
+              <p className="mt-2 text-xs text-destructive">No sites are available yet. Create a site before adding installer accounts.</p>
             )}
           </div>
           {form.role === 'sub_user' && <div>
@@ -196,7 +225,8 @@ export function SubUsers() {
 
         <div className="flex justify-end gap-2">
           {editing && <button type="button" onClick={reset} className="px-4 py-2 rounded-lg border border-border hover:bg-muted">Cancel</button>}
-          <button disabled={saving || form.allowed_site_ids.length === 0 || (form.role === 'sub_user' && form.permissions.length === 0)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
+          {cannotSaveReason && <p className="mr-auto text-xs text-muted-foreground">{cannotSaveReason}</p>}
+          <button disabled={saving || Boolean(cannotSaveReason)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
             {editing ? 'Update account user' : 'Create account user'}
           </button>

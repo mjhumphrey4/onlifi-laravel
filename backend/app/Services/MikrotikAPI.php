@@ -519,6 +519,50 @@ class MikrotikAPI {
         }, $secrets);
     }
 
+    public function getPppoeActiveSessions() {
+        if (!$this->connect()) {
+            return [];
+        }
+
+        $response = $this->communicate(['/ppp/active/print']);
+        $sessions = $this->parseResponse($response);
+
+        return array_map(function ($session) {
+            return [
+                'id' => $session['.id'] ?? '',
+                'name' => $session['name'] ?? '',
+                'username' => $session['name'] ?? '',
+                'service' => $session['service'] ?? '',
+                'caller_id' => $session['caller-id'] ?? '',
+                'address' => $session['address'] ?? '',
+                'uptime' => $session['uptime'] ?? '',
+                'encoding' => $session['encoding'] ?? '',
+                'session_id' => $session['session-id'] ?? '',
+            ];
+        }, $sessions);
+    }
+
+    public function getPppoeProfiles() {
+        if (!$this->connect()) {
+            return [];
+        }
+
+        $response = $this->communicate(['/ppp/profile/print']);
+        $profiles = $this->parseResponse($response);
+
+        return array_map(function ($profile) {
+            return [
+                'id' => $profile['.id'] ?? '',
+                'name' => $profile['name'] ?? '',
+                'local_address' => $profile['local-address'] ?? '',
+                'remote_address' => $profile['remote-address'] ?? '',
+                'rate_limit' => $profile['rate-limit'] ?? '',
+                'only_one' => ($profile['only-one'] ?? '') ?: '',
+                'comment' => $profile['comment'] ?? '',
+            ];
+        }, $profiles);
+    }
+
     public function addPppoeSecret(array $client) {
         if (!$this->connect()) {
             return false;
@@ -558,6 +602,38 @@ class MikrotikAPI {
         ]);
 
         return isset($response[0]) && $response[0] === '!done';
+    }
+
+    public function removeActivePppoeSessions(string $username) {
+        if (!$this->connect()) {
+            return false;
+        }
+
+        $response = $this->communicate([
+            '/ppp/active/print',
+            '?name=' . $username,
+            '=.proplist=.id,name',
+        ]);
+
+        $sessions = $this->parseResponse($response);
+        $removed = false;
+
+        foreach ($sessions as $session) {
+            if (empty($session['.id'])) {
+                continue;
+            }
+
+            $removeResponse = $this->communicate([
+                '/ppp/active/remove',
+                '=.id=' . $session['.id'],
+            ]);
+
+            if (isset($removeResponse[0]) && $removeResponse[0] === '!done') {
+                $removed = true;
+            }
+        }
+
+        return $removed || empty($sessions);
     }
 
     public function removePppoeSecret(string $id) {

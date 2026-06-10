@@ -267,6 +267,7 @@ class RouterSnapshotService
                 'profile' => $secret['profile'] ?: null,
                 'service' => $secret['service'] ?: 'pppoe',
                 'remote_address' => $secret['remote_address'] ?: null,
+                'expires_at' => $this->extractOnlifiExpiry($secret['comment'] ?? ''),
                 'phone' => null,
                 'notes' => $secret['comment'] ?: null,
                 'is_active' => !$secret['disabled'],
@@ -463,6 +464,7 @@ class RouterSnapshotService
                 $table->string('profile', 100)->nullable();
                 $table->string('service', 100)->nullable();
                 $table->string('remote_address', 64)->nullable();
+                $table->timestamp('expires_at')->nullable()->index();
                 $table->string('phone', 32)->nullable();
                 $table->string('notes', 255)->nullable();
                 $table->boolean('is_active')->default(true)->index();
@@ -476,6 +478,11 @@ class RouterSnapshotService
         if (!Schema::connection('tenant')->hasColumn('pppoe_clients', 'router_id')) {
             Schema::connection('tenant')->table('pppoe_clients', function (Blueprint $table) {
                 $table->string('router_id', 64)->nullable()->after('site_id');
+            });
+        }
+        if (!Schema::connection('tenant')->hasColumn('pppoe_clients', 'expires_at')) {
+            Schema::connection('tenant')->table('pppoe_clients', function (Blueprint $table) {
+                $table->timestamp('expires_at')->nullable()->after('remote_address')->index();
             });
         }
     }
@@ -543,5 +550,16 @@ class RouterSnapshotService
         }
 
         return $seconds;
+    }
+
+    private function extractOnlifiExpiry(string $comment): ?string
+    {
+        if (!preg_match('/onlifi_expires_at=([^|]+)/', $comment, $matches)) {
+            return null;
+        }
+
+        $value = trim($matches[1]);
+
+        return $value !== '' ? $value : null;
     }
 }

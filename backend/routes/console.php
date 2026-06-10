@@ -365,10 +365,84 @@ Artisan::command('onlifi:router-snapshots:sync {--tenant= : Limit sync to one te
     return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
 })->purpose('Pull RouterOS lists into Redis/database snapshots for fast dashboard reads');
 
+Artisan::command('onlifi:pppoe:expire', function () {
+    $rows = [];
+    $expired = 0;
+    $failed = 0;
+
+    \App\Models\Tenant::whereNotNull('database_name')->orderBy('id')->chunkById(20, function ($tenants) use (&$rows, &$expired, &$failed) {
+        foreach ($tenants as $tenant) {
+            $sites = \App\Models\Site::where('tenant_id', $tenant->id)->where('is_active', true)->orderBy('id')->get();
+
+            foreach ($sites as $site) {
+                try {
+                    $site->configureTenantConnection($tenant);
+
+                    if (!Schema::connection('tenant')->hasTable('pppoe_clients') || !Schema::connection('tenant')->hasColumn('pppoe_clients', 'expires_at')) {
+                        continue;
+                    }
+
+                    $clients = DB::connection('tenant')
+                        ->table('pppoe_clients')
+                        ->where('site_id', $site->id)
+                        ->where('is_active', true)
+                        ->whereNotNull('expires_at')
+                        ->where('expires_at', '<=', now())
+                        ->get();
+
+                    if ($clients->isEmpty()) {
+                        continue;
+                    }
+
+                    $router = app(\App\Services\RouterSnapshotService::class)->routerForSite($site);
+                    if (!$router) {
+                        $failed += $clients->count();
+                        $rows[] = [$tenant->id, $site->id, $clients->count(), 'missing router'];
+                        continue;
+                    }
+
+                    foreach ($clients as $client) {
+                        $ok = true;
+                        if ($client->router_id) {
+                            $ok = app(\App\Services\MikrotikService::class)->setPppoeSecretDisabled($router, $client->router_id, true);
+                        }
+                        app(\App\Services\MikrotikService::class)->removeActivePppoeSessions($router, $client->username);
+
+                        if ($ok) {
+                            DB::connection('tenant')->table('pppoe_clients')->where('id', $client->id)->update([
+                                'is_active' => false,
+                                'updated_at' => now(),
+                            ]);
+                            $expired++;
+                        } else {
+                            $failed++;
+                        }
+                    }
+
+                    app(\App\Services\RouterSnapshotService::class)->syncSite($site, ['pppoe_clients']);
+                    $rows[] = [$tenant->id, $site->id, $clients->count(), 'ok'];
+                } catch (\Throwable $e) {
+                    $failed++;
+                    $rows[] = [$tenant->id, $site->id, 0, $e->getMessage()];
+                }
+            }
+        }
+    });
+
+    $this->table(['Tenant', 'Site', 'Expired', 'Status'], $rows);
+    $this->info("PPPoE expiry completed. Disabled: {$expired}; failed: {$failed}");
+
+    return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
+})->purpose('Disable expired PPPoE secrets and disconnect active PPPoE sessions');
+
 Schedule::command('onlifi:vouchers:cleanup')
     ->everyMinute()
     ->withoutOverlapping();
 
 Schedule::command('onlifi:router-snapshots:sync')
     ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('onlifi:pppoe:expire')
+    ->everyMinute()
     ->withoutOverlapping();

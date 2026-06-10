@@ -288,10 +288,14 @@ Route::middleware(['tenant'])->group(function () {
 
     Route::middleware('tenant.permission:view_routers')->prefix('pppoe')->group(function () {
         Route::get('/clients', [PppoeClientController::class, 'index']);
+        Route::get('/active', [PppoeClientController::class, 'active']);
+        Route::get('/profiles', [PppoeClientController::class, 'profiles']);
+        Route::get('/pools', [PppoeClientController::class, 'pools']);
         Route::post('/clients', [PppoeClientController::class, 'store']);
         Route::put('/clients/{id}', [PppoeClientController::class, 'update']);
         Route::post('/clients/{id}/enable', [PppoeClientController::class, 'enable']);
         Route::post('/clients/{id}/disable', [PppoeClientController::class, 'disable']);
+        Route::post('/clients/{id}/deactivate', [PppoeClientController::class, 'deactivate']);
         Route::delete('/clients/{id}', [PppoeClientController::class, 'destroy']);
     });
 

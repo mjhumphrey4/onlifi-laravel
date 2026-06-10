@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MikrotikRouter;
+use App\Models\InstallerDeviceSubmission;
 use App\Models\RadiusNas;
 use App\Models\RouterTelemetry;
 use App\Models\Site;
@@ -44,7 +45,7 @@ class MikrotikController extends Controller
                     $router = $router->fresh('latestTelemetry');
                 }
 
-                return response()->json([$router]);
+                return response()->json($this->decorateRouters(collect([$router]))->values());
             }
 
             return response()->json([[
@@ -65,7 +66,7 @@ class MikrotikController extends Controller
 
         $routers = $query->orderBy('name')->get();
 
-        return response()->json($routers);
+        return response()->json($this->decorateRouters($routers));
     }
 
     public function show($id)
@@ -774,5 +775,33 @@ class MikrotikController extends Controller
         }
 
         return $this->snapshots->routerForSite($site);
+    }
+
+    private function decorateRouters($routers)
+    {
+        $tenant = app()->bound('tenant') ? app('tenant') : null;
+        $routerIds = $routers->pluck('id')->filter()->values();
+        $submissions = collect();
+
+        if ($tenant && $routerIds->isNotEmpty()) {
+            $submissions = InstallerDeviceSubmission::where('tenant_id', $tenant->id)
+                ->whereIn('router_id', $routerIds)
+                ->get()
+                ->keyBy('router_id');
+        }
+
+        return $routers->map(function (MikrotikRouter $router) use ($submissions) {
+            $data = $router->toArray();
+            $submission = $submissions->get($router->id);
+
+            $data['front_photo_url'] = $submission?->front_photo_path ? asset('storage/' . $submission->front_photo_path) : null;
+            $data['back_photo_url'] = $submission?->back_photo_path ? asset('storage/' . $submission->back_photo_path) : null;
+            $data['google_maps_url'] = ($router->latitude && $router->longitude)
+                ? 'https://www.google.com/maps?q=' . $router->latitude . ',' . $router->longitude
+                : null;
+            $data['status'] = $router->last_seen && $router->last_seen->diffInMinutes(now()) < 10 ? 'online' : 'offline';
+
+            return $data;
+        })->values();
     }
 }

@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { CheckCircle2, Loader2, Network, Plus, RefreshCw, Trash2, XCircle } from 'lucide-react';
-import { createPppoeClient, deletePppoeClient, disablePppoeClient, enablePppoeClient, getPppoeClients } from '../utils/api';
+import type { ReactNode } from 'react';
+import { CheckCircle2, Loader2, Network, Plus, RefreshCw, Trash2, XCircle, ZapOff } from 'lucide-react';
+import {
+  createPppoeClient,
+  deactivatePppoeClient,
+  deletePppoeClient,
+  disablePppoeClient,
+  enablePppoeClient,
+  getPppoeActiveSessions,
+  getPppoeClients,
+  getPppoePools,
+  getPppoeProfiles,
+} from '../utils/api';
 import { useSite } from '../context/SiteContext';
 
 interface PppoeClient {
@@ -12,11 +23,39 @@ interface PppoeClient {
   profile?: string | null;
   service?: string | null;
   remote_address?: string | null;
+  expires_at?: string | null;
   phone?: string | null;
   notes?: string | null;
   is_active: boolean | number;
   last_seen_at?: string | null;
-  created_at?: string | null;
+}
+
+interface PppoeSession {
+  id: string;
+  username?: string;
+  name?: string;
+  service?: string;
+  caller_id?: string;
+  address?: string;
+  uptime?: string;
+}
+
+interface PppoeProfile {
+  id: string;
+  name: string;
+  local_address?: string;
+  remote_address?: string;
+  rate_limit?: string;
+  only_one?: string;
+  comment?: string;
+}
+
+interface IpPool {
+  id: string;
+  name: string;
+  ranges?: string;
+  next_pool?: string;
+  comment?: string;
 }
 
 const emptyForm = {
@@ -26,14 +65,21 @@ const emptyForm = {
   profile: 'default',
   service: 'pppoe',
   remote_address: '',
+  expires_at: '',
   phone: '',
   notes: '',
   is_active: true,
 };
 
+type TabKey = 'active' | 'clients' | 'profiles' | 'pools';
+
 export function PppoeClients() {
   const { selectedSite } = useSite();
+  const [tab, setTab] = useState<TabKey>('active');
   const [clients, setClients] = useState<PppoeClient[]>([]);
+  const [sessions, setSessions] = useState<PppoeSession[]>([]);
+  const [profiles, setProfiles] = useState<PppoeProfile[]>([]);
+  const [pools, setPools] = useState<IpPool[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,11 +90,26 @@ export function PppoeClients() {
     setLoading(true);
     setError('');
     try {
-      const data = await getPppoeClients(refresh);
-      setClients(data.clients || data.data || []);
-      if (data.message) setMessage(data.message);
+      const [clientsData, activeData, profilesData, poolsData] = await Promise.all([
+        getPppoeClients(refresh),
+        getPppoeActiveSessions(),
+        getPppoeProfiles(),
+        getPppoePools(),
+      ]);
+
+      const nextClients = clientsData.clients || clientsData.data || [];
+      const nextProfiles = profilesData.profiles || [];
+      setClients(nextClients);
+      setSessions(activeData.sessions || []);
+      setProfiles(nextProfiles);
+      setPools(poolsData.pools || []);
+
+      if (!form.profile && nextProfiles[0]?.name) {
+        setForm((current) => ({ ...current, profile: nextProfiles[0].name }));
+      }
+      if (clientsData.message) setMessage(clientsData.message);
     } catch (err: any) {
-      setError(err.message || 'Failed to load PPPoE clients.');
+      setError(err.message || 'Failed to load PPPoE data.');
     } finally {
       setLoading(false);
     }
@@ -69,12 +130,14 @@ export function PppoeClients() {
         profile: form.profile || null,
         service: form.service || null,
         remote_address: form.remote_address || null,
+        expires_at: form.expires_at || null,
         phone: form.phone || null,
         notes: form.notes || null,
       });
       setForm({ ...emptyForm });
       setMessage('PPPoE client created.');
       await load(true);
+      setTab('clients');
     } catch (err: any) {
       setError(err.message || 'Failed to create PPPoE client.');
     } finally {
@@ -96,6 +159,17 @@ export function PppoeClients() {
     }
   };
 
+  const deactivateClient = async (client: PppoeClient) => {
+    if (!confirm(`Deactivate and disconnect "${client.username}"?`)) return;
+    setError('');
+    try {
+      await deactivatePppoeClient(client.id);
+      await load(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to deactivate PPPoE client.');
+    }
+  };
+
   const removeClient = async (client: PppoeClient) => {
     if (!confirm(`Delete PPPoE client "${client.username}"?`)) return;
     setError('');
@@ -107,7 +181,7 @@ export function PppoeClients() {
     }
   };
 
-  if (loading && clients.length === 0) {
+  if (loading && clients.length === 0 && sessions.length === 0) {
     return <div className="min-h-screen grid place-items-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
 
@@ -119,7 +193,7 @@ export function PppoeClients() {
             <Network className="w-7 h-7 text-primary" />
             PPPoE
           </h1>
-          <p className="text-muted-foreground mt-1">Manage PPPoE clients for {selectedSite?.name || 'the active site'}.</p>
+          <p className="text-muted-foreground mt-1">Manage PPPoE sessions, users, profiles and pools for {selectedSite?.name || 'the active site'}.</p>
         </div>
         <button onClick={() => load(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border hover:bg-muted">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -151,7 +225,10 @@ export function PppoeClients() {
           </label>
           <label className="space-y-1">
             <span className="text-sm text-muted-foreground">Profile</span>
-            <input value={form.profile} onChange={(e) => setForm({ ...form, profile: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
+            <select value={form.profile} onChange={(e) => setForm({ ...form, profile: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg">
+              <option value="default">default</option>
+              {profiles.map((profile) => <option key={profile.id || profile.name} value={profile.name}>{profile.name}</option>)}
+            </select>
           </label>
           <label className="space-y-1">
             <span className="text-sm text-muted-foreground">Service</span>
@@ -162,10 +239,14 @@ export function PppoeClients() {
             <input value={form.remote_address} onChange={(e) => setForm({ ...form, remote_address: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
           </label>
           <label className="space-y-1">
+            <span className="text-sm text-muted-foreground">Expiry date</span>
+            <input type="datetime-local" value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
+          </label>
+          <label className="space-y-1">
             <span className="text-sm text-muted-foreground">Phone</span>
             <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
           </label>
-          <label className="space-y-1">
+          <label className="space-y-1 xl:col-span-2">
             <span className="text-sm text-muted-foreground">Notes</span>
             <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="w-full px-3 py-2 bg-background border border-input rounded-lg" />
           </label>
@@ -184,58 +265,116 @@ export function PppoeClients() {
       </form>
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        <div className="p-5 border-b border-border">
-          <h2 className="font-semibold text-card-foreground">PPPoE Clients</h2>
-          <p className="text-sm text-muted-foreground mt-1">Stored router snapshot. Use Refresh to pull latest RouterOS PPP secrets.</p>
+        <div className="flex flex-wrap gap-2 p-4 border-b border-border">
+          {[
+            ['active', `Active Sessions (${sessions.length})`],
+            ['clients', `Users (${clients.length})`],
+            ['profiles', `Profiles (${profiles.length})`],
+            ['pools', `Pools (${pools.length})`],
+          ].map(([key, label]) => (
+            <button key={key} onClick={() => setTab(key as TabKey)} className={`px-3 py-2 rounded-lg text-sm ${tab === key ? 'bg-primary text-primary-foreground' : 'border border-border hover:bg-muted'}`}>
+              {label}
+            </button>
+          ))}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-muted-foreground border-b border-border">
-              <tr>
-                <th className="px-5 py-3 font-medium">Client</th>
-                <th className="px-5 py-3 font-medium">Profile</th>
-                <th className="px-5 py-3 font-medium">Remote Address</th>
-                <th className="px-5 py-3 font-medium">Last Seen</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
+
+        {tab === 'active' && (
+          <DataTable empty="No active PPPoE sessions right now." columns={['User', 'Address', 'Caller ID', 'Service', 'Uptime']}>
+            {sessions.map((session) => (
+              <tr key={session.id || session.username} className="border-b border-border/70 last:border-0">
+                <td className="px-5 py-3 font-medium text-card-foreground">{session.username || session.name || '-'}</td>
+                <td className="px-5 py-3 font-mono">{session.address || '-'}</td>
+                <td className="px-5 py-3 font-mono">{session.caller_id || '-'}</td>
+                <td className="px-5 py-3">{session.service || '-'}</td>
+                <td className="px-5 py-3">{session.uptime || '-'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {clients.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">No PPPoE clients for this site yet.</td></tr>
-              ) : clients.map((client) => (
-                <tr key={client.id} className="border-b border-border/70 last:border-0">
-                  <td className="px-5 py-3">
-                    <p className="font-medium text-card-foreground">{client.name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{client.username}</p>
-                    {client.phone && <p className="text-xs text-muted-foreground">{client.phone}</p>}
-                  </td>
-                  <td className="px-5 py-3">{client.profile || 'default'}</td>
-                  <td className="px-5 py-3 font-mono">{client.remote_address || '-'}</td>
-                  <td className="px-5 py-3 whitespace-nowrap">{client.last_seen_at ? new Date(client.last_seen_at).toLocaleString() : 'Never'}</td>
-                  <td className="px-5 py-3">
-                    {Boolean(client.is_active) ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="w-3 h-3" /> Active</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-muted-foreground"><XCircle className="w-3 h-3" /> Disabled</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => toggleClient(client)} className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted">
-                        {Boolean(client.is_active) ? 'Disable' : 'Activate'}
-                      </button>
-                      <button onClick={() => removeClient(client)} className="p-2 rounded-lg text-destructive hover:bg-destructive/10" title="Delete client">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </DataTable>
+        )}
+
+        {tab === 'clients' && (
+          <DataTable empty="No PPPoE users for this site yet." columns={['Client', 'Profile', 'Remote Address', 'Expiry', 'Status', 'Actions']}>
+            {clients.map((client) => (
+              <tr key={client.id} className="border-b border-border/70 last:border-0">
+                <td className="px-5 py-3">
+                  <p className="font-medium text-card-foreground">{client.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{client.username}</p>
+                  {client.phone && <p className="text-xs text-muted-foreground">{client.phone}</p>}
+                </td>
+                <td className="px-5 py-3">{client.profile || 'default'}</td>
+                <td className="px-5 py-3 font-mono">{client.remote_address || '-'}</td>
+                <td className="px-5 py-3 whitespace-nowrap">{client.expires_at ? new Date(client.expires_at).toLocaleString() : '-'}</td>
+                <td className="px-5 py-3">
+                  {Boolean(client.is_active) ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-600"><CheckCircle2 className="w-3 h-3" /> Active</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-muted-foreground"><XCircle className="w-3 h-3" /> Disabled</span>
+                  )}
+                </td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center justify-end gap-2">
+                    <button onClick={() => toggleClient(client)} className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted">
+                      {Boolean(client.is_active) ? 'Disable' : 'Activate'}
+                    </button>
+                    <button onClick={() => deactivateClient(client)} className="p-2 rounded-lg text-amber-600 hover:bg-amber-500/10" title="Deactivate and disconnect">
+                      <ZapOff className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => removeClient(client)} className="p-2 rounded-lg text-destructive hover:bg-destructive/10" title="Delete client">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        )}
+
+        {tab === 'profiles' && (
+          <DataTable empty="No PPPoE profiles returned by the router." columns={['Profile', 'Local Address', 'Remote Address / Pool', 'Rate Limit', 'Only One']}>
+            {profiles.map((profile) => (
+              <tr key={profile.id || profile.name} className="border-b border-border/70 last:border-0">
+                <td className="px-5 py-3 font-medium text-card-foreground">{profile.name}</td>
+                <td className="px-5 py-3 font-mono">{profile.local_address || '-'}</td>
+                <td className="px-5 py-3 font-mono">{profile.remote_address || '-'}</td>
+                <td className="px-5 py-3">{profile.rate_limit || '-'}</td>
+                <td className="px-5 py-3">{profile.only_one || '-'}</td>
+              </tr>
+            ))}
+          </DataTable>
+        )}
+
+        {tab === 'pools' && (
+          <DataTable empty="No IP pools returned by the router." columns={['Pool', 'Ranges', 'Next Pool', 'Comment']}>
+            {pools.map((pool) => (
+              <tr key={pool.id || pool.name} className="border-b border-border/70 last:border-0">
+                <td className="px-5 py-3 font-medium text-card-foreground">{pool.name}</td>
+                <td className="px-5 py-3 font-mono">{pool.ranges || '-'}</td>
+                <td className="px-5 py-3">{pool.next_pool || '-'}</td>
+                <td className="px-5 py-3">{pool.comment || '-'}</td>
+              </tr>
+            ))}
+          </DataTable>
+        )}
       </div>
+    </div>
+  );
+}
+
+function DataTable({ columns, empty, children }: { columns: string[]; empty: string; children: ReactNode }) {
+  const hasRows = Array.isArray(children) ? children.length > 0 : Boolean(children);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-left text-muted-foreground border-b border-border">
+          <tr>
+            {columns.map((column) => <th key={column} className="px-5 py-3 font-medium">{column}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {hasRows ? children : <tr><td colSpan={columns.length} className="px-5 py-8 text-center text-muted-foreground">{empty}</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }

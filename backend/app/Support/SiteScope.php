@@ -28,7 +28,7 @@ class SiteScope
         }
 
         $user = $request->user();
-        if ($user?->role === 'sub_user' && !in_array((int) $siteId, $user->allowed_site_ids ?: [], true)) {
+        if (in_array($user?->role, ['sub_user', 'installer'], true) && !in_array((int) $siteId, $user->allowed_site_ids ?: [], true)) {
             return null;
         }
 
@@ -49,7 +49,7 @@ class SiteScope
 
         $query = Site::where('tenant_id', $tenantId);
         $user = $request->user();
-        if ($user?->role === 'sub_user') {
+        if (in_array($user?->role, ['sub_user', 'installer'], true)) {
             $query->whereIn('id', $user->allowed_site_ids ?: []);
         }
 
@@ -62,7 +62,7 @@ class SiteScope
             return $site;
         }
 
-        if ($user?->role === 'sub_user') {
+        if (in_array($user?->role, ['sub_user', 'installer'], true)) {
             return null;
         }
 

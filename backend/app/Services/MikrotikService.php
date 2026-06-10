@@ -351,6 +351,58 @@ class MikrotikService
         }
     }
 
+    public function getPppoeActiveSessions(MikrotikRouter $router): array
+    {
+        if (!$this->connect($router)) {
+            return [];
+        }
+
+        try {
+            $sessions = $this->api->getPppoeActiveSessions();
+            if ($error = $this->api->getLastError()) {
+                $this->lastError = $error;
+                $this->disconnect();
+                return [];
+            }
+            $this->disconnect();
+            return $sessions;
+        } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+            Log::error("Failed to get active PPPoE sessions from MikroTik", [
+                'router' => $router->ip_address,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return [];
+        }
+    }
+
+    public function getPppoeProfiles(MikrotikRouter $router): array
+    {
+        if (!$this->connect($router)) {
+            return [];
+        }
+
+        try {
+            $profiles = $this->api->getPppoeProfiles();
+            if ($error = $this->api->getLastError()) {
+                $this->lastError = $error;
+                $this->disconnect();
+                return [];
+            }
+            $this->disconnect();
+            return $profiles;
+        } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+            Log::error("Failed to get PPPoE profiles from MikroTik", [
+                'router' => $router->ip_address,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return [];
+        }
+    }
+
     public function addPppoeSecret(MikrotikRouter $router, array $client): bool
     {
         if (!$this->connect($router)) {
@@ -389,6 +441,28 @@ class MikrotikService
                 'router' => $router->ip_address,
                 'id' => $id,
                 'disabled' => $disabled,
+                'error' => $e->getMessage(),
+            ]);
+            $this->disconnect();
+            return false;
+        }
+    }
+
+    public function removeActivePppoeSessions(MikrotikRouter $router, string $username): bool
+    {
+        if (!$this->connect($router)) {
+            return false;
+        }
+
+        try {
+            $result = $this->api->removeActivePppoeSessions($username);
+            $this->disconnect();
+            return $result;
+        } catch (\Exception $e) {
+            $this->lastError = $e->getMessage();
+            Log::error("Failed to remove active PPPoE sessions", [
+                'router' => $router->ip_address,
+                'username' => $username,
                 'error' => $e->getMessage(),
             ]);
             $this->disconnect();

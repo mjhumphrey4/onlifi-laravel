@@ -56,7 +56,7 @@ const menuItems: MenuItem[] = [
   { path: '/dashboard',      label: 'Dashboard',          icon: LayoutDashboard, adminOnly: false },
   { path: '/clients',        label: 'Clients',            icon: Users, adminOnly: false, permission: 'view_clients' },
   { path: '/devices',        label: 'Monitor Router',     icon: Server, adminOnly: false, permission: 'view_routers' },
-  { path: '/routers',        label: 'Routers',            icon: Router, adminOnly: false, permission: 'view_routers' },
+  { path: '/routers',        label: 'Accesspoints',       icon: Router, adminOnly: false, permission: 'view_routers' },
   { 
     path: '/vouchers',       
     label: 'Manage Vouchers',           

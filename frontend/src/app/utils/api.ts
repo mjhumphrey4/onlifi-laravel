@@ -293,10 +293,14 @@ export const getOmadaVouchers = () => get('/omada/vouchers');
 
 // ============ PPPOE CLIENTS (Tenant) ============
 export const getPppoeClients = (refresh = false) => get(`/pppoe/clients${refresh ? '?refresh=1' : ''}`);
+export const getPppoeActiveSessions = () => get('/pppoe/active');
+export const getPppoeProfiles = () => get('/pppoe/profiles');
+export const getPppoePools = () => get('/pppoe/pools');
 export const createPppoeClient = (data: Record<string, unknown>) => post('/pppoe/clients', data);
 export const updatePppoeClient = (id: number, data: Record<string, unknown>) => put(`/pppoe/clients/${id}`, data);
 export const enablePppoeClient = (id: number) => post(`/pppoe/clients/${id}/enable`);
 export const disablePppoeClient = (id: number) => post(`/pppoe/clients/${id}/disable`);
+export const deactivatePppoeClient = (id: number) => post(`/pppoe/clients/${id}/deactivate`);
 export const deletePppoeClient = (id: number) => del(`/pppoe/clients/${id}`);
 
 // ============ TRANSACTIONS (Tenant) ============
