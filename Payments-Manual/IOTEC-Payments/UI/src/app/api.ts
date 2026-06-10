@@ -1,4 +1,4 @@
-export const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8011/api";
+export const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 const TOKEN_KEY = "iotec_payments_admin_token";
 
