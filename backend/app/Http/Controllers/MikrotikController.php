@@ -11,6 +11,7 @@ use App\Models\SystemSetting;
 use App\Services\MikrotikService;
 use App\Services\RouterSnapshotService;
 use App\Support\SiteScope;
+use App\Support\TenantRouterSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
@@ -29,6 +30,8 @@ class MikrotikController extends Controller
     public function index(Request $request)
     {
         $site = SiteScope::selectedSite($request);
+        TenantRouterSchema::ensureForSite($site);
+
         $query = MikrotikRouter::with('latestTelemetry');
 
         if ($site) {
@@ -106,6 +109,8 @@ class MikrotikController extends Controller
 
         $data = $request->all();
         $site = SiteScope::selectedSite($request);
+        TenantRouterSchema::ensureForSite($site);
+
         if ($site && Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
             $data['site_id'] = $site->id;
         }

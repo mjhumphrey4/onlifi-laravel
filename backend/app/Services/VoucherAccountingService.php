@@ -106,6 +106,26 @@ class VoucherAccountingService
         ];
 
         if ($voucher->expires_at && now()->greaterThanOrEqualTo($voucher->expires_at)) {
+            $correctedExpiresAt = $voucher->first_used_at
+                ? $voucher->first_used_at->copy()->addSeconds($this->radiusService->validitySeconds($voucher))
+                : null;
+
+            if ($correctedExpiresAt && $correctedExpiresAt->greaterThan($voucher->expires_at) && $correctedExpiresAt->isFuture()) {
+                $voucher->fill($this->filterVoucherColumns([
+                    'status' => 'in_use',
+                    'expires_at' => $correctedExpiresAt,
+                    'expired_reason' => null,
+                    'last_accounting_at' => now(),
+                ]));
+                $voucher->save();
+                if ($freshVoucher = $voucher->fresh()) {
+                    $this->radiusService->syncVoucher($freshVoucher);
+                }
+                $summary['reconciled']++;
+
+                return $summary;
+            }
+
             $voucher->fill($this->filterVoucherColumns([
                 'status' => 'used',
                 'last_accounting_at' => now(),

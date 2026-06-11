@@ -911,7 +911,11 @@ RSC;
   }
 }
 
-/system scheduler add name="onlifi-telemetry-scheduler" start-time=startup interval=30s on-event="/system script run onlifi-telemetry"
+:if ([:len [/system scheduler find name="onlifi-telemetry-scheduler"]] = 0) do={
+  /system scheduler add name="onlifi-telemetry-scheduler" start-time=startup interval=30s on-event="/system script run onlifi-telemetry"
+} else={
+  /system scheduler set [find name="onlifi-telemetry-scheduler"] start-time=startup interval=30s on-event="/system script run onlifi-telemetry" disabled=no
+}
 :do { /system script run onlifi-telemetry } on-error={ :log warning "OnLiFi telemetry first run failed" }
 :log info "OnLiFi telemetry installed"
 RSC;

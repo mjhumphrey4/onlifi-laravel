@@ -359,9 +359,7 @@ function insertRow(PDO $pdo, string $table, array $data): void {
 }
 
 function syncRadius(PDO $pdo, string $code, array $package): void {
-    $sessionTimeout = !empty($package['validity_minutes'])
-        ? max(60, (int) $package['validity_minutes'] * 60)
-        : max(60, (int) $package['validity_hours'] * 3600);
+    $sessionTimeout = packageSessionTimeoutSeconds($package);
 
     $stmt = $pdo->prepare("DELETE FROM radcheck WHERE username = ?");
     $stmt->execute([$code]);
@@ -393,6 +391,24 @@ function syncRadius(PDO $pdo, string $code, array $package): void {
     foreach ($replies as $reply) {
         $stmt->execute([$code, $reply[0], $reply[1], $reply[2]]);
     }
+}
+
+function packageSessionTimeoutSeconds(array $package): int {
+    $hours = max(0, (int) ($package['validity_hours'] ?? 0));
+    $minutes = max(0, (int) ($package['validity_minutes'] ?? 0));
+
+    if ($minutes > 0) {
+        $secondsFromMinutes = $minutes * 60;
+        $secondsFromHours = $hours * 3600;
+
+        if ($secondsFromHours > 0 && $secondsFromMinutes < $secondsFromHours) {
+            return max(60, $secondsFromHours);
+        }
+
+        return max(60, $secondsFromMinutes);
+    }
+
+    return max(60, $hours * 3600);
 }
 
 function generateSixDigitCode(PDO $pdo): string {

@@ -288,11 +288,21 @@ class FreeRadiusService
 
     private function validitySeconds(int $validityHours, ?int $validityMinutes = null): int
     {
-        if ($validityMinutes) {
-            return max(60, $validityMinutes * 60);
+        $hours = max(0, $validityHours);
+        $minutes = max(0, (int) ($validityMinutes ?? 0));
+
+        if ($minutes > 0) {
+            $secondsFromMinutes = $minutes * 60;
+            $secondsFromHours = $hours * 3600;
+
+            if ($secondsFromHours > 0 && $secondsFromMinutes < $secondsFromHours) {
+                return max(60, $secondsFromHours);
+            }
+
+            return max(60, $secondsFromMinutes);
         }
 
-        return max(60, $validityHours * 3600);
+        return max(60, $hours * 3600);
     }
 
     private function remainingSessionSeconds($voucher): int

@@ -6,6 +6,7 @@ use App\Models\InstallerDeviceSubmission;
 use App\Models\Site;
 use App\Models\SystemSetting;
 use App\Models\TenantUser;
+use App\Support\TenantRouterSchema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -115,6 +116,8 @@ class InstallerController extends Controller
             return response()->json(['message' => 'The tenant device table is not ready yet.'], 503);
         }
 
+        TenantRouterSchema::ensureForSite($site);
+
         $routerQuery = DB::connection('tenant')->table('mikrotik_routers')->where('ip_address', $request->ip_address);
         $routerConflict = (clone $routerQuery)->first();
         if ($routerConflict) {
@@ -162,6 +165,8 @@ class InstallerController extends Controller
 
     private function createTenantDevice(Site $site, TenantUser $installer, InstallerDeviceSubmission $submission): int
     {
+        TenantRouterSchema::ensureForSite($site);
+
         $columns = Schema::connection('tenant')->getColumnListing('mikrotik_routers');
         $data = [
             'name' => $submission->device_name,

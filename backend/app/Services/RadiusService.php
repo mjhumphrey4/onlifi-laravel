@@ -262,11 +262,21 @@ class RadiusService
 
     public function validitySeconds(Voucher $voucher): int
     {
-        if (!empty($voucher->validity_minutes)) {
-            return max(60, (int) $voucher->validity_minutes * 60);
+        $hours = max(0, (int) $voucher->validity_hours);
+        $minutes = max(0, (int) ($voucher->validity_minutes ?? 0));
+
+        if ($minutes > 0) {
+            $secondsFromMinutes = $minutes * 60;
+            $secondsFromHours = $hours * 3600;
+
+            if ($secondsFromHours > 0 && $secondsFromMinutes < $secondsFromHours) {
+                return max(60, $secondsFromHours);
+            }
+
+            return max(60, $secondsFromMinutes);
         }
 
-        return max(60, (int) $voucher->validity_hours * 3600);
+        return max(60, $hours * 3600);
     }
 
     private function mikrotikTotalLimitAttributes(int $bytes): array
