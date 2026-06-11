@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, ImageOff, Loader2, Map, MapPin, RefreshCw, Router, X } from 'lucide-react';
+import { ExternalLink, ImageOff, Loader2, Map, MapPin, Minus, Plus, RefreshCw, Router, X } from 'lucide-react';
 import { getRouters } from '../utils/api';
 import { useSite } from '../context/SiteContext';
 
@@ -17,6 +17,17 @@ interface Accesspoint {
   status?: string | null;
   last_seen?: string | null;
   managed_by_site?: boolean;
+  installer_submission_id?: number | string | null;
+}
+
+interface PreviewImage {
+  label: string;
+  url: string;
+}
+
+interface ImagePreview {
+  title: string;
+  images: PreviewImage[];
 }
 
 export function Routers() {
@@ -25,14 +36,26 @@ export function Routers() {
   const [tab, setTab] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [preview, setPreview] = useState<{ url: string; title: string } | null>(null);
+  const [preview, setPreview] = useState<ImagePreview | null>(null);
+
+  const previewImagesFor = (accesspoint: Accesspoint): PreviewImage[] => [
+    accesspoint.front_photo_url ? { label: 'Front photo', url: accesspoint.front_photo_url } : null,
+    accesspoint.back_photo_url ? { label: 'Back photo', url: accesspoint.back_photo_url } : null,
+  ].filter(Boolean) as PreviewImage[];
+
+  const openImagePreview = (accesspoint: Accesspoint) => {
+    const images = previewImagesFor(accesspoint);
+    if (images.length === 0) return;
+
+    setPreview({ title: accesspoint.name, images });
+  };
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
       const data = await getRouters();
-      setAccesspoints(Array.isArray(data) ? data.filter((item: Accesspoint) => !item.managed_by_site && item.id !== null) : []);
+      setAccesspoints(Array.isArray(data) ? data.filter((item: Accesspoint) => !item.managed_by_site && item.id !== null && Boolean(item.installer_submission_id)) : []);
     } catch (err: any) {
       setError(err.message || 'Failed to load accesspoints.');
     } finally {
@@ -68,6 +91,18 @@ export function Routers() {
       </div>
 
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+
+      <div className="rounded-lg border border-border bg-card p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-card-foreground">Installer Device IP Range</p>
+            <p className="text-xs text-muted-foreground">Use unique addresses from this admin-assigned range when adding accesspoints.</p>
+          </div>
+          <code className="w-fit rounded-md border border-border bg-muted px-3 py-2 text-sm font-semibold text-card-foreground">
+            {selectedSite?.assigned_device_ip_range || 'Not assigned'}
+          </code>
+        </div>
+      </div>
 
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="flex flex-wrap gap-2 p-4 border-b border-border">
@@ -109,9 +144,9 @@ export function Routers() {
                       {imageUrl ? (
                         <button
                           type="button"
-                          onClick={() => setPreview({ url: imageUrl, title: accesspoint.name })}
+                          onClick={() => openImagePreview(accesspoint)}
                           className="group h-14 w-20 rounded-md overflow-hidden border border-border bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
-                          title="Preview router image"
+                          title="Preview accesspoint photos"
                         >
                           <img src={imageUrl} alt={accesspoint.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
                         </button>
@@ -142,13 +177,13 @@ export function Routers() {
               })}
             </tbody>
           </table>
-        </div> : <AccesspointMap accesspoints={accesspoints} onPreview={(url, title) => setPreview({ url, title })} />}
+        </div> : <AccesspointMap accesspoints={accesspoints} onPreview={openImagePreview} />}
       </div>
 
       {preview && (
         <ImagePreviewDialog
-          url={preview.url}
           title={preview.title}
+          images={preview.images}
           onClose={() => setPreview(null)}
         />
       )}
@@ -178,9 +213,10 @@ function CoordinateLink({ accesspoint }: { accesspoint: Accesspoint }) {
   );
 }
 
-function AccesspointMap({ accesspoints, onPreview }: { accesspoints: Accesspoint[]; onPreview: (url: string, title: string) => void }) {
+function AccesspointMap({ accesspoints, onPreview }: { accesspoints: Accesspoint[]; onPreview: (accesspoint: Accesspoint) => void }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = useState(900);
+  const [zoomOffset, setZoomOffset] = useState(0);
   const mapped = accesspoints
     .map((accesspoint) => ({
       ...accesspoint,
@@ -226,7 +262,8 @@ function AccesspointMap({ accesspoints, onPreview }: { accesspoints: Accesspoint
     : `https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=${mapped[0].lat},${mapped[0].lng}&destination=${mapped[mapped.length - 1].lat},${mapped[mapped.length - 1].lng}&waypoints=${mapped.slice(1, -1).map((point) => `${point.lat},${point.lng}`).join('|')}`;
   const centerLat = (minLat + maxLat) / 2;
   const centerLng = (minLng + maxLng) / 2;
-  const zoom = mapZoomForBounds(minLat, maxLat, minLng, maxLng);
+  const baseZoom = Math.min(18, mapZoomForBounds(minLat, maxLat, minLng, maxLng) + 1);
+  const zoom = Math.max(3, Math.min(19, baseZoom + zoomOffset));
   const center = latLngToWorldPixel(centerLat, centerLng, zoom);
   const width = viewportWidth;
   const height = 520;
@@ -279,6 +316,35 @@ function AccesspointMap({ accesspoints, onPreview }: { accesspoints: Accesspoint
         <div className="absolute left-4 top-4 rounded-md bg-card/95 border border-border px-3 py-2 text-xs text-muted-foreground shadow-sm">
           {mapped.length} installed {mapped.length === 1 ? 'accesspoint' : 'accesspoints'}
         </div>
+        <div className="absolute right-4 top-4 overflow-hidden rounded-md border border-border bg-card/95 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setZoomOffset((value) => Math.min(19 - baseZoom, value + 1))}
+            className="grid h-9 w-9 place-items-center border-b border-border hover:bg-muted"
+            aria-label="Zoom in"
+            title="Zoom in"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoomOffset((value) => Math.max(3 - baseZoom, value - 1))}
+            className="grid h-9 w-9 place-items-center border-b border-border hover:bg-muted"
+            aria-label="Zoom out"
+            title="Zoom out"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoomOffset(0)}
+            className="grid h-9 w-9 place-items-center text-[10px] font-semibold text-muted-foreground hover:bg-muted"
+            aria-label="Reset zoom"
+            title="Reset zoom"
+          >
+            1x
+          </button>
+        </div>
 
         {mapped.map((accesspoint) => {
           const point = latLngToWorldPixel(accesspoint.lat, accesspoint.lng, zoom);
@@ -296,9 +362,9 @@ function AccesspointMap({ accesspoints, onPreview }: { accesspoints: Accesspoint
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => imageUrl ? onPreview(imageUrl, accesspoint.name) : undefined}
+                  onClick={() => imageUrl ? onPreview(accesspoint) : undefined}
                   className="h-12 w-12 rounded-full border-2 border-white bg-card shadow-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary"
-                  title={imageUrl ? 'Preview router image' : 'Router location'}
+                  title={imageUrl ? 'Preview accesspoint photos' : 'Accesspoint location'}
                 >
                   {imageUrl ? (
                     <img src={imageUrl} alt={accesspoint.name} className="h-full w-full object-cover" />
@@ -322,31 +388,41 @@ function AccesspointMap({ accesspoints, onPreview }: { accesspoints: Accesspoint
           );
         })}
         <div className="absolute bottom-3 right-3 rounded bg-card/95 px-2 py-1 text-[11px] text-muted-foreground shadow-sm">
-          Map tiles © OpenStreetMap contributors
+          Map tiles (c) OpenStreetMap contributors
         </div>
       </div>
     </div>
   );
 }
 
-function ImagePreviewDialog({ url, title, onClose }: { url: string; title: string; onClose: () => void }) {
+function ImagePreviewDialog({ title, images, onClose }: { title: string; images: PreviewImage[]; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-4xl overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
+      <div className="w-full max-w-6xl overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div>
             <p className="font-medium text-card-foreground">{title}</p>
-            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-              Open image
-              <ExternalLink className="w-3 h-3" />
-            </a>
+            <p className="text-xs text-muted-foreground">{images.length} uploaded {images.length === 1 ? 'photo' : 'photos'}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-md border border-border p-2 hover:bg-muted" aria-label="Close image preview">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[75vh] bg-black">
-          <img src={url} alt={title} className="mx-auto max-h-[75vh] w-auto max-w-full object-contain" />
+        <div className="max-h-[78vh] overflow-auto bg-black p-4">
+          <div className={`grid gap-4 ${images.length > 1 ? 'lg:grid-cols-2' : 'grid-cols-1'}`}>
+            {images.map((image) => (
+              <div key={image.url} className="overflow-hidden rounded-lg border border-white/15 bg-zinc-950">
+                <div className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
+                  <p className="text-sm font-medium text-white">{image.label}</p>
+                  <a href={image.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-white/80 hover:text-white">
+                    Open
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <img src={image.url} alt={`${title} ${image.label}`} className="mx-auto max-h-[64vh] w-auto max-w-full object-contain" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

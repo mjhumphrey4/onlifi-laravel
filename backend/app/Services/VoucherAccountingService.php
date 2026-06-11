@@ -257,6 +257,10 @@ class VoucherAccountingService
 
         $query = MikrotikRouter::where('is_active', true);
 
+        if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'installer_submission_id')) {
+            $query->whereNull('installer_submission_id');
+        }
+
         if ($site && Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
             $query->where('site_id', $site->id);
         }

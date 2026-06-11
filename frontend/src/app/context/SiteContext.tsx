@@ -13,6 +13,9 @@ export interface Site {
   omada_site_id?: string | null;
   omada_controller_id?: string | null;
   omada_link_status?: 'not_required' | 'pending_admin' | 'linked' | string;
+  vpn_private_ip?: string | null;
+  router_api_port?: number | null;
+  assigned_device_ip_range?: string | null;
   is_active?: boolean;
   api_token?: string;
 }

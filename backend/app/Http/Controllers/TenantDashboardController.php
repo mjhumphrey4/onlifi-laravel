@@ -38,6 +38,9 @@ class TenantDashboardController extends Controller
         }
 
         $routerQuery = MikrotikRouter::where('is_active', true);
+        if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'installer_submission_id')) {
+            $routerQuery->whereNull('installer_submission_id');
+        }
         if ($site && Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
             $routerQuery->where('site_id', $site->id);
         }
@@ -201,9 +204,13 @@ class TenantDashboardController extends Controller
 
         // Get the router - either specified by ID or the first active one
         $routerId = $request->input('router_id');
+        $routerQuery = MikrotikRouter::where('is_active', true);
+        if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'installer_submission_id')) {
+            $routerQuery->whereNull('installer_submission_id');
+        }
         $router = $routerId
-            ? MikrotikRouter::where('id', $routerId)->where('is_active', true)->first()
-            : MikrotikRouter::where('is_active', true)->first();
+            ? (clone $routerQuery)->where('id', $routerId)->first()
+            : $routerQuery->first();
 
         if (!$router) {
             return response()->json([
