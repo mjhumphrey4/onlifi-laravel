@@ -96,7 +96,6 @@ class VoucherController extends Controller
         SiteScope::applyToTenantTable($query, 'vouchers', $site);
 
         $status = $request->query('status');
-        $hasExpiredReason = Schema::connection('tenant')->hasColumn('vouchers', 'expired_reason');
         $hasExpiresAt = Schema::connection('tenant')->hasColumn('vouchers', 'expires_at');
         $hasLastUsedAt = Schema::connection('tenant')->hasColumn('vouchers', 'last_used_at');
         $hasUsedByMac = Schema::connection('tenant')->hasColumn('vouchers', 'used_by_mac');
@@ -105,17 +104,25 @@ class VoucherController extends Controller
         if ($status === 'consumed') {
             $query->whereIn('status', ['in_use', 'used', 'expired']);
         } elseif ($status === 'expired') {
-            $query->where(function ($expiredQuery) use ($hasExpiredReason, $hasExpiresAt) {
+            $query->where(function ($expiredQuery) use ($hasExpiresAt) {
                 $expiredQuery->whereIn('status', ['used', 'expired']);
 
-                if ($hasExpiredReason) {
-                    $expiredQuery->orWhereNotNull('expired_reason');
-                }
-
                 if ($hasExpiresAt) {
-                    $expiredQuery->orWhere('expires_at', '<=', now());
+                    $expiredQuery->orWhere(function ($timeQuery) {
+                        $timeQuery->where('expires_at', '<=', now())
+                            ->whereNotIn('status', ['unused', 'reserved', 'in_use']);
+                    });
                 }
             });
+
+            if (Schema::connection('tenant')->hasTable('radacct')) {
+                $query->whereNotExists(function ($activeSessionQuery) {
+                    $activeSessionQuery->select(DB::raw(1))
+                        ->from('radacct')
+                        ->whereColumn('radacct.username', 'vouchers.voucher_code')
+                        ->whereNull('radacct.acctstoptime');
+                });
+            }
         } elseif ($request->filled('status')) {
             $query->where('status', $status);
         }

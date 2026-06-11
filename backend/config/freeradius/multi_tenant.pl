@@ -135,6 +135,17 @@ sub site_uses_dedicated_db {
     return ($tenant->{site_database_name} // '') ne ($tenant->{tenant_database_name} // '');
 }
 
+sub set_tenant_time_zone {
+    my ($dbh, $context) = @_;
+
+    return unless $dbh;
+
+    my $ok = eval { $dbh->do(q{SET time_zone = '+03:00'}); };
+    if (!$ok) {
+        &radiusd::radlog(1, "PERL WARNING: Could not set DB time_zone to +03:00 for $context: " . ($dbh->errstr // $@ // 'unknown error'));
+    }
+}
+
 sub start_voucher_timer {
     my ($dbh, $username) = @_;
 
@@ -285,6 +296,7 @@ sub authorize {
         &radiusd::radlog(1, "PERL ERROR: Cannot connect to tenant database: $tenant->{database_name} - $err");
         return RLM_MODULE_FAIL;
     }
+    set_tenant_time_zone($dbh, 'authorize');
     
     &radiusd::radlog(1, "PERL: Connected to tenant database successfully");
 
@@ -457,6 +469,7 @@ sub accounting {
         &radiusd::radlog(1, "PERL ACCOUNTING ERROR: Cannot connect to tenant DB");
         return RLM_MODULE_FAIL;
     }
+    set_tenant_time_zone($dbh, 'accounting');
     
     if ($acct_status eq 'Start') {
         my $sth = $dbh->prepare(q{
@@ -678,6 +691,7 @@ sub post_auth {
         $tenant->{database_password},
         { RaiseError => 0, PrintError => 0 }
     );
+    set_tenant_time_zone($dbh, 'post_auth') if $dbh;
     
     return RLM_MODULE_NOOP unless $dbh;
     
