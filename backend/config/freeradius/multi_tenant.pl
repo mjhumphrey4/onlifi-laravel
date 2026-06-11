@@ -31,10 +31,10 @@ use Digest::MD5 qw(md5_hex);
 our (%RAD_REQUEST, %RAD_REPLY, %RAD_CHECK, %RAD_CONFIG);
 
 # Database configuration - UPDATE THESE VALUES
-my $central_db_host = $ENV{'RADIUS_DB_HOST'} // "localhost";
-my $central_db_name = $ENV{'RADIUS_DB_NAME'} // "onlifi_central";
-my $central_db_user = $ENV{'RADIUS_DB_USER'} // "onlifi";
-my $central_db_pass = $ENV{'RADIUS_DB_PASS'} // "password";
+my $central_db_host = "localhost";
+my $central_db_name = "onlifi_central";
+my $central_db_user = "radius_user";
+my $central_db_pass = 'onlifi@rad26';
 
 # Cache for tenant/site database lookups (keyed by router_identifier)
 my %tenant_cache;
