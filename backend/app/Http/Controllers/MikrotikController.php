@@ -34,6 +34,18 @@ class MikrotikController extends Controller
         if ($site) {
             if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
                 $query->where('site_id', $site->id);
+            } elseif (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'installer_submission_id')) {
+                $submissionIds = InstallerDeviceSubmission::where('tenant_id', $site->tenant_id)
+                    ->where('site_id', $site->id)
+                    ->pluck('id');
+
+                $query->where(function ($query) use ($site, $submissionIds) {
+                    $query->where('name', $site->name);
+
+                    if ($submissionIds->isNotEmpty()) {
+                        $query->orWhereIn('installer_submission_id', $submissionIds);
+                    }
+                });
             } else {
                 $query->where('name', $site->name);
             }
