@@ -32,7 +32,13 @@ class MikrotikController extends Controller
         $site = SiteScope::selectedSite($request);
         TenantRouterSchema::ensureForSite($site);
 
-        $query = MikrotikRouter::with('latestTelemetry');
+        $query = MikrotikRouter::query();
+        $hasTelemetryTable = Schema::connection('tenant')->hasTable('router_telemetry')
+            && Schema::connection('tenant')->hasColumn('router_telemetry', 'router_id')
+            && Schema::connection('tenant')->hasColumn('router_telemetry', 'recorded_at');
+        if ($hasTelemetryTable) {
+            $query->with('latestTelemetry');
+        }
 
         if ($site) {
             if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
@@ -55,7 +61,7 @@ class MikrotikController extends Controller
 
             $routers = $query->orderBy('name')->orderBy('id')->get();
             if ($routers->isNotEmpty()) {
-                return response()->json($this->decorateRouters($routers));
+                return response()->json($this->decorateRouters($routers, $hasTelemetryTable));
             }
 
             return response()->json([[
@@ -76,7 +82,7 @@ class MikrotikController extends Controller
 
         $routers = $query->orderBy('name')->get();
 
-        return response()->json($this->decorateRouters($routers));
+        return response()->json($this->decorateRouters($routers, $hasTelemetryTable));
     }
 
     public function show($id)
@@ -789,25 +795,40 @@ class MikrotikController extends Controller
         return $this->snapshots->routerForSite($site);
     }
 
-    private function decorateRouters($routers)
+    private function decorateRouters($routers, bool $hasTelemetryTable = false)
     {
         $tenant = app()->bound('tenant') ? app('tenant') : null;
         $routerIds = $routers->pluck('id')->filter()->values();
         $submissions = collect();
 
-        if ($tenant && $routerIds->isNotEmpty()) {
-            $submissions = InstallerDeviceSubmission::where('tenant_id', $tenant->id)
-                ->whereIn('router_id', $routerIds)
-                ->get()
-                ->keyBy('router_id');
+        if (
+            $tenant
+            && $routerIds->isNotEmpty()
+            && Schema::connection('central')->hasTable('installer_device_submissions')
+            && Schema::connection('central')->hasColumn('installer_device_submissions', 'router_id')
+        ) {
+            try {
+                $submissions = InstallerDeviceSubmission::where('tenant_id', $tenant->id)
+                    ->whereIn('router_id', $routerIds)
+                    ->get()
+                    ->keyBy('router_id');
+            } catch (\Throwable $e) {
+                Log::warning('Could not load installer submissions for routers list', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
-        return $routers->map(function (MikrotikRouter $router) use ($submissions) {
+        return $routers->map(function (MikrotikRouter $router) use ($submissions, $hasTelemetryTable) {
             $data = $router->toArray();
+            if (!$hasTelemetryTable) {
+                $data['latest_telemetry'] = null;
+            }
+
             $submission = $submissions->get($router->id);
 
-            $data['front_photo_url'] = $submission?->front_photo_path ? asset('storage/' . $submission->front_photo_path) : null;
-            $data['back_photo_url'] = $submission?->back_photo_path ? asset('storage/' . $submission->back_photo_path) : null;
+            $data['front_photo_url'] = !empty($submission?->front_photo_path) ? asset('storage/' . $submission->front_photo_path) : null;
+            $data['back_photo_url'] = !empty($submission?->back_photo_path) ? asset('storage/' . $submission->back_photo_path) : null;
             $data['google_maps_url'] = ($router->latitude && $router->longitude)
                 ? 'https://www.google.com/maps?q=' . $router->latitude . ',' . $router->longitude
                 : null;
