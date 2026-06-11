@@ -221,15 +221,50 @@ Artisan::command('onlifi:radius:diagnose {--router= : NAS-Identifier/router iden
         ->where('username', $voucherCode)
         ->orderBy('attribute')
         ->get(['attribute', 'op', 'value']);
+    $oldestAccounting = Schema::connection('tenant')->hasTable('radacct')
+        ? DB::connection('tenant')
+            ->table('radacct')
+            ->where('username', $voucherCode)
+            ->orderBy('acctstarttime')
+            ->first(['acctstarttime', 'acctstoptime', 'acctsessiontime', 'acctterminatecause'])
+        : null;
+
+    $validityHours = $voucher ? (int) ($voucher->validity_hours ?? 0) : 0;
+    $validityMinutes = $voucher ? (int) ($voucher->validity_minutes ?? 0) : 0;
+    $effectiveMinutes = max($validityMinutes, $validityHours * 60, 1);
+    $expectedExpiresAt = null;
+
+    if ($voucher && !empty($voucher->first_used_at)) {
+        $expectedExpiresAt = \Illuminate\Support\Carbon::parse($voucher->first_used_at)
+            ->addMinutes($effectiveMinutes)
+            ->toDateTimeString();
+    }
 
     $this->table(['Check', 'Result'], [
         ['Voucher row', $voucher ? 'found' : 'missing'],
         ['Voucher status', $voucher->status ?? '-'],
         ['Voucher site_id', $voucher->site_id ?? 'NULL'],
         ['Expected site_id', $site?->id ?? 'NULL'],
+        ['Validity hours', $voucher->validity_hours ?? '-'],
+        ['Validity minutes', $voucher->validity_minutes ?? 'NULL'],
+        ['Effective minutes', $voucher ? (string) $effectiveMinutes : '-'],
+        ['First used at', $voucher->first_used_at ?? 'NULL'],
+        ['Current expires_at', $voucher->expires_at ?? 'NULL'],
+        ['Expected expires_at', $expectedExpiresAt ?? 'NULL'],
+        ['Expired reason', $voucher->expired_reason ?? 'NULL'],
+        ['Oldest radacct start', $oldestAccounting->acctstarttime ?? 'NULL'],
+        ['Oldest radacct stop', $oldestAccounting->acctstoptime ?? 'NULL'],
         ['radcheck password', $radcheck ? ($radcheck->value === $voucherCode ? 'found; equals voucher code' : 'found; different from voucher code') : 'missing'],
         ['radreply rows', (string) $radreply->count()],
     ]);
+
+    if ($voucher && $validityHours > 0 && $validityMinutes > 0 && $validityMinutes < ($validityHours * 60)) {
+        $this->warn("Voucher validity_minutes is shorter than validity_hours. It should be at least " . ($validityHours * 60) . " for {$validityHours}h.");
+    }
+
+    if ($voucher && $expectedExpiresAt && !empty($voucher->expires_at) && \Illuminate\Support\Carbon::parse($voucher->expires_at)->lt(\Illuminate\Support\Carbon::parse($expectedExpiresAt))) {
+        $this->warn("Voucher expires_at is earlier than the expected expiry. Run tenants migration and radius sync, then copy/restart FreeRADIUS Perl module.");
+    }
 
     if ($radreply->isNotEmpty()) {
         $this->table(['Attribute', 'Op', 'Value'], $radreply->map(fn ($row) => [

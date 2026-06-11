@@ -54,11 +54,28 @@ return new class extends Migration
 
             DB::connection('tenant')->statement("
                 UPDATE `$table`
-                SET expires_at = DATE_ADD(first_used_at, INTERVAL validity_minutes MINUTE)
+                SET expires_at = DATE_ADD(first_used_at, INTERVAL validity_minutes MINUTE),
+                    status = CASE
+                        WHEN status = 'used'
+                         AND expired_reason = 'time_limit'
+                         AND DATE_ADD(first_used_at, INTERVAL validity_minutes MINUTE) > NOW()
+                            THEN 'in_use'
+                        ELSE status
+                    END,
+                    expired_reason = CASE
+                        WHEN status = 'used'
+                         AND expired_reason = 'time_limit'
+                         AND DATE_ADD(first_used_at, INTERVAL validity_minutes MINUTE) > NOW()
+                            THEN NULL
+                        ELSE expired_reason
+                    END
                 WHERE first_used_at IS NOT NULL
                   AND validity_minutes IS NOT NULL
                   AND validity_minutes > 0
-                  AND status IN ('reserved', 'in_use')
+                  AND (
+                    status IN ('reserved', 'in_use')
+                    OR (status = 'used' AND expired_reason = 'time_limit' AND DATE_ADD(first_used_at, INTERVAL validity_minutes MINUTE) > NOW())
+                  )
                   AND (
                     expires_at IS NULL
                     OR expires_at < DATE_ADD(first_used_at, INTERVAL validity_minutes MINUTE)

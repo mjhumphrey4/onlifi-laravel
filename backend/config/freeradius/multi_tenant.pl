@@ -143,7 +143,12 @@ sub start_voucher_timer {
             status = CASE WHEN status IN ('unused', 'reserved') THEN 'in_use' ELSE status END,
             first_used_at = COALESCE(first_used_at, NOW()),
             last_used_at = NOW(),
-            expires_at = COALESCE(expires_at, DATE_ADD(NOW(), INTERVAL COALESCE(validity_minutes, validity_hours * 60) MINUTE)),
+            expires_at = CASE
+                WHEN expires_at IS NULL THEN DATE_ADD(NOW(), INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE)
+                WHEN first_used_at IS NOT NULL AND expires_at < DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE)
+                    THEN DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE)
+                ELSE expires_at
+            END,
             used_by_mac = COALESCE(NULLIF(used_by_mac, ''), ?),
             used_by_ip = COALESCE(NULLIF(used_by_ip, ''), ?),
             last_accounting_at = NOW()
@@ -167,6 +172,53 @@ sub start_voucher_timer {
     unless ($rows) {
         &radiusd::radlog(1, "PERL VOUCHER WARNING: Timer update affected no rows for $username: " . ($err // 'not found or expired'));
         return 0;
+    }
+
+    return 1;
+}
+
+sub repair_voucher_expiry {
+    my ($dbh, $username) = @_;
+
+    my $sth = $dbh->prepare(q{
+        UPDATE vouchers SET
+            expires_at = DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE),
+            status = CASE
+                WHEN status = 'used'
+                 AND expired_reason = 'time_limit'
+                 AND DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE) > NOW()
+                    THEN 'in_use'
+                ELSE status
+            END,
+            expired_reason = CASE
+                WHEN status = 'used'
+                 AND expired_reason = 'time_limit'
+                 AND DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE) > NOW()
+                    THEN NULL
+                ELSE expired_reason
+            END,
+            last_accounting_at = NOW()
+        WHERE voucher_code = ?
+          AND first_used_at IS NOT NULL
+          AND (
+            expires_at IS NULL
+            OR expires_at < DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE)
+          )
+    });
+
+    unless ($sth) {
+        &radiusd::radlog(1, "PERL VOUCHER ERROR: Could not prepare expiry repair for $username: " . ($dbh->errstr // 'unknown error'));
+        return 0;
+    }
+
+    my $rows = $sth->execute($username);
+    my $err = $dbh->errstr;
+    $sth->finish();
+
+    if ($rows && $rows > 0) {
+        &radiusd::radlog(1, "PERL VOUCHER REPAIR: Corrected expiry window for $username");
+    } elsif ($err) {
+        &radiusd::radlog(1, "PERL VOUCHER WARNING: Expiry repair for $username returned: $err");
     }
 
     return 1;
@@ -237,6 +289,8 @@ sub authorize {
     &radiusd::radlog(1, "PERL: Connected to tenant database successfully");
 
     my $calling_mac = $RAD_REQUEST{'Calling-Station-Id'} // '';
+    repair_voucher_expiry($dbh, $username);
+
     my $voucher_sth = $dbh->prepare(q{
         SELECT voucher_code, status, site_id, expires_at, used_by_mac,
                (expires_at IS NOT NULL AND expires_at <= NOW()) AS is_expired,
@@ -493,10 +547,19 @@ sub accounting {
         
         # Stop updates usage totals but does not invalidate an unexpired voucher.
         # The voucher remains reusable until the wall-clock expiry from first login.
+        repair_voucher_expiry($dbh, $username);
         my $total_octets = $input_octets + $output_octets;
         my $voucher_update = $dbh->prepare(q{
             UPDATE vouchers SET
+                expires_at = CASE
+                    WHEN first_used_at IS NOT NULL
+                     AND (expires_at IS NULL OR expires_at < DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE))
+                        THEN DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE)
+                    ELSE expires_at
+                END,
                 status = CASE
+                    WHEN first_used_at IS NOT NULL
+                     AND DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE) <= NOW() THEN 'used'
                     WHEN expires_at IS NOT NULL AND expires_at <= NOW() THEN 'used'
                     WHEN data_limit_mb IS NOT NULL AND ROUND(? / 1048576, 2) >= data_limit_mb THEN 'used'
                     ELSE 'in_use'
@@ -506,6 +569,8 @@ sub accounting {
                 total_data_used_mb = ROUND(? / 1048576, 2),
                 last_accounting_at = NOW(),
                 expired_reason = CASE
+                    WHEN first_used_at IS NOT NULL
+                     AND DATE_ADD(first_used_at, INTERVAL GREATEST(COALESCE(validity_minutes, 0), COALESCE(validity_hours, 0) * 60, 1) MINUTE) <= NOW() THEN 'time_limit'
                     WHEN expires_at IS NOT NULL AND expires_at <= NOW() THEN 'time_limit'
                     WHEN data_limit_mb IS NOT NULL AND ROUND(? / 1048576, 2) >= data_limit_mb THEN 'data_limit'
                     ELSE NULL
