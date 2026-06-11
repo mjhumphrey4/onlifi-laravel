@@ -174,7 +174,7 @@ class InstallerController extends Controller
             'api_port' => 8728,
             'username' => SystemSetting::get('router_admin_username', 'onlifi'),
             'password' => SystemSetting::get('router_admin_password', 'onlifi-router-admin-change-me'),
-            'location' => $submission->notes,
+            'location' => null,
             'is_active' => true,
             'created_at' => now(),
             'updated_at' => now(),

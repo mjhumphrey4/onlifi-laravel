@@ -839,6 +839,7 @@ class MikrotikController extends Controller
 
             $data['front_photo_url'] = !empty($submission?->front_photo_path) ? asset('storage/' . $submission->front_photo_path) : null;
             $data['back_photo_url'] = !empty($submission?->back_photo_path) ? asset('storage/' . $submission->back_photo_path) : null;
+            $data['comment'] = $submission?->notes ?: null;
             $data['google_maps_url'] = ($router->latitude && $router->longitude)
                 ? 'https://www.google.com/maps?q=' . $router->latitude . ',' . $router->longitude
                 : null;
@@ -877,6 +878,7 @@ class MikrotikController extends Controller
                 $data['latest_telemetry'] = null;
                 $data['front_photo_url'] = !empty($submission?->front_photo_path) ? asset('storage/' . $submission->front_photo_path) : null;
                 $data['back_photo_url'] = !empty($submission?->back_photo_path) ? asset('storage/' . $submission->back_photo_path) : null;
+                $data['comment'] = $submission->notes ?? null;
                 $data['google_maps_url'] = (!empty($row->latitude) && !empty($row->longitude))
                     ? 'https://www.google.com/maps?q=' . $row->latitude . ',' . $row->longitude
                     : null;

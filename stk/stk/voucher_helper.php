@@ -205,7 +205,7 @@ function createVoucherAndRadiusRows(PDO $pdo, array $transaction): string {
 
 function resolvePackage(PDO $pdo, array $transaction): array {
     $amount = (float) $transaction['amount'];
-    $voucherType = trim((string) ($transaction['voucher_type'] ?? ''));
+    $voucherType = canonicalVoucherType((string) ($transaction['voucher_type'] ?? ''));
     $siteId = $transaction['site_id'] ?? ONLIFI_SITE_ID;
 
     $baseSql = "SELECT * FROM voucher_groups WHERE price = ?";
@@ -305,8 +305,47 @@ function packageTypeHasExactDuration(string $voucherType): bool {
     return packageDefaults($voucherType, 0)['exact_duration'] ?? false;
 }
 
+function canonicalVoucherType(string $voucherType): string {
+    $clean = strtolower(trim($voucherType));
+    $key = preg_replace('/[^a-z0-9]+/', '', $clean);
+
+    $aliases = [
+        '2hour' => '2hours',
+        '2hours' => '2hours',
+        '2hr' => '2hours',
+        '2hrs' => '2hours',
+        '3hour' => '3hours',
+        '3hours' => '3hours',
+        '3hr' => '3hours',
+        '3hrs' => '3hours',
+        '12hour' => '12hours',
+        '12hours' => '12hours',
+        '12hr' => '12hours',
+        '12hrs' => '12hours',
+        'daily' => '24hours',
+        'day' => '24hours',
+        '1day' => '24hours',
+        '24hour' => '24hours',
+        '24hours' => '24hours',
+        '24hr' => '24hours',
+        '24hrs' => '24hours',
+        '7day' => '7days',
+        '7days' => '7days',
+        'week' => '7days',
+        'weekly' => '7days',
+        '30day' => '30days',
+        '30days' => '30days',
+        'month' => '30days',
+        'monthly' => '30days',
+        '1month' => '30days',
+        'familymonthly' => 'family_monthly',
+    ];
+
+    return $aliases[$key] ?? $clean;
+}
+
 function packageDefaults(string $voucherType, float $amount): array {
-    $key = strtolower(trim($voucherType));
+    $key = canonicalVoucherType($voucherType);
     $map = [
         '2hours' => ['group_name' => '2hours', 'profile_name' => '2hours', 'validity_hours' => 2, 'validity_minutes' => 120, 'exact_duration' => true],
         '2h' => ['group_name' => '2hours', 'profile_name' => '2hours', 'validity_hours' => 2, 'validity_minutes' => 120, 'exact_duration' => true],

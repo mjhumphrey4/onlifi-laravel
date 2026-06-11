@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ImageOff, Loader2, Map, MapPin, RefreshCw, Router } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ExternalLink, ImageOff, Loader2, Map, MapPin, RefreshCw, Router, X } from 'lucide-react';
 import { getRouters } from '../utils/api';
 import { useSite } from '../context/SiteContext';
 
@@ -12,6 +12,7 @@ interface Accesspoint {
   longitude?: string | number | null;
   front_photo_url?: string | null;
   back_photo_url?: string | null;
+  comment?: string | null;
   google_maps_url?: string | null;
   status?: string | null;
   last_seen?: string | null;
@@ -24,6 +25,7 @@ export function Routers() {
   const [tab, setTab] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [preview, setPreview] = useState<{ url: string; title: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -85,14 +87,15 @@ export function Routers() {
               <tr>
                 <th className="px-5 py-3 font-medium">Router</th>
                 <th className="px-5 py-3 font-medium">Image</th>
-                <th className="px-5 py-3 font-medium">Location</th>
+                <th className="px-5 py-3 font-medium">Comment</th>
+                <th className="px-5 py-3 font-medium">Coordinates</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 font-medium">Last Seen</th>
               </tr>
             </thead>
             <tbody>
               {accesspoints.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">No accesspoints have been submitted from the installer app yet.</td></tr>
+                <tr><td colSpan={6} className="px-5 py-8 text-center text-muted-foreground">No accesspoints have been submitted from the installer app yet.</td></tr>
               ) : accesspoints.map((accesspoint, index) => {
                 const isOnline = accesspoint.status === 'online';
                 const imageUrl = accesspoint.front_photo_url || accesspoint.back_photo_url;
@@ -104,7 +107,14 @@ export function Routers() {
                     </td>
                     <td className="px-5 py-3">
                       {imageUrl ? (
-                        <img src={imageUrl} alt={accesspoint.name} className="h-14 w-20 rounded-md object-cover border border-border" />
+                        <button
+                          type="button"
+                          onClick={() => setPreview({ url: imageUrl, title: accesspoint.name })}
+                          className="group h-14 w-20 rounded-md overflow-hidden border border-border bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                          title="Preview router image"
+                        >
+                          <img src={imageUrl} alt={accesspoint.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                        </button>
                       ) : (
                         <div className="h-14 w-20 rounded-md border border-border bg-muted grid place-items-center text-muted-foreground">
                           <ImageOff className="w-5 h-5" />
@@ -112,13 +122,12 @@ export function Routers() {
                       )}
                     </td>
                     <td className="px-5 py-3">
-                      <p className="text-card-foreground">{accesspoint.location || '-'}</p>
-                      {accesspoint.google_maps_url && (
-                        <a href={accesspoint.google_maps_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                          <MapPin className="w-3 h-3" />
-                          Google Maps
-                        </a>
-                      )}
+                      <div className="max-w-xs rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-card-foreground">
+                        {accesspoint.comment || accesspoint.location || '-'}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <CoordinateLink accesspoint={accesspoint} />
                     </td>
                     <td className="px-5 py-3">
                       <span className={`inline-flex px-2 py-1 rounded-md text-xs font-medium ${isOnline ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
@@ -133,13 +142,45 @@ export function Routers() {
               })}
             </tbody>
           </table>
-        </div> : <AccesspointMap accesspoints={accesspoints} />}
+        </div> : <AccesspointMap accesspoints={accesspoints} onPreview={(url, title) => setPreview({ url, title })} />}
       </div>
+
+      {preview && (
+        <ImagePreviewDialog
+          url={preview.url}
+          title={preview.title}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
   );
 }
 
-function AccesspointMap({ accesspoints }: { accesspoints: Accesspoint[] }) {
+function CoordinateLink({ accesspoint }: { accesspoint: Accesspoint }) {
+  const lat = Number(accesspoint.latitude);
+  const lng = Number(accesspoint.longitude);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return <span className="text-muted-foreground">-</span>;
+  }
+
+  return (
+    <a
+      href={googleMapsUrl(lat, lng)}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-mono text-xs text-primary hover:bg-muted"
+      title="Open exact coordinates in Google Maps"
+    >
+      <MapPin className="w-3 h-3" />
+      {lat.toFixed(6)}, {lng.toFixed(6)}
+    </a>
+  );
+}
+
+function AccesspointMap({ accesspoints, onPreview }: { accesspoints: Accesspoint[]; onPreview: (url: string, title: string) => void }) {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(900);
   const mapped = accesspoints
     .map((accesspoint) => ({
       ...accesspoint,
@@ -147,6 +188,24 @@ function AccesspointMap({ accesspoints }: { accesspoints: Accesspoint[] }) {
       lng: Number(accesspoint.longitude),
     }))
     .filter((accesspoint) => Number.isFinite(accesspoint.lat) && Number.isFinite(accesspoint.lng));
+
+  useEffect(() => {
+    const element = mapRef.current;
+    if (!element) return;
+
+    const updateWidth = () => setViewportWidth(Math.max(320, Math.round(element.clientWidth)));
+    updateWidth();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateWidth);
+      return () => window.removeEventListener('resize', updateWidth);
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
 
   if (mapped.length === 0) {
     return (
@@ -162,18 +221,42 @@ function AccesspointMap({ accesspoints }: { accesspoints: Accesspoint[] }) {
   const maxLat = Math.max(...lats);
   const minLng = Math.min(...lngs);
   const maxLng = Math.max(...lngs);
-  const latRange = Math.max(maxLat - minLat, 0.0001);
-  const lngRange = Math.max(maxLng - minLng, 0.0001);
   const allMapsUrl = mapped.length === 1
     ? googleMapsUrl(mapped[0].lat, mapped[0].lng)
     : `https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=${mapped[0].lat},${mapped[0].lng}&destination=${mapped[mapped.length - 1].lat},${mapped[mapped.length - 1].lng}&waypoints=${mapped.slice(1, -1).map((point) => `${point.lat},${point.lng}`).join('|')}`;
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLng = (minLng + maxLng) / 2;
+  const zoom = mapZoomForBounds(minLat, maxLat, minLng, maxLng);
+  const center = latLngToWorldPixel(centerLat, centerLng, zoom);
+  const width = viewportWidth;
+  const height = 520;
+  const tileSize = 256;
+  const startTileX = Math.floor((center.x - width / 2) / tileSize);
+  const endTileX = Math.floor((center.x + width / 2) / tileSize);
+  const startTileY = Math.floor((center.y - height / 2) / tileSize);
+  const endTileY = Math.floor((center.y + height / 2) / tileSize);
+  const tileCount = 2 ** zoom;
+  const tiles = [];
+
+  for (let x = startTileX; x <= endTileX; x++) {
+    for (let y = startTileY; y <= endTileY; y++) {
+      if (y < 0 || y >= tileCount) continue;
+      const wrappedX = ((x % tileCount) + tileCount) % tileCount;
+      tiles.push({
+        key: `${x}-${y}`,
+        url: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
+        left: x * tileSize - (center.x - width / 2),
+        top: y * tileSize - (center.y - height / 2),
+      });
+    }
+  }
 
   return (
     <div className="p-5 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="font-semibold text-card-foreground">Accesspoint Map</h2>
-          <p className="text-sm text-muted-foreground">Router photos mark the captured GPS coordinates from the installer app.</p>
+          <p className="text-sm text-muted-foreground">Installed devices are pinned from their captured GPS coordinates.</p>
         </div>
         <a href={allMapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border hover:bg-muted text-sm">
           <MapPin className="w-4 h-4" />
@@ -181,32 +264,42 @@ function AccesspointMap({ accesspoints }: { accesspoints: Accesspoint[] }) {
         </a>
       </div>
 
-      <div className="relative h-[520px] rounded-lg overflow-hidden border border-border bg-[#eef3ed]">
-        <div className="absolute inset-0 opacity-70" style={{
-          backgroundImage: 'linear-gradient(rgba(30,64,55,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(30,64,55,.12) 1px, transparent 1px)',
-          backgroundSize: '42px 42px',
-        }} />
+      <div ref={mapRef} className="relative h-[520px] rounded-lg overflow-hidden border border-border bg-muted">
+        {tiles.map((tile) => (
+          <img
+            key={tile.key}
+            src={tile.url}
+            alt=""
+            className="absolute h-64 w-64 select-none"
+            draggable={false}
+            style={{ left: tile.left, top: tile.top }}
+          />
+        ))}
+        <div className="absolute inset-0 bg-gradient-to-b from-background/5 via-transparent to-background/10 pointer-events-none" />
         <div className="absolute left-4 top-4 rounded-md bg-card/95 border border-border px-3 py-2 text-xs text-muted-foreground shadow-sm">
           {mapped.length} installed {mapped.length === 1 ? 'accesspoint' : 'accesspoints'}
         </div>
 
         {mapped.map((accesspoint) => {
-          const x = 8 + ((accesspoint.lng - minLng) / lngRange) * 84;
-          const y = 8 + ((maxLat - accesspoint.lat) / latRange) * 84;
+          const point = latLngToWorldPixel(accesspoint.lat, accesspoint.lng, zoom);
+          const x = point.x - (center.x - width / 2);
+          const y = point.y - (center.y - height / 2);
           const imageUrl = accesspoint.front_photo_url || accesspoint.back_photo_url;
 
           return (
-            <a
+            <div
               key={accesspoint.id ?? `${accesspoint.name}-${accesspoint.ip_address}`}
-              href={googleMapsUrl(accesspoint.lat, accesspoint.lng)}
-              target="_blank"
-              rel="noreferrer"
               title={`${accesspoint.name} - ${accesspoint.ip_address || ''}`}
               className="absolute -translate-x-1/2 -translate-y-full group"
-              style={{ left: `${x}%`, top: `${y}%` }}
+              style={{ left: x, top: y }}
             >
               <div className="relative">
-                <div className="h-12 w-12 rounded-full border-2 border-white bg-card shadow-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => imageUrl ? onPreview(imageUrl, accesspoint.name) : undefined}
+                  className="h-12 w-12 rounded-full border-2 border-white bg-card shadow-lg overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary"
+                  title={imageUrl ? 'Preview router image' : 'Router location'}
+                >
                   {imageUrl ? (
                     <img src={imageUrl} alt={accesspoint.name} className="h-full w-full object-cover" />
                   ) : (
@@ -214,17 +307,47 @@ function AccesspointMap({ accesspoints }: { accesspoints: Accesspoint[] }) {
                       <Router className="w-5 h-5" />
                     </div>
                   )}
-                </div>
+                </button>
                 <div className="mx-auto h-4 w-4 rotate-45 -mt-2 bg-card border-b border-r border-white shadow-sm" />
                 <div className="absolute left-1/2 top-full mt-2 hidden min-w-44 -translate-x-1/2 rounded-md border border-border bg-card p-2 text-xs shadow-lg group-hover:block">
                   <p className="font-medium text-card-foreground">{accesspoint.name}</p>
                   <p className="text-muted-foreground">{accesspoint.ip_address || 'No IP assigned'}</p>
-                  <p className="text-muted-foreground">{accesspoint.lat.toFixed(6)}, {accesspoint.lng.toFixed(6)}</p>
+                  <a href={googleMapsUrl(accesspoint.lat, accesspoint.lng)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                    {accesspoint.lat.toFixed(6)}, {accesspoint.lng.toFixed(6)}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
                 </div>
               </div>
-            </a>
+            </div>
           );
         })}
+        <div className="absolute bottom-3 right-3 rounded bg-card/95 px-2 py-1 text-[11px] text-muted-foreground shadow-sm">
+          Map tiles © OpenStreetMap contributors
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImagePreviewDialog({ url, title, onClose }: { url: string; title: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-4xl overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div>
+            <p className="font-medium text-card-foreground">{title}</p>
+            <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+              Open image
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-md border border-border p-2 hover:bg-muted" aria-label="Close image preview">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-[75vh] bg-black">
+          <img src={url} alt={title} className="mx-auto max-h-[75vh] w-auto max-w-full object-contain" />
+        </div>
       </div>
     </div>
   );
@@ -232,4 +355,33 @@ function AccesspointMap({ accesspoints }: { accesspoints: Accesspoint[] }) {
 
 function googleMapsUrl(lat: number, lng: number) {
   return `https://www.google.com/maps?q=${lat},${lng}`;
+}
+
+function mapZoomForBounds(minLat: number, maxLat: number, minLng: number, maxLng: number) {
+  const latRange = Math.max(Math.abs(maxLat - minLat), 0.0001);
+  const lngRange = Math.max(Math.abs(maxLng - minLng), 0.0001);
+  const range = Math.max(latRange, lngRange);
+
+  if (range > 2) return 7;
+  if (range > 1) return 8;
+  if (range > 0.5) return 9;
+  if (range > 0.25) return 10;
+  if (range > 0.12) return 11;
+  if (range > 0.06) return 12;
+  if (range > 0.03) return 13;
+  if (range > 0.015) return 14;
+  if (range > 0.007) return 15;
+
+  return 16;
+}
+
+function latLngToWorldPixel(lat: number, lng: number, zoom: number) {
+  const tileSize = 256;
+  const scale = tileSize * 2 ** zoom;
+  const sinLat = Math.sin((Math.max(Math.min(lat, 85.05112878), -85.05112878) * Math.PI) / 180);
+
+  return {
+    x: ((lng + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  };
 }
