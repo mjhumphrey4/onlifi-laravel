@@ -30,59 +30,69 @@ class MikrotikController extends Controller
     public function index(Request $request)
     {
         $site = SiteScope::selectedSite($request);
-        TenantRouterSchema::ensureForSite($site);
 
-        $query = MikrotikRouter::query();
-        $hasTelemetryTable = Schema::connection('tenant')->hasTable('router_telemetry')
-            && Schema::connection('tenant')->hasColumn('router_telemetry', 'router_id')
-            && Schema::connection('tenant')->hasColumn('router_telemetry', 'recorded_at');
-        if ($hasTelemetryTable) {
-            $query->with('latestTelemetry');
-        }
+        try {
+            TenantRouterSchema::ensureForSite($site);
 
-        if ($site) {
-            if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
-                $query->where('site_id', $site->id);
-            } elseif (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'installer_submission_id')) {
-                $submissionIds = InstallerDeviceSubmission::where('tenant_id', $site->tenant_id)
-                    ->where('site_id', $site->id)
-                    ->pluck('id');
+            $query = MikrotikRouter::query();
+            $hasTelemetryTable = Schema::connection('tenant')->hasTable('router_telemetry')
+                && Schema::connection('tenant')->hasColumn('router_telemetry', 'router_id')
+                && Schema::connection('tenant')->hasColumn('router_telemetry', 'recorded_at');
+            if ($hasTelemetryTable) {
+                $query->with('latestTelemetry');
+            }
 
-                $query->where(function ($query) use ($site, $submissionIds) {
+            if ($site) {
+                if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+                    $query->where('site_id', $site->id);
+                } elseif (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'installer_submission_id')) {
+                    $submissionIds = InstallerDeviceSubmission::where('tenant_id', $site->tenant_id)
+                        ->where('site_id', $site->id)
+                        ->pluck('id');
+
+                    $query->where(function ($query) use ($site, $submissionIds) {
+                        $query->where('name', $site->name);
+
+                        if ($submissionIds->isNotEmpty()) {
+                            $query->orWhereIn('installer_submission_id', $submissionIds);
+                        }
+                    });
+                } else {
                     $query->where('name', $site->name);
+                }
 
-                    if ($submissionIds->isNotEmpty()) {
-                        $query->orWhereIn('installer_submission_id', $submissionIds);
-                    }
-                });
-            } else {
-                $query->where('name', $site->name);
+                $routers = $query->orderBy('name')->orderBy('id')->get();
+                if ($routers->isNotEmpty()) {
+                    return response()->json($this->decorateRouters($routers, $hasTelemetryTable));
+                }
+
+                return response()->json([[
+                    'id' => null,
+                    'name' => $site->name,
+                    'site_id' => $site->id,
+                    'ip_address' => $site->vpn_private_ip,
+                    'api_port' => $site->router_api_port ?: 8728,
+                    'username' => SystemSetting::get('router_admin_username', 'onlifi'),
+                    'location' => $site->description,
+                    'is_active' => true,
+                    'last_seen' => $site->vpn_last_seen_at,
+                    'latest_telemetry' => null,
+                    'managed_by_site' => true,
+                    'needs_remote_access' => !$site->vpn_private_ip,
+                ]]);
             }
 
-            $routers = $query->orderBy('name')->orderBy('id')->get();
-            if ($routers->isNotEmpty()) {
-                return response()->json($this->decorateRouters($routers, $hasTelemetryTable));
-            }
+            $routers = $query->orderBy('name')->get();
 
-            return response()->json([[
-                'id' => null,
-                'name' => $site->name,
-                'site_id' => $site->id,
-                'ip_address' => $site->vpn_private_ip,
-                'api_port' => $site->router_api_port ?: 8728,
-                'username' => SystemSetting::get('router_admin_username', 'onlifi'),
-                'location' => $site->description,
-                'is_active' => true,
-                'last_seen' => $site->vpn_last_seen_at,
-                'latest_telemetry' => null,
-                'managed_by_site' => true,
-                'needs_remote_access' => !$site->vpn_private_ip,
-            ]]);
+            return response()->json($this->decorateRouters($routers, $hasTelemetryTable));
+        } catch (\Throwable $e) {
+            Log::error('Routers index failed; returning fallback table response', [
+                'error' => $e->getMessage(),
+                'site_id' => $site?->id,
+            ]);
+
+            return response()->json($this->fallbackRouters($site));
         }
-
-        $routers = $query->orderBy('name')->get();
-
-        return response()->json($this->decorateRouters($routers, $hasTelemetryTable));
     }
 
     public function show($id)
@@ -836,5 +846,95 @@ class MikrotikController extends Controller
 
             return $data;
         })->values();
+    }
+
+    private function fallbackRouters(?Site $site)
+    {
+        try {
+            if (!Schema::connection('tenant')->hasTable('mikrotik_routers')) {
+                return collect();
+            }
+
+            $query = DB::connection('tenant')->table('mikrotik_routers');
+
+            if ($site) {
+                if (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'site_id')) {
+                    $query->where('site_id', $site->id);
+                } elseif (Schema::connection('tenant')->hasColumn('mikrotik_routers', 'name')) {
+                    $query->where('name', $site->name);
+                }
+            }
+
+            $rows = $query->orderBy('name')->orderBy('id')->get();
+            $submissions = $this->fallbackInstallerSubmissions($rows);
+
+            return $rows->map(function ($row) use ($submissions) {
+                $data = (array) $row;
+                $submission = !empty($row->installer_submission_id)
+                    ? $submissions->get((int) $row->installer_submission_id)
+                    : null;
+
+                $data['latest_telemetry'] = null;
+                $data['front_photo_url'] = !empty($submission?->front_photo_path) ? asset('storage/' . $submission->front_photo_path) : null;
+                $data['back_photo_url'] = !empty($submission?->back_photo_path) ? asset('storage/' . $submission->back_photo_path) : null;
+                $data['google_maps_url'] = (!empty($row->latitude) && !empty($row->longitude))
+                    ? 'https://www.google.com/maps?q=' . $row->latitude . ',' . $row->longitude
+                    : null;
+                $data['status'] = $this->routerStatusFromLastSeen($row->last_seen ?? null);
+
+                return $data;
+            })->values();
+        } catch (\Throwable $e) {
+            Log::error('Fallback routers response also failed', [
+                'error' => $e->getMessage(),
+                'site_id' => $site?->id,
+            ]);
+
+            return collect();
+        }
+    }
+
+    private function fallbackInstallerSubmissions($rows)
+    {
+        $submissionIds = $rows
+            ->pluck('installer_submission_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if (
+            $submissionIds->isEmpty()
+            || !Schema::connection('central')->hasTable('installer_device_submissions')
+        ) {
+            return collect();
+        }
+
+        try {
+            return DB::connection('central')
+                ->table('installer_device_submissions')
+                ->whereIn('id', $submissionIds)
+                ->get()
+                ->keyBy('id');
+        } catch (\Throwable $e) {
+            Log::warning('Could not load installer submissions for fallback routers response', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return collect();
+        }
+    }
+
+    private function routerStatusFromLastSeen($lastSeen): string
+    {
+        if (!$lastSeen) {
+            return 'offline';
+        }
+
+        try {
+            return now()->diffInMinutes(\Illuminate\Support\Carbon::parse($lastSeen)) < 10 ? 'online' : 'offline';
+        } catch (\Throwable) {
+            return 'offline';
+        }
     }
 }
