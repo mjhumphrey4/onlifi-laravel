@@ -18,7 +18,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField "String", "API_BASE_URL", "\"${project.findProperty("onlifiInstallerApiUrl") ?: "https://onlifi.net/api/installer"}\""
+        buildConfigField "String", "API_BASE_URL", "\"${project.findProperty("onlifiInstallerApiUrl") ?: "https://api.onlifi.net/api/installer"}\""
     }
 
     buildFeatures {

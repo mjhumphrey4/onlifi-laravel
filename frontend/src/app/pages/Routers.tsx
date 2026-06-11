@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ImageOff, Loader2, MapPin, RefreshCw, Router } from 'lucide-react';
 import { getRouters } from '../utils/api';
+import { useSite } from '../context/SiteContext';
 
 interface Accesspoint {
   id: number | null;
@@ -18,6 +19,7 @@ interface Accesspoint {
 }
 
 export function Routers() {
+  const { selectedSite } = useSite();
   const [accesspoints, setAccesspoints] = useState<Accesspoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,7 +39,10 @@ export function Routers() {
 
   useEffect(() => {
     load();
-  }, []);
+    const interval = window.setInterval(load, 15000);
+
+    return () => window.clearInterval(interval);
+  }, [selectedSite?.id]);
 
   if (loading && accesspoints.length === 0) {
     return <div className="min-h-screen grid place-items-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;

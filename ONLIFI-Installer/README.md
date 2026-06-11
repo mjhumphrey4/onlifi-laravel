@@ -54,7 +54,7 @@ Windows PowerShell:
 To point the app at another ONLIFI installer API:
 
 ```bash
-./gradlew :app:assembleDebug -PonlifiInstallerApiUrl=https://onlifi.net/api/installer
+./gradlew :app:assembleDebug -PonlifiInstallerApiUrl=https://api.onlifi.net/api/installer
 ```
 
 ## Expected API

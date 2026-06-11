@@ -24,7 +24,7 @@ installer:devices:create
 Base URL used by the app:
 
 ```text
-https://onlifi.net/api/installer
+https://api.onlifi.net/api/installer
 ```
 
 ### POST /api/installer/login

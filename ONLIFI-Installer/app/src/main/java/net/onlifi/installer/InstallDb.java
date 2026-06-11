@@ -75,6 +75,22 @@ final class InstallDb extends SQLiteOpenHelper {
         }
     }
 
+    int failedCount() {
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM installations WHERE last_error IS NOT NULL AND last_error != ''",
+                new String[]{})) {
+            return cursor.moveToFirst() ? cursor.getInt(0) : 0;
+        }
+    }
+
+    String latestError() {
+        try (Cursor cursor = getReadableDatabase().rawQuery(
+                "SELECT last_error FROM installations WHERE last_error IS NOT NULL AND last_error != '' ORDER BY created_at DESC LIMIT 1",
+                new String[]{})) {
+            return cursor.moveToFirst() ? cursor.getString(0) : "";
+        }
+    }
+
     List<Installation> pending() {
         List<Installation> installations = new ArrayList<>();
         try (Cursor cursor = getReadableDatabase().rawQuery(

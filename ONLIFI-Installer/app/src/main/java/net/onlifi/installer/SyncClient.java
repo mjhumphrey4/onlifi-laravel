@@ -48,6 +48,9 @@ final class SyncClient {
         result.token = json.optString("token");
         result.installerId = json.optString("installer_id");
         result.installerName = json.optString("installer_name", "Installer");
+        result.siteId = json.optString("site_id");
+        result.siteName = json.optString("site_name", "Assigned site");
+        result.assignedDeviceIpRange = json.optString("assigned_device_ip_range");
         if (result.token.isEmpty()) {
             throw new ApiException(status, "ONLIFI did not return an installer token.");
         }
@@ -143,9 +146,34 @@ final class SyncClient {
         try {
             JSONObject json = new JSONObject(response);
             String message = json.optString("message");
-            return message.isEmpty() ? fallback : message;
+            StringBuilder builder = new StringBuilder(message.isEmpty() ? fallback : message);
+            JSONObject errors = json.optJSONObject("errors");
+            if (errors != null) {
+                java.util.Iterator<String> keys = errors.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    builder.append("\n").append(key).append(": ");
+                    Object value = errors.opt(key);
+                    if (value instanceof org.json.JSONArray) {
+                        org.json.JSONArray array = (org.json.JSONArray) value;
+                        for (int index = 0; index < array.length(); index++) {
+                            if (index > 0) {
+                                builder.append(" ");
+                            }
+                            builder.append(array.optString(index));
+                        }
+                    } else {
+                        builder.append(String.valueOf(value));
+                    }
+                }
+            }
+            String range = json.optString("assigned_device_ip_range");
+            if (!range.isEmpty()) {
+                builder.append("\nAssigned range: ").append(range);
+            }
+            return builder.toString();
         } catch (Exception ignored) {
-            return fallback;
+            return fallback + "\nServer response: " + response;
         }
     }
 
@@ -160,6 +188,9 @@ final class SyncClient {
         String token;
         String installerId;
         String installerName;
+        String siteId;
+        String siteName;
+        String assignedDeviceIpRange;
     }
 
     static final class ApiException extends Exception {

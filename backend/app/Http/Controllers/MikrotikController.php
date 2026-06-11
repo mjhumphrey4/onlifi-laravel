@@ -38,14 +38,9 @@ class MikrotikController extends Controller
                 $query->where('name', $site->name);
             }
 
-            $router = $query->orderBy('id')->first();
-            if ($router) {
-                if ($router->name !== $site->name) {
-                    $router->update(['name' => $site->name]);
-                    $router = $router->fresh('latestTelemetry');
-                }
-
-                return response()->json($this->decorateRouters(collect([$router]))->values());
+            $routers = $query->orderBy('name')->orderBy('id')->get();
+            if ($routers->isNotEmpty()) {
+                return response()->json($this->decorateRouters($routers));
             }
 
             return response()->json([[
