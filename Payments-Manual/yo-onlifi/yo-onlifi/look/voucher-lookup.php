@@ -1,70 +1,423 @@
 <?php
-// Database configuration
-$host = 'localhost';
-$dbname = 'payment_mikrotik';
-$username = 'yo';
-$password = 'password';
+// Database configuration for this lookup page.
+// Keep this pointed at the same tenant/site DB used by FreeRADIUS.
+$dbHost = '10.200.1.254';
+$dbPort = 3306;
+$dbName = 'onlifi_1_1_stk';
+$dbUser = 'yo';
+$dbPass = 'password';
 
 // Get MAC address from URL parameter (passed from MikroTik login page)
 $client_mac = isset($_GET['mac']) ? urldecode(trim($_GET['mac'])) : '';
 
-// Get MAC address from POST request (when form is submitted)
-$mac_address = isset($_POST['mac_address']) ? trim($_POST['mac_address']) : $client_mac;
+// Only use the MAC supplied by MikroTik for the requesting device.
+$mac_address = $client_mac;
 
 // Initialize response
 $response = [];
 
+function voucherLookupLog(string $event, array $context = []): void {
+    $safeContext = $context;
+    unset($safeContext['db_pass'], $safeContext['password']);
+
+    $line = json_encode([
+        'time' => date('Y-m-d H:i:s'),
+        'event' => $event,
+        'remote_addr' => $_SERVER['REMOTE_ADDR'] ?? null,
+        'host' => $_SERVER['HTTP_HOST'] ?? null,
+        'uri' => $_SERVER['REQUEST_URI'] ?? null,
+        'context' => $safeContext,
+    ], JSON_UNESCAPED_SLASHES);
+
+    if ($line === false) {
+        $line = date('Y-m-d H:i:s') . ' ' . $event;
+    }
+
+    $logFile = __DIR__ . '/voucher-lookup.log';
+    if (@file_put_contents($logFile, $line . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
+        error_log('voucher-lookup: ' . $line);
+    }
+}
+
+function normalizeLookupMac($value): string {
+    $decoded = rawurldecode(rawurldecode(trim((string) $value)));
+    return strtoupper(preg_replace('/[^A-Fa-f0-9]/', '', $decoded));
+}
+
+function getLookupDB(): PDO {
+    global $dbHost, $dbPort, $dbName, $dbUser, $dbPass;
+
+    voucherLookupLog('db_connect_attempt', [
+        'db_host' => $dbHost,
+        'db_port' => $dbPort,
+        'db_name' => $dbName,
+        'db_user' => $dbUser,
+    ]);
+
+    $pdo = new PDO(
+        "mysql:host=$dbHost;port=$dbPort;dbname=$dbName;charset=utf8mb4",
+        $dbUser,
+        $dbPass,
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]
+    );
+
+    voucherLookupLog('db_connect_success', [
+        'db_host' => $dbHost,
+        'db_port' => $dbPort,
+        'db_name' => $dbName,
+        'db_user' => $dbUser,
+    ]);
+
+    return $pdo;
+}
+
+function isValidIdentifier(string $identifier): bool {
+    return (bool) preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier);
+}
+
+function tableColumns(PDO $pdo, string $table, bool $refresh = false): array {
+    static $cache = [];
+
+    if (!isValidIdentifier($table)) {
+        return [];
+    }
+
+    $key = spl_object_hash($pdo) . ':' . $table;
+    if (!$refresh && array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM `$table`");
+        $columns = [];
+        foreach ($stmt->fetchAll() as $column) {
+            $columns[$column['Field']] = $column;
+        }
+        $cache[$key] = $columns;
+    } catch (PDOException $e) {
+        $cache[$key] = [];
+        voucherLookupLog('schema_check_failed', [
+            'table' => $table,
+            'error' => $e->getMessage(),
+            'sql_state' => $e->getCode(),
+        ]);
+    }
+
+    return $cache[$key];
+}
+
+function tableExists(PDO $pdo, string $table): bool {
+    return isValidIdentifier($table) && !empty(tableColumns($pdo, $table));
+}
+
+function columnExists(PDO $pdo, string $table, string $column): bool {
+    if (!isValidIdentifier($table) || !isValidIdentifier($column)) {
+        return false;
+    }
+
+    $columns = tableColumns($pdo, $table);
+    return isset($columns[$column]);
+}
+
+function normalizedMacSql(string $column): string {
+    return "REPLACE(REPLACE(REPLACE(REPLACE(UPPER(COALESCE($column, '')), '%3A', ''), ':', ''), '-', ''), '.', '')";
+}
+
+function firstExistingColumn(PDO $pdo, string $table, array $columns): ?string {
+    foreach ($columns as $column) {
+        if (columnExists($pdo, $table, $column)) {
+            return $column;
+        }
+    }
+
+    return null;
+}
+
+function successResponseFromRow(array $row): array {
+    return [
+        'status' => 'success',
+        'voucher_code' => $row['voucher_code'] ?? '',
+        'voucher_type' => $row['voucher_type'] ?? null,
+        'amount' => $row['amount'] ?? null,
+        'created_at' => $row['created_at'] ?? null,
+        'msisdn' => $row['msisdn'] ?? null,
+        'email' => $row['email'] ?? null,
+        'lookup_source' => $row['lookup_source'] ?? null,
+    ];
+}
+
+function findVoucherFromActiveRadius(PDO $pdo, string $normalizedMac): ?array {
+    if (!tableExists($pdo, 'radacct')) {
+        return null;
+    }
+
+    $macExpr = normalizedMacSql('ra.callingstationid');
+    $joins = '';
+    $voucherCodeExpr = 'ra.username';
+    $voucherTypeExpr = 'ra.groupname';
+    $amountExpr = 'NULL';
+    $createdExpr = 'COALESCE(ra.acctupdatetime, ra.acctstarttime)';
+    $voucherStatusFilter = '';
+
+    if (tableExists($pdo, 'vouchers')) {
+        $codeColumn = firstExistingColumn($pdo, 'vouchers', ['voucher_code', 'code']);
+        if ($codeColumn) {
+            $joins .= " LEFT JOIN vouchers v ON v.`$codeColumn` = ra.username";
+            $voucherCodeExpr = "COALESCE(NULLIF(v.`$codeColumn`, ''), ra.username)";
+
+            if (tableExists($pdo, 'voucher_groups') && columnExists($pdo, 'voucher_groups', 'group_name') && columnExists($pdo, 'vouchers', 'group_id')) {
+                $joins .= " LEFT JOIN voucher_groups vg ON vg.id = v.group_id";
+                $voucherTypeExpr = columnExists($pdo, 'vouchers', 'profile_name')
+                    ? "COALESCE(vg.group_name, v.profile_name, ra.groupname)"
+                    : "COALESCE(vg.group_name, ra.groupname)";
+            } elseif (columnExists($pdo, 'vouchers', 'profile_name')) {
+                $voucherTypeExpr = 'COALESCE(v.profile_name, ra.groupname)';
+            } elseif (columnExists($pdo, 'vouchers', 'type')) {
+                $voucherTypeExpr = 'COALESCE(v.`type`, ra.groupname)';
+            }
+
+            $amountColumn = firstExistingColumn($pdo, 'vouchers', ['price', 'amount']);
+            if ($amountColumn) {
+                $amountExpr = "v.`$amountColumn`";
+            }
+
+            $dateParts = ['ra.acctupdatetime', 'ra.acctstarttime'];
+            foreach (['last_used_at', 'first_used_at', 'assigned_date', 'created_at'] as $dateColumn) {
+                if (columnExists($pdo, 'vouchers', $dateColumn)) {
+                    $dateParts[] = "v.`$dateColumn`";
+                }
+            }
+            $createdExpr = 'COALESCE(' . implode(', ', $dateParts) . ')';
+
+            if (columnExists($pdo, 'vouchers', 'status')) {
+                $voucherStatusFilter = "AND (v.`status` IS NULL OR v.`status` NOT IN ('expired', 'disabled'))";
+            }
+        }
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            $voucherCodeExpr AS voucher_code,
+            $voucherTypeExpr AS voucher_type,
+            $amountExpr AS amount,
+            'success' AS status,
+            $createdExpr AS created_at,
+            NULL AS msisdn,
+            NULL AS email,
+            ra.callingstationid AS client_mac,
+            'active_radius' AS lookup_source
+        FROM radacct ra
+        $joins
+        WHERE $macExpr = :mac
+          AND COALESCE(ra.username, '') != ''
+          AND (ra.acctstoptime IS NULL OR CAST(ra.acctstoptime AS CHAR) = '0000-00-00 00:00:00')
+          $voucherStatusFilter
+        ORDER BY COALESCE(ra.acctupdatetime, ra.acctstarttime) DESC, ra.radacctid DESC
+        LIMIT 1
+    ");
+    $stmt->execute(['mac' => $normalizedMac]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row ?: null;
+}
+
+function findVoucherFromVouchers(PDO $pdo, string $normalizedMac): ?array {
+    if (!tableExists($pdo, 'vouchers')) {
+        return null;
+    }
+
+    $codeColumn = firstExistingColumn($pdo, 'vouchers', ['voucher_code', 'code']);
+    $macColumn = firstExistingColumn($pdo, 'vouchers', ['used_by_mac', 'assigned_mac']);
+
+    if (!$codeColumn || !$macColumn) {
+        return null;
+    }
+
+    $macExpr = normalizedMacSql("v.`$macColumn`");
+    $joins = '';
+    $voucherTypeExpr = 'NULL';
+
+    if (tableExists($pdo, 'voucher_groups') && columnExists($pdo, 'voucher_groups', 'group_name') && columnExists($pdo, 'vouchers', 'group_id')) {
+        $joins = 'LEFT JOIN voucher_groups vg ON vg.id = v.group_id';
+        $voucherTypeExpr = columnExists($pdo, 'vouchers', 'profile_name')
+            ? 'COALESCE(vg.group_name, v.profile_name)'
+            : 'vg.group_name';
+    } elseif (columnExists($pdo, 'vouchers', 'profile_name')) {
+        $voucherTypeExpr = 'v.profile_name';
+    } elseif (columnExists($pdo, 'vouchers', 'type')) {
+        $voucherTypeExpr = 'v.`type`';
+    }
+
+    $amountColumn = firstExistingColumn($pdo, 'vouchers', ['price', 'amount']);
+    $amountExpr = $amountColumn ? "v.`$amountColumn`" : 'NULL';
+    $dateColumn = firstExistingColumn($pdo, 'vouchers', ['last_used_at', 'first_used_at', 'assigned_date', 'created_at']);
+    $createdExpr = $dateColumn ? "v.`$dateColumn`" : 'NULL';
+    $orderParts = [];
+    if ($dateColumn) {
+        $orderParts[] = "$createdExpr DESC";
+    }
+    if (columnExists($pdo, 'vouchers', 'id')) {
+        $orderParts[] = 'v.id DESC';
+    }
+    $orderSql = $orderParts ? implode(', ', $orderParts) : "v.`$codeColumn` DESC";
+
+    $statusFilter = '';
+    if (columnExists($pdo, 'vouchers', 'status')) {
+        $statusFilter = "AND v.`status` NOT IN ('unused', 'expired', 'disabled')";
+    } elseif (columnExists($pdo, 'vouchers', 'used')) {
+        $statusFilter = 'AND v.`used` = 1';
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT
+            v.`$codeColumn` AS voucher_code,
+            $voucherTypeExpr AS voucher_type,
+            $amountExpr AS amount,
+            " . (columnExists($pdo, 'vouchers', 'status') ? 'v.`status`' : "'success'") . " AS status,
+            $createdExpr AS created_at,
+            NULL AS msisdn,
+            NULL AS email,
+            v.`$macColumn` AS client_mac,
+            'vouchers' AS lookup_source
+        FROM vouchers v
+        $joins
+        WHERE $macExpr = :mac
+          AND COALESCE(v.`$codeColumn`, '') != ''
+          $statusFilter
+        ORDER BY $orderSql
+        LIMIT 1
+    ");
+    $stmt->execute(['mac' => $normalizedMac]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row ?: null;
+}
+
+function findVoucherFromTransactions(PDO $pdo, string $normalizedMac): ?array {
+    if (!tableExists($pdo, 'transactions')) {
+        return null;
+    }
+
+    $macExpr = normalizedMacSql('client_mac');
+    $stmt = $pdo->prepare("
+        SELECT
+            id,
+            voucher_code,
+            voucher_type,
+            amount,
+            status,
+            created_at,
+            msisdn,
+            email,
+            client_mac,
+            'transactions' AS lookup_source
+        FROM transactions
+        WHERE $macExpr = :mac
+          AND voucher_code IS NOT NULL
+          AND voucher_code != ''
+          AND LOWER(status) IN ('success', 'completed')
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+    ");
+    $stmt->execute(['mac' => $normalizedMac]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row ?: null;
+}
+
 if (!empty($mac_address)) {
     try {
-        // Create PDO connection
-        $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        
-        // Normalize MAC address for comparison
-        $normalized_mac = strtoupper(preg_replace('/[^A-Fa-f0-9]/', '', $mac_address));
-        
-        // Query to get the LATEST voucher (most recent by created_at timestamp)
-        $stmt = $pdo->prepare("
-            SELECT 
-                id,
-                voucher_code, 
-                voucher_type,
-                amount,
-                status,
-                created_at,
-                msisdn,
-                email,
-                client_mac
-            FROM transactions 
-            WHERE REPLACE(REPLACE(REPLACE(UPPER(REPLACE(client_mac, '%3A', '')), ':', ''), '-', ''), '.', '') = :mac
-            AND voucher_code IS NOT NULL
-            AND voucher_code != ''
-            AND status = 'success'
-            ORDER BY created_at DESC, id DESC
-            LIMIT 1
-        ");
-        
-        $stmt->execute(['mac' => $normalized_mac]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        voucherLookupLog('lookup_request_start', [
+            'raw_mac' => $mac_address,
+            'query_mac' => $_GET['mac'] ?? null,
+        ]);
+
+        $pdo = getLookupDB();
+        $normalized_mac = normalizeLookupMac($mac_address);
+
+        voucherLookupLog('lookup_mac_normalized', [
+            'raw_mac' => $mac_address,
+            'normalized_mac' => $normalized_mac,
+            'normalized_length' => strlen($normalized_mac),
+        ]);
+
+        $result = null;
+        if ($normalized_mac !== '') {
+            voucherLookupLog('lookup_stage_start', ['stage' => 'active_radius']);
+            $result = findVoucherFromActiveRadius($pdo, $normalized_mac);
+            voucherLookupLog('lookup_stage_done', [
+                'stage' => 'active_radius',
+                'found' => (bool) $result,
+                'voucher_code' => $result['voucher_code'] ?? null,
+            ]);
+
+            if (!$result) {
+                voucherLookupLog('lookup_stage_start', ['stage' => 'vouchers']);
+                $result = findVoucherFromVouchers($pdo, $normalized_mac);
+                voucherLookupLog('lookup_stage_done', [
+                    'stage' => 'vouchers',
+                    'found' => (bool) $result,
+                    'voucher_code' => $result['voucher_code'] ?? null,
+                ]);
+            }
+
+            if (!$result) {
+                voucherLookupLog('lookup_stage_start', ['stage' => 'transactions']);
+                $result = findVoucherFromTransactions($pdo, $normalized_mac);
+                voucherLookupLog('lookup_stage_done', [
+                    'stage' => 'transactions',
+                    'found' => (bool) $result,
+                    'voucher_code' => $result['voucher_code'] ?? null,
+                ]);
+            }
+        } else {
+            voucherLookupLog('lookup_invalid_mac', [
+                'raw_mac' => $mac_address,
+                'normalized_mac' => $normalized_mac,
+            ]);
+        }
         
         if ($result) {
-            $response['status'] = 'success';
-            $response['voucher_code'] = $result['voucher_code'];
-            $response['voucher_type'] = $result['voucher_type'];
-            $response['amount'] = $result['amount'];
-            $response['created_at'] = $result['created_at'];
-            $response['msisdn'] = $result['msisdn'];
-            $response['email'] = $result['email'];
+            $response = successResponseFromRow($result);
+            voucherLookupLog('lookup_success', [
+                'lookup_source' => $response['lookup_source'] ?? null,
+                'voucher_code' => $response['voucher_code'] ?? null,
+            ]);
         } else {
             $response['status'] = 'not_found';
             $response['message'] = 'No voucher found for this MAC address';
+            voucherLookupLog('lookup_not_found', [
+                'normalized_mac' => $normalized_mac,
+            ]);
         }
         
     } catch (PDOException $e) {
         $response['status'] = 'error';
         $response['message'] = 'Database connection error. Please try again later.';
-        error_log('Voucher lookup error: ' . $e->getMessage());
+        voucherLookupLog('lookup_pdo_error', [
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+    } catch (Throwable $e) {
+        $response['status'] = 'error';
+        $response['message'] = 'Lookup error. Please try again later.';
+        voucherLookupLog('lookup_unexpected_error', [
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
     }
+} else {
+    voucherLookupLog('lookup_request_missing_mac', [
+        'query_mac' => $_GET['mac'] ?? null,
+    ]);
 }
 ?>
 <!DOCTYPE html>
@@ -232,6 +585,24 @@ if (!empty($mac_address)) {
             padding: 25px;
             margin: 20px 0;
             text-align: center;
+        }
+
+        .success-message {
+            background: #ecfdf5;
+            border-left: 4px solid #10b981;
+            border-radius: 8px;
+            color: #065f46;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.5;
+            margin-bottom: 18px;
+            padding: 12px 14px;
+            text-align: center;
+        }
+
+        .success-message span {
+            color: #047857;
+            font-weight: 700;
         }
         
         .voucher-label {
@@ -447,6 +818,10 @@ if (!empty($mac_address)) {
                             <path class="checkmark" d="M30 50 L45 65 L70 35"/>
                         </svg>
                     </div>
+
+                    <div class="success-message">
+                        Voucher found for <?php echo htmlspecialchars($mac_address); ?>. Connecting in <span id="connectCountdown">3</span>s...
+                    </div>
                     
                     <div class="voucher-card">
                         <div class="voucher-label">
@@ -470,14 +845,18 @@ if (!empty($mac_address)) {
                             <span class="info-label">Voucher Type:</span>
                             <span class="info-value"><?php echo htmlspecialchars($response['voucher_type'] ?: 'N/A'); ?></span>
                         </div>
+                        <?php if ($response['amount'] !== null && $response['amount'] !== ''): ?>
                         <div class="info-item">
                             <span class="info-label">Amount Paid:</span>
                             <span class="info-value">UGX <?php echo number_format($response['amount'], 0); ?></span>
                         </div>
+                        <?php endif; ?>
+                        <?php if (!empty($response['msisdn'])): ?>
                         <div class="info-item">
                             <span class="info-label">Phone Number:</span>
-                            <span class="info-value"><?php echo htmlspecialchars($response['msisdn'] ?: 'N/A'); ?></span>
+                            <span class="info-value"><?php echo htmlspecialchars($response['msisdn']); ?></span>
                         </div>
+                        <?php endif; ?>
                         <?php if (!empty($response['email'])): ?>
                         <div class="info-item">
                             <span class="info-label">Email:</span>
@@ -486,6 +865,7 @@ if (!empty($mac_address)) {
                         <?php endif; ?>
                     </div>
                     
+                    <?php if (!empty($response['created_at']) && strtotime($response['created_at'])): ?>
                     <div class="expiry-notice">
                         <div class="label">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -496,8 +876,9 @@ if (!empty($mac_address)) {
                             </svg>
                             Purchase Date
                         </div>
-                        <div class="date"><?php echo date('M d, Y • H:i', strtotime($response['created_at'])); ?></div>
+                        <div class="date"><?php $createdTime = strtotime($response['created_at']); echo date('M d, Y', $createdTime) . ' &bull; ' . date('H:i', $createdTime); ?></div>
                     </div>
+                    <?php endif; ?>
                     
                     <div class="footer-note">
                         Please save this voucher code for your records
@@ -505,13 +886,24 @@ if (!empty($mac_address)) {
                 </div>
 
                 <script>
-                    // Send voucher code to parent window
-                    if (window.parent !== window) {
-                        window.parent.postMessage({
-                            type: 'VOUCHER_FOUND',
-                            voucherCode: '<?php echo htmlspecialchars($response['voucher_code']); ?>'
-                        }, '*');
-                    }
+                    let remainingSeconds = 3;
+                    const countdownEl = document.getElementById('connectCountdown');
+                    const connectTimer = setInterval(() => {
+                        remainingSeconds -= 1;
+                        if (countdownEl) {
+                            countdownEl.textContent = String(Math.max(remainingSeconds, 0));
+                        }
+
+                        if (remainingSeconds <= 0) {
+                            clearInterval(connectTimer);
+                            if (window.parent !== window) {
+                                window.parent.postMessage({
+                                    type: 'VOUCHER_FOUND',
+                                    voucherCode: '<?php echo htmlspecialchars($response['voucher_code']); ?>'
+                                }, '*');
+                            }
+                        }
+                    }, 1000);
 
                     function copyVoucher() {
                         const code = document.getElementById('voucherCode').textContent;
@@ -542,8 +934,8 @@ if (!empty($mac_address)) {
                     
                     <div class="contact-box">
                         <strong>Please contact STK support ON:</strong>
-                        <a href="tel:0200906013">0200906013</a> or 
-                        <a href="tel:0786979317">0786979317</a>
+                        <a href="tel:0788770102">0788770102</a> or
+                        <a href="tel:0704169987">0704169987</a>
                     </div>
                     
                     <button class="refresh-btn" onclick="location.reload()">

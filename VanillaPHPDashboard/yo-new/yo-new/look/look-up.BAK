@@ -1,0 +1,379 @@
+<?php
+// Database configuration
+$host = 'localhost';
+$dbname = 'payment_mikrotik';
+$username = 'yo';
+$password = 'password';
+
+// Get MAC address from URL parameter (passed from MikroTik login page)
+$client_mac = isset($_GET['mac']) ? urldecode(trim($_GET['mac'])) : '';
+
+// Get MAC address from POST request (when form is submitted)
+$mac_address = isset($_POST['mac_address']) ? trim($_POST['mac_address']) : $client_mac;
+
+// Initialize response
+$response = [];
+
+if (!empty($mac_address)) {
+    try {
+        // Create PDO connection
+        $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        
+        // Normalize MAC address for comparison
+        // Remove all separators (colons, hyphens, dots) and convert to uppercase
+        $normalized_mac = strtoupper(preg_replace('/[^A-Fa-f0-9]/', '', $mac_address));
+        
+        // Prepare query - we'll compare normalized versions of both sides
+        // The database stores URL-encoded MACs like "2C%3AFD%3AAB%3A61%3A60%3ABC"
+        // We need to decode them and normalize for comparison
+        $stmt = $pdo->prepare("
+            SELECT 
+                id,
+                voucher_code, 
+                voucher_type,
+                amount,
+                status,
+                created_at,
+                msisdn,
+                email,
+                client_mac
+            FROM transactions 
+            WHERE REPLACE(REPLACE(REPLACE(UPPER(REPLACE(client_mac, '%3A', '')), ':', ''), '-', ''), '.', '') = :mac
+            AND voucher_code IS NOT NULL
+            AND voucher_code != ''
+            ORDER BY created_at DESC
+            LIMIT 1
+        ");
+        
+        $stmt->execute(['mac' => $normalized_mac]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($result) {
+            // Check if transaction was successful
+            if ($result['status'] === 'success') {
+                $response['status'] = 'success';
+                $response['voucher_code'] = $result['voucher_code'];
+                $response['voucher_type'] = $result['voucher_type'];
+                $response['amount'] = $result['amount'];
+                $response['created_at'] = $result['created_at'];
+                $response['msisdn'] = $result['msisdn'];
+                $response['email'] = $result['email'];
+            } else {
+                $response['status'] = 'pending';
+                $response['message'] = 'Transaction found but payment status is: ' . $result['status'];
+                $response['transaction_status'] = $result['status'];
+            }
+        } else {
+            $response['status'] = 'not_found';
+            $response['message'] = 'No voucher found for this MAC address';
+        }
+        
+    } catch (PDOException $e) {
+        $response['status'] = 'error';
+        $response['message'] = 'Database connection error. Please try again later.';
+        // Log the actual error for debugging (don't show to user)
+        error_log('Voucher lookup error: ' . $e->getMessage());
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find My Voucher</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #3b82f6 100%);
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #3b82f6 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 6px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .result.not-found {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        
+        .result.pending {
+            background: #cce5ff;
+            border: 1px solid #b8daff;
+            color: #004085;
+        }
+        
+        .voucher-code {
+            font-size: 28px;
+            font-weight: bold;
+            text-align: center;
+            margin: 15px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 6px;
+            letter-spacing: 3px;
+            border: 2px dashed #28a745;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+        }
+        
+        .info-value {
+            text-align: right;
+        }
+        
+        .info-box {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .helper-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .status-pending {
+            background: #ffc107;
+            color: #333;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🎟️ Your Voucher</h2>
+        
+        <div style="text-align: center; margin-bottom: 20px;">
+            <div style="color: #555; font-size: 13px; margin-bottom: 10px;">
+                Searching for voucher associated with:
+            </div>
+            <div style="color: #667eea; font-size: 16px; font-weight: 600;">
+                <?php echo htmlspecialchars($mac_address); ?>
+            </div>
+            <?php if (empty($response)): ?>
+                <div style="margin-top: 20px; color: #888;">
+                    <div style="display: inline-block; width: 30px; height: 30px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <div style="margin-top: 10px;">Searching database...</div>
+                </div>
+            <?php endif; ?>
+        </div>
+        
+        <?php if (!empty($response)): ?>
+            <div class="result <?php echo $response['status']; ?>">
+                <?php if ($response['status'] === 'success'): ?>
+                    <div style="text-align: center; margin-bottom: 10px;">
+                        <span style="font-size: 40px;">✅</span>
+                        <h3 style="margin: 10px 0;">Voucher Found!</h3>
+                    </div>
+                    
+                    <div class="voucher-code"><?php echo htmlspecialchars($response['voucher_code']); ?></div>
+                    
+                    <div class="info-box">
+                        <div class="info-row">
+                            <span class="info-label">Voucher Type:</span>
+                            <span class="info-value"><?php echo htmlspecialchars($response['voucher_type'] ?: 'N/A'); ?></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Amount Paid:</span>
+                            <span class="info-value">UGX <?php echo number_format($response['amount'], 0); ?></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Phone Number:</span>
+                            <span class="info-value"><?php echo htmlspecialchars($response['msisdn'] ?: 'N/A'); ?></span>
+                        </div>
+                        <?php if (!empty($response['email'])): ?>
+                        <div class="info-row">
+                            <span class="info-label">Email:</span>
+                            <span class="info-value"><?php echo htmlspecialchars($response['email']); ?></span>
+                        </div>
+                        <?php endif; ?>
+                        <div class="info-row">
+                            <span class="info-label">Purchase Date:</span>
+                            <span class="info-value"><?php echo date('M d, Y H:i', strtotime($response['created_at'])); ?></span>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 15px; font-size: 12px; color: #666;">
+                        Please save this voucher code for your records
+                    </div>
+
+                    <script>
+                        // Send voucher code to parent window
+                        if (window.parent !== window) {
+                            window.parent.postMessage({
+                                type: 'VOUCHER_FOUND',
+                                voucherCode: '<?php echo htmlspecialchars($response['voucher_code']); ?>'
+                            }, '*');
+                        }
+                    </script>                    
+                    
+                <?php elseif ($response['status'] === 'pending'): ?>
+                    <div style="text-align: center;">
+                        <span style="font-size: 40px;">⏳</span>
+                        <h3 style="margin: 10px 0;">Transaction Pending</h3>
+                        <p><?php echo htmlspecialchars($response['message']); ?></p>
+                        <div style="margin-top: 15px; font-size: 14px;">
+                            Please complete your payment or wait for the transaction to be processed.
+                        </div>
+                    </div>
+                    
+                <?php elseif ($response['status'] === 'not_found'): ?>
+                    <div style="text-align: center;">
+                        <span style="font-size: 40px;">⚠️</span>
+                        <h3 style="margin: 10px 0;">No Voucher Found</h3>
+                        <p><?php echo htmlspecialchars($response['message']); ?></p>
+                        <div style="margin-top: 15px; font-size: 14px;">
+                            Uh Oh!!! We don't have any lost vouchers for this Device's address. Please contact STK support ON: 0200906013 or 0786979317.
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button onclick="location.reload()" style="background: #667eea; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                🔄 Refresh Search
+                            </button>
+                        </div>
+                    </div>
+                    
+                <?php else: ?>
+                    <div style="text-align: center;">
+                        <span style="font-size: 40px;">❌</span>
+                        <h3 style="margin: 10px 0;">Error</h3>
+                        <p><?php echo htmlspecialchars($response['message']); ?></p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</body>
+</html>

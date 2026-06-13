@@ -1,0 +1,7 @@
+RewriteEngine On
+
+# Accept reusable site paths such as /ranken/initiate.php while keeping only
+# one physical PHP file per endpoint.
+RewriteRule ^([a-zA-Z0-9-]+)/(initiate|check_status|ipn|callback|failure|api)\.php$ $2.php?site=$1 [QSA,L]
+
+DirectoryIndex index.php

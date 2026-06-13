@@ -1,0 +1,20 @@
+# Redirect to login if accessing directory
+DirectoryIndex login.php
+
+# Enable error reporting (disable in production)
+# php_flag display_errors on
+# php_value error_reporting E_ALL
+
+# Security headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# Prevent direct HTTP access to config and includes directories
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^includes/ - [F,L]
+</IfModule>

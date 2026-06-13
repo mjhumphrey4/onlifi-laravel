@@ -1,0 +1,17 @@
+{
+  "skin1": {
+    "name": "Modern Gradient",
+    "description": "Bold gradient design with vibrant colors",
+    "preview": "Purple to blue gradient background"
+  },
+  "skin2": {
+    "name": "Glassmorphism",
+    "description": "Frosted glass effect with blur and transparency",
+    "preview": "Light background with glass cards"
+  },
+  "skin3": {
+    "name": "Dark Neumorphism",
+    "description": "Modern dark theme with soft shadows",
+    "preview": "Dark background with raised card elements"
+  }
+}

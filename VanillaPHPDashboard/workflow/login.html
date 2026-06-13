@@ -1,0 +1,1571 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="-1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Internet Hotspot - Voucher Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #ff6b35 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+            padding: 8px 20px 15px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.2) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        
+        .wifi-icon {
+            width: 120px;
+            height: 90px;
+            margin: 0 auto 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .wifi-icon svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+        }    
+
+        h1 {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: 400;
+            position: relative;
+            z-index: 1;
+        }
+
+        .form-container {
+            padding: 24px 20px;
+        }
+
+        .info {
+            text-align: center;
+            color: #5a6c7d;
+            font-size: 13px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .info.alert {
+            color: #ff6b35;
+            font-weight: 600;
+            background: rgba(255, 107, 53, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            border-left: 3px solid #ff6b35;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 18px;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            z-index: 1;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 14px 14px 48px;
+            border: 2px solid rgb(0, 1, 3);
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            background: white;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #2a5298;
+            box-shadow: 0 0 0 4px rgba(42, 82, 152, 0.1);
+        }
+
+        input[type="text"]::placeholder {
+            color: #a0aec0;
+            font-weight: 400;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .pricing-section {
+            padding: 20px 24px;
+            border-top: 1px solid #e0e7ee;
+            background: linear-gradient(to bottom, #ffffff 0%, #f8fafc 100%);
+        }
+
+        .pricing-title {
+            text-align: center;
+            color: #1e3c72;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .pricing-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+
+        .pricing-table tr {
+            transition: transform 0.2s ease;
+        }
+
+        .pricing-table tr:hover {
+            transform: translateX(4px);
+        }
+
+        .pricing-table td {
+            padding: 10px 12px;
+            background: white;
+            border: 2px solid #e0e7ee;
+        }
+
+        .pricing-table td:first-child {
+            border-radius: 10px 0 0 10px;
+            border-right: none;
+            color: #2a5298;
+            font-weight: 600;
+            font-size: 14px;
+            width: 35%;
+            line-height: 1.3;
+        }
+        
+        .pricing-table td:first-child .package-duration {
+            display: block;
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+        
+        .pricing-table td:first-child .package-desc {
+            display: block;
+            font-size: 11px;
+            color: #5a6c7d;
+            font-weight: 500;
+        }
+
+        .pricing-table td:nth-child(2) {
+            border-right: none;
+            border-left: none;
+            color: #1e3c72;
+            font-weight: 700;
+            font-size: 14px;
+            width: 35%;
+        }
+
+        .pricing-table td:last-child {
+            border-radius: 0 10px 10px 0;
+            border-left: none;
+            padding: 6px 10px;
+            width: 30%;
+        }
+
+        .buy-btn {
+            width: 100%;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .buy-btn:hover {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(42, 82, 152, 0.3);
+        }
+
+        .buy-btn:active {
+            transform: translateY(0);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 16px 24px 20px;
+            color: #a0aec0;
+            font-size: 12px;
+            border-top: 1px solid #e0e7ee;
+        }
+
+        .footer-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #5a6c7d;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer-logo svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: rgba(30, 30, 50, 0.95);
+            border-radius: 12px;
+            padding: 25px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s ease;
+            margin: 20px;
+        }
+
+        /* Voucher Modal - iframe styling */
+        #voucherModal .modal {
+            background: white;
+            max-width: 420px;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #voucherModal .modal-header {
+            padding: 20px 24px;
+            margin-bottom: 0;
+            border-bottom: 1px solid #e0e7ee;
+        }
+
+        #voucherModal .modal-body {
+            padding: 0;
+            height: 600px;
+            overflow: hidden;
+        }
+
+        #voucherModal iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+            color: #1e3c72;
+            margin: 0;
+            font-weight: 700;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #a0aec0;
+            font-size: 28px;
+            cursor: pointer;
+            transition: color 0.3s;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: #1e3c72;
+        }
+
+        .modal-body {
+            margin-bottom: 16px;
+        }
+
+        .package-summary {
+            background: linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(255, 107, 53, 0.1) 100%);
+            border: 2px solid rgba(42, 82, 152, 0.3);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .package-summary h3 {
+            color: #1e3c72;
+            font-size: 16px;
+            margin: 0 0 6px 0;
+            font-weight: 700;
+        }
+
+        .package-summary .price {
+            color: #ff6b35;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #5a6c7d;
+            font-size: 13px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e0e7ee;
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #2a5298;
+            box-shadow: 0 0 0 4px rgba(42, 82, 152, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #a0aec0;
+        }
+
+        .warning {
+            color: #ff6b35;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .error-message {
+            color: #ff6b35;
+            font-size: 12px;
+            margin-top: 6px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        #paymentStatus {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 500;
+            display: none;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        #paymentStatus.info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #2a5298;
+            border: 2px solid rgba(42, 82, 152, 0.3);
+        }
+
+        #paymentStatus.success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #059669;
+            border: 2px solid rgba(34, 197, 94, 0.3);
+        }
+
+        #paymentStatus.error {
+            background: rgba(255, 107, 53, 0.1);
+            color: #ff6b35;
+            border: 2px solid rgba(255, 107, 53, 0.3);
+        }
+        #paymentStatus.backup {
+            background: rgba(251, 191, 36, 0.1);
+            color: #f59e0b;
+            border: 2px solid rgba(251, 191, 36, 0.3);
+        }
+        .spinner {
+            border: 2px solid #e0e7ee;
+            border-top: 2px solid #2a5298;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-cancel {
+            flex: 1;
+            background: white;
+            color: #5a6c7d;
+            padding: 12px 16px;
+            border: 2px solid #e0e7ee;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+        }
+
+        .btn-cancel:hover {
+            background: #f8fafc;
+            border-color: #2a5298;
+        }
+
+        .btn-proceed {
+            flex: 1;
+            background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+            color: white;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+        }
+
+        .btn-proceed:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        .btn-proceed:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                border-radius: 16px;
+                max-width: 100%;
+                margin: 0;
+            }
+
+            .header {
+                padding: 15px 16px 20px;
+            }
+
+            h1 {
+                font-size: 22px;
+                margin-bottom: 4px;
+            }
+
+            .subtitle {
+                font-size: 13px;
+            }
+
+            .wifi-icon {
+                width: 110px;
+                height: 85px;
+                margin: 0 auto 10px;
+            }
+
+            .form-container {
+                padding: 20px 16px;
+            }
+
+            .pricing-section {
+                padding: 18px 16px;
+            }
+
+            .pricing-title {
+                font-size: 15px;
+                margin-bottom: 14px;
+            }
+
+            .pricing-table td:first-child {
+                font-size: 12px;
+                padding: 8px 10px;
+            }
+
+            .pricing-table td:nth-child(2) {
+                font-size: 13px;
+                padding: 8px 10px;
+            }
+
+            .buy-btn {
+                font-size: 10px;
+                padding: 7px 10px;
+            }
+
+            input[type="text"] {
+                padding: 14px 14px 14px 48px;
+                font-size: 15px;
+            }
+
+            .submit-btn {
+                padding: 14px;
+                font-size: 14px;
+            }
+
+            .button-row {
+                gap: 10px;
+                margin-top: 10px;
+            }
+
+            .btn-find-voucher,
+            .btn-trial {
+                padding: 11px 12px;
+                font-size: 12px;
+            }
+
+            marquee {
+                font-size: 12px;
+                margin-top: 6px;
+                padding: 0 10px;
+            }
+
+            .modal {
+                margin: 10px;
+                max-width: 95%;
+            }
+
+            #voucherModal .modal {
+                max-width: 95%;
+            }
+
+            #voucherModal .modal-body {
+                height: 500px;
+            }
+        }
+
+        .free-trial-section {
+            text-align: center;
+            margin-bottom: 25px;
+            padding: 20px 15px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 2px solid rgba(59, 130, 246, 0.5);
+            border-radius: 8px;
+        }
+
+        .free-trial-section h2 {
+            font-size: 16px;
+            color: #3b82f6;
+            margin-bottom: 10px;
+        }
+
+        .free-trial-section p {
+            color: #aaa;
+            margin-bottom: 12px;
+            font-size: 12px;
+            line-height: 1.5;
+        }        
+        .btn-trial {
+            flex: 1;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+            text-decoration: none;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+        }
+
+        .btn-trial:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        }
+
+        .btn-trial:active {
+            transform: translateY(0);
+        }        
+        .button-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .btn-find-voucher {
+            flex: 1;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+        }
+
+        .btn-find-voucher:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        }
+
+        .btn-find-voucher:active {
+            transform: translateY(0);
+        }
+        marquee {
+            color: #ff6600;
+            font-size: 13px;
+            margin-top: 8px;
+        }            
+    </style>
+</head>
+<body>
+    $(if chap-id)
+    <form name="sendin" action="$(link-login-only)" method="post" style="display:none">
+        <input type="hidden" name="username" />
+        <input type="hidden" name="password" />
+        <input type="hidden" name="dst" value="$(link-orig)" />
+        <input type="hidden" name="popup" value="true" />
+    </form>
+
+    <script src="/md5.js"></script>
+    <script>
+        function doLogin() {
+            var voucher = document.login.username.value;
+            document.sendin.username.value = voucher;
+            document.sendin.password.value = hexMD5('$(chap-id)' + voucher + '$(chap-challenge)');
+            document.sendin.submit();
+            return false;
+        }
+    </script>
+    $(endif)
+
+    <!-- Payment Modal -->
+    <div class="modal-overlay" id="paymentModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">Payment Details</h2>
+                <button class="modal-close" onclick="closePaymentModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Package Summary -->
+                <div class="package-summary">
+                    <h3 id="summaryPackage">📦 Package Name</h3>
+                    <p class="price" id="summaryPrice">UGX 0</p>
+                </div>
+                
+                <div class="form-group">
+                    <p class="warning">Do not close this page while entering your PIN! In case of challenges please contact support on: <strong>0786979317</strong>.</p>
+                    <label for="phoneInput">Phone Number <span style="color: #ff6b35;">*</span></label>
+                    <input 
+                        type="tel" 
+                        id="phoneInput" 
+                        placeholder="Enter your phone number (e.g., 0701234567)"
+                        required
+                    />
+                    <div class="error-message" id="phoneError">Phone number is required</div>
+                </div>
+                <!-- Add status display area -->
+                <div id="paymentStatus">
+                    <span id="statusText"></span>
+                    <span id="statusSpinner" class="spinner" style="display: none;"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" id="cancelBtn" onclick="closePaymentModal()">Cancel</button>
+                <button class="btn-proceed" id="proceedBtn" onclick="proceedPayment()">Buy Voucher</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div class="wifi-icon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="wifiGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffaa00;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#ff8800;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6600;stop-opacity:1" />
+    </linearGradient>
+    
+    <radialGradient id="glowRadial">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#ffaa00;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#ff6600;stop-opacity:0" />
+    </radialGradient>
+
+    <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffaa00;stop-opacity:0" />
+      <stop offset="50%" style="stop-color:#ffaa00;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffaa00;stop-opacity:0" />
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="strongGlow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background glow pulse -->
+  <circle cx="200" cy="280" r="100" fill="url(#glowRadial)" opacity="0.4">
+    <animate attributeName="r" values="100;130;100" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.4;0.6;0.4" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- WiFi Signal Waves - Outer (largest) -->
+  <path d="M 70 150 Q 200 50 330 150" 
+        stroke="url(#wifiGradient)" 
+        stroke-width="12" 
+        fill="none" 
+        stroke-linecap="round"
+        opacity="0">
+    <animate attributeName="opacity" values="0;0.3;0.7;1;0.7;0.3;0" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="stroke-width" values="8;12;8" dur="2s" repeatCount="indefinite"/>
+  </path>
+
+  <!-- WiFi Signal Waves - Second -->
+  <path d="M 100 170 Q 200 90 300 170" 
+        stroke="url(#wifiGradient)" 
+        stroke-width="12" 
+        fill="none" 
+        stroke-linecap="round"
+        opacity="0"
+        filter="url(#glow)">
+    <animate attributeName="opacity" values="0;0.4;0.8;1;0.8;0.4;0" dur="2s" repeatCount="indefinite" begin="0.3s"/>
+    <animate attributeName="stroke-width" values="8;12;8" dur="2s" repeatCount="indefinite" begin="0.3s"/>
+  </path>
+
+  <!-- WiFi Signal Waves - Third -->
+  <path d="M 130 190 Q 200 130 270 190" 
+        stroke="url(#wifiGradient)" 
+        stroke-width="12" 
+        fill="none" 
+        stroke-linecap="round"
+        opacity="0"
+        filter="url(#glow)">
+    <animate attributeName="opacity" values="0;0.5;0.9;1;0.9;0.5;0" dur="2s" repeatCount="indefinite" begin="0.6s"/>
+    <animate attributeName="stroke-width" values="8;12;8" dur="2s" repeatCount="indefinite" begin="0.6s"/>
+  </path>
+
+  <!-- WiFi Signal Waves - Fourth (innermost) -->
+  <path d="M 160 210 Q 200 170 240 210" 
+        stroke="url(#wifiGradient)" 
+        stroke-width="12" 
+        fill="none" 
+        stroke-linecap="round"
+        opacity="0"
+        filter="url(#strongGlow)">
+    <animate attributeName="opacity" values="0;0.6;1;1;1;0.6;0" dur="2s" repeatCount="indefinite" begin="0.9s"/>
+    <animate attributeName="stroke-width" values="8;14;8" dur="2s" repeatCount="indefinite" begin="0.9s"/>
+  </path>
+
+  <!-- WiFi Router/Source base -->
+  <g id="routerBase" filter="url(#strongGlow)">
+    <!-- Base of router -->
+    <rect x="170" y="265" width="60" height="35" rx="5" fill="url(#wifiGradient)" opacity="0.9">
+      <animate attributeName="opacity" values="0.9;1;0.9" dur="2s" repeatCount="indefinite"/>
+    </rect>
+    
+    <!-- Router top highlight -->
+    <rect x="175" y="268" width="50" height="4" rx="2" fill="#ffaa00" opacity="0.8">
+      <animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>
+    </rect>
+    
+    <!-- Antenna left -->
+    <rect x="178" y="255" width="4" height="12" rx="2" fill="url(#wifiGradient)">
+      <animate attributeName="fill-opacity" values="0.8;1;0.8" dur="1.8s" repeatCount="indefinite"/>
+    </rect>
+    
+    <!-- Antenna right -->
+    <rect x="218" y="255" width="4" height="12" rx="2" fill="url(#wifiGradient)">
+      <animate attributeName="fill-opacity" values="0.8;1;0.8" dur="1.8s" repeatCount="indefinite" begin="0.2s"/>
+    </rect>
+  </g>
+
+  <!-- Speed data particles emanating outward -->
+  <g id="dataParticles">
+    <!-- Left side particles -->
+    <circle cx="200" cy="240" r="3" fill="#ffaa00" filter="url(#glow)">
+      <animate attributeName="cx" values="200;80;60" dur="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="240;180;160" dur="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;5;2" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="200" cy="240" r="3" fill="#ff8800" filter="url(#glow)">
+      <animate attributeName="cx" values="200;90;70" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+      <animate attributeName="cy" values="240;170;150" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+      <animate attributeName="r" values="3;5;2" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+    </circle>
+
+    <!-- Right side particles -->
+    <circle cx="200" cy="240" r="3" fill="#ffaa00" filter="url(#glow)">
+      <animate attributeName="cx" values="200;320;340" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+      <animate attributeName="cy" values="240;180;160" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+      <animate attributeName="r" values="3;5;2" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+    </circle>
+    
+    <circle cx="200" cy="240" r="3" fill="#ff8800" filter="url(#glow)">
+      <animate attributeName="cx" values="200;310;330" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+      <animate attributeName="cy" values="240;170;150" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+      <animate attributeName="r" values="3;5;2" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+    </circle>
+
+    <!-- Upward particles -->
+    <circle cx="200" cy="240" r="3" fill="#ff9900" filter="url(#glow)">
+      <animate attributeName="cx" values="200;200;200" dur="1.6s" repeatCount="indefinite" begin="0.4s"/>
+      <animate attributeName="cy" values="240;120;80" dur="1.6s" repeatCount="indefinite" begin="0.4s"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.6s" repeatCount="indefinite" begin="0.4s"/>
+      <animate attributeName="r" values="3;6;2" dur="1.6s" repeatCount="indefinite" begin="0.4s"/>
+    </circle>
+  </g>
+
+  <!-- Speed indicator arrows/chevrons -->
+  <g id="speedChevrons" opacity="0.7">
+    <!-- Left chevrons -->
+    <path d="M 120 200 L 100 220 L 120 240" stroke="#ffaa00" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite"/>
+      <animate attributeName="stroke-width" values="2;4;2" dur="1.2s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 140 200 L 120 220 L 140 240" stroke="#ff9900" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" begin="0.2s"/>
+      <animate attributeName="stroke-width" values="2;4;2" dur="1.2s" repeatCount="indefinite" begin="0.2s"/>
+    </path>
+
+    <!-- Right chevrons -->
+    <path d="M 280 200 L 300 220 L 280 240" stroke="#ffaa00" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" begin="0.1s"/>
+      <animate attributeName="stroke-width" values="2;4;2" dur="1.2s" repeatCount="indefinite" begin="0.1s"/>
+    </path>
+    <path d="M 260 200 L 280 220 L 260 240" stroke="#ff9900" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" begin="0.3s"/>
+      <animate attributeName="stroke-width" values="2;4;2" dur="1.2s" repeatCount="indefinite" begin="0.3s"/>
+    </path>
+  </g>
+
+  <!-- WiFi dot indicator (center point) -->
+  <circle cx="200" cy="280" r="8" fill="#ffffff" filter="url(#strongGlow)">
+    <animate attributeName="r" values="6;10;6" dur="1.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.8;1;0.8" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Rotating signal indicator ring -->
+  <circle cx="200" cy="280" r="25" stroke="#ffaa00" stroke-width="2" fill="none" opacity="0.5" stroke-dasharray="5 10">
+    <animateTransform attributeName="transform" type="rotate" from="0 200 280" to="360 200 280" dur="3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.3;0.7;0.3" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Speed streaks across the entire logo -->
+  <g id="speedStreaks" opacity="0.6">
+    <line x1="0" y1="220" x2="400" y2="220" stroke="url(#speedGradient)" stroke-width="2">
+      <animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite"/>
+    </line>
+    <line x1="0" y1="230" x2="400" y2="230" stroke="url(#speedGradient)" stroke-width="3">
+      <animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite" begin="0.3s"/>
+    </line>
+    <line x1="0" y1="240" x2="400" y2="240" stroke="url(#speedGradient)" stroke-width="2">
+      <animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite" begin="0.6s"/>
+    </line>
+  </g>
+
+  <!-- Additional WiFi wave pulses for emphasis -->
+  <g id="wifiPulses" opacity="0.4">
+    <path d="M 40 130 Q 200 20 360 130" 
+          stroke="#ffaa00" 
+          stroke-width="3" 
+          fill="none" 
+          stroke-linecap="round"
+          stroke-dasharray="10 15">
+      <animate attributeName="stroke-dashoffset" values="0;-100" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.2;0.6;0.2" dur="2s" repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>
+            </div>
+            <h1>STK WIFI POINT</h1>
+            <p class="subtitle">Faster, Affordable Internet with a Smile</p>
+        </div>
+
+        <form name="login" action="$(link-login-only)" method="post" $(if chap-id) onSubmit="return doLogin()" $(endif)>
+            <input type="hidden" name="dst" value="https://google.com" />
+            <input type="hidden" name="popup" value="true" />
+            $(if error == "")
+            <input type="hidden" name="password" value="" />
+            $(endif)
+
+            <div class="form-container">
+                <p class="info $(if error)alert$(endif)">
+                    $(if error == "")$(endif)
+                    $(if error)$(error)$(endif)
+                </p>
+
+                <div class="input-group">
+                    <svg class="input-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M9 11V6C9 4.34315 10.3431 3 12 3C13.6569 3 15 4.34315 15 6V11M12 14V17M6 11H18C19.1046 11 20 11.8954 20 13V19C20 20.1046 19.1046 21 18 21H6C4.89543 21 4 20.1046 4 19V13C4 11.8954 4.89543 11 6 11Z" stroke="#2a5298" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <input name="username" type="text" value="$(username)" placeholder="Enter Voucher Code" required autocomplete="off" />
+                </div>
+
+                <script>
+                    // Set password to match username for non-CHAP
+                    $(if chap-id == "")
+                    document.addEventListener('DOMContentLoaded', function() {
+                        var form = document.forms['login'];
+                        var usernameInput = form.elements['username'];
+                        var passwordInput = form.elements['password'];
+                        
+                        usernameInput.addEventListener('input', function() {
+                            passwordInput.value = usernameInput.value;
+                        });
+                    });
+                    $(endif)
+                </script>
+
+                <button type="submit" class="submit-btn">Connect Now</button>
+
+                <!-- Button Row: Find Voucher (Green) and Free Trial (Blue) -->
+                <div class="button-row">
+                    <button type="button" class="btn-find-voucher" onclick="openVoucherModal()">🔍 Find Lost Voucher</button>
+                    $(if trial == 'yes')
+                    <a href="$(link-login-only)?dst=$(link-orig-esc)&username=T-$(mac-esc)" class="btn-trial">🎁 Enjoy Free WIFI (10 mins daily)</a>
+                    $(endif)
+                </div>
+            </div>
+        </form>
+
+        <!-- Find My Voucher Modal -->
+<div class="modal-overlay" id="voucherModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Finding Your Voucher</h2>
+            <button class="modal-close" onclick="closeVoucherModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <iframe id="voucherIframe" src="https://pay.onlustech.com/yo/look/voucher-lookup.php"></iframe>
+        </div>
+    </div>
+</div>   
+    <marquee>Welcome to STK WIFI POINT, you can buy a voucher from Corner House, Taata Nita (Uncle Duuka) or Nuwarinda Mobile Shop or pay with mobile money for instant access. Happy Surfing!!!! Need help? Contact: <strong>0786979317</strong></marquee>     
+        <div class="pricing-section">
+            <h2 class="pricing-title">Don't have a voucher? Buy with Mobile Money</h2>
+            <table class="pricing-table">
+                <tr>
+                    <td>
+                        <span class="package-duration">3 Hours</span>
+                    </td>
+                    <td>UGX 500</td>
+                    <td><button class="buy-btn" onclick="openPaymentModal(this, '492', '3hours', '3 Hours', '$(mac-esc)', '$(link-orig-esc)', '$(link-login-only)')">Buy</button></td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="package-duration">12 Hours</span>
+                        <span class="package-desc">Half Day</span>
+                    </td>
+                    <td>UGX 1,000</td>
+                    <td><button class="buy-btn" onclick="openPaymentModal(this, '985', '12hours', '12 Hours', '$(mac-esc)', '$(link-orig-esc)', '$(link-login-only)')">Buy</button></td>
+                </tr>                
+                <tr>
+                    <td>
+                        <span class="package-duration">24 Hours</span>
+                        <span class="package-desc">Full Day</span>
+                    </td>
+                    <td>UGX 1,500</td>
+                    <td><button class="buy-btn" onclick="openPaymentModal(this, '1477', '24hours', '24 Hours', '$(mac-esc)', '$(link-orig-esc)', '$(link-login-only)')">Buy</button></td>
+                </tr>           
+                <tr>
+                    <td>
+                        <span class="package-duration">7 Days</span>
+                        <span class="package-desc">One Week</span>
+                    </td>
+                    <td>UGX 6,000</td>
+                    <td><button class="buy-btn" onclick="openPaymentModal(this, '5910', '7days', '7 Days', '$(mac-esc)', '$(link-orig-esc)', '$(link-login-only)')">Buy</button></td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="package-duration">30 Days</span>
+                        <span class="package-desc">One Month</span>
+                    </td>
+                    <td>UGX 25,000</td>
+                    <td><button class="buy-btn" onclick="openPaymentModal(this, '25000', '30days', '30 Days', '$(mac-esc)', '$(link-orig-esc)', '$(link-login-only)')">Buy</button></td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="package-duration">Family (Weekly)</span>
+                        <span class="package-desc">Smart TV, 2-3 Devices</span>
+                    </td>
+                    <td>UGX 10,000</td>
+                    <td><button class="buy-btn" onclick="openPaymentModal(this, '10000', '7days', '7 Days', '$(mac-esc)', '$(link-orig-esc)', '$(link-login-only)')">Buy</button></td>
+                </tr>                                  
+            </table>
+        </div>
+
+        <div class="footer">
+            <span class="footer-logo">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 7L12 3L4 7M20 7L12 11M20 7V17L12 21M12 11L4 7M12 11V21M4 7V17L12 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Need help? Contact: <strong>0786979317</strong>  
+            </span><br>
+            Powered by ONLIFI NMS - www.onlifi.net
+        </div>
+    </div>
+
+    <script>
+        // Global variables for payment
+        var pendingPayment = {
+            amount: 0,
+            packageType: '',
+            packageName: '',
+            clientMac: '',
+            linkOrig: '',
+            linkLoginOnly: ''
+        };
+
+        // Define the origin site identifier for this specific frontend instance
+        const CURRENT_ORIGIN_SITE = 'STK WIFI'; // Your site identifier
+
+        let pollInterval; // Variable to hold the polling interval ID
+        let pollCount = 0; // Variable to track the number of polls
+        const MAX_POLLS = 40; // Maximum number of polling attempts (40 * 5s = ~3 minutes)
+
+        // Copy username to hidden password field on input
+        document.addEventListener('DOMContentLoaded', function() {
+            var form = document.forms['login'];
+            if (form) {
+                var usernameInput = form.elements['username'];
+                var passwordInput = form.elements['password'];
+                
+                if (usernameInput && passwordInput) {
+                    usernameInput.addEventListener('input', function() {
+                        passwordInput.value = usernameInput.value;
+                    });
+                }
+            }
+        });
+
+        function openPaymentModal(buttonElement, amount, packageType, packageName, clientMac, linkOrig, linkLoginOnly) {
+            // Extract the displayed price from the DOM
+            var priceElement = buttonElement.parentElement.querySelector('.package-price');
+            if (!priceElement) {
+                priceElement = buttonElement.closest('tr').querySelectorAll('td')[1];
+            }
+            var displayPrice = priceElement ? priceElement.textContent.trim() : 'UGX ' + amount;
+            
+            // Store payment details - MikroTik variables are passed as parameters
+            pendingPayment.amount = amount;
+            pendingPayment.packageType = packageType;
+            pendingPayment.packageName = packageName;
+            pendingPayment.clientMac = clientMac;
+            pendingPayment.linkOrig = linkOrig;
+            pendingPayment.linkLoginOnly = linkLoginOnly;
+
+            // Update modal title and package summary
+            document.getElementById('modalTitle').innerHTML = 'Pay for ' + packageName + ' Access';
+            document.getElementById('summaryPackage').innerHTML = '📦 ' + packageName;
+            document.getElementById('summaryPrice').innerHTML = displayPrice;
+
+            // Clear form fields and status display
+            document.getElementById('phoneInput').value = '';
+            document.getElementById('phoneError').classList.remove('show');
+            document.getElementById('paymentStatus').style.display = 'none';
+            document.getElementById('statusText').innerHTML = '';
+            document.getElementById('statusSpinner').style.display = 'none';
+
+            // Re-enable buttons
+            document.getElementById('proceedBtn').disabled = false;
+            document.getElementById('cancelBtn').disabled = false;
+
+            // Show modal
+            document.getElementById('paymentModal').classList.add('show');
+
+            // Focus on phone input
+            setTimeout(function() {
+                document.getElementById('phoneInput').focus();
+            }, 100);
+        }
+
+        function closePaymentModal() {
+            // Clear any ongoing polling if modal is closed manually
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+            pollCount = 0;
+
+            document.getElementById('paymentModal').classList.remove('show');
+            pendingPayment = {
+                amount: 0,
+                packageType: '',
+                packageName: '',
+                clientMac: '',
+                linkOrig: '',
+                linkLoginOnly: ''
+            };
+        }
+
+        function formatPhone(phone) {
+            // Remove spaces and convert to 256 format
+            phone = phone.replace(/\s/g, '').replace('+', '');
+            if (phone.startsWith('0')) {
+                phone = phone.substring(1);
+            }
+            if (!phone.startsWith('256')) {
+                phone = '256' + phone;
+            }
+            return phone;
+        }
+
+        function validatePhone(phone) {
+            var phoneRegex = /^(\+256|0)[0-9]{9}$/;
+            return phoneRegex.test(phone.replace(/\s/g, ''));
+        }
+
+        function proceedPayment() {
+            var phone = document.getElementById('phoneInput').value.trim();
+            var phoneError = document.getElementById('phoneError');
+            var isValid = true;
+
+            // Validate phone
+            phoneError.classList.remove('show');
+            if (phone === '' || !validatePhone(phone)) {
+                phoneError.textContent = phone === '' ? 'Phone number is required' : 'Invalid phone number format';
+                phoneError.classList.add('show');
+                isValid = false;
+            } else {
+                phone = formatPhone(phone); // Auto-format to 256XXXXXXXXX
+            }
+ 
+            if (!isValid) return;
+
+            // Start Payment Process
+            document.getElementById('proceedBtn').disabled = true;
+            document.getElementById('cancelBtn').disabled = true;
+            document.getElementById('paymentStatus').className = 'info';
+            document.getElementById('statusText').innerHTML = '<strong>Initiating voucher payment...</strong>';
+            document.getElementById('statusSpinner').style.display = 'inline-block';
+            document.getElementById('paymentStatus').style.display = 'block';
+
+            // Clear any previous polling intervals
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+            pollCount = 0;
+
+            // Prepare data including MikroTik variables and user input
+            const paymentData = {
+                amount: parseFloat(pendingPayment.amount),
+                msisdn: phone,
+                origin_site: CURRENT_ORIGIN_SITE,
+                client_mac: pendingPayment.clientMac,
+                voucher_type: pendingPayment.packageType,
+                origin_url: pendingPayment.linkOrig
+            };
+
+            // Call backend initiate.php
+            fetch('https://pay.onlustech.com/yo/initiate.php', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams(paymentData).toString()
+            })
+            //.then(response => response.json())
+            .then(response => {
+                console.log('Response status:', response.status, response.statusText);
+                
+                // Check if response is OK (status 200-299)
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                }
+                
+                // Check content type before parsing
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    console.error('Invalid content-type:', contentType);
+                    throw new Error('Server returned non-JSON response');
+                }
+                
+                return response.json();
+            })            
+            .then(initData => {
+                console.log('Initiate response:', initData);
+
+                if (initData.status === -1) {
+                  showPaymentError(initData.errorMessage || 'Payment initiation failed');
+                } else if (initData.status === 1) {
+                  document.getElementById('statusText').innerHTML = '<strong>📱 Check your phone to enter PIN and confirm payment.</strong><br>Waiting for confirmation...';
+                  const ref = initData.transactionReference;
+
+                  if (!ref) {
+                    console.error('No transactionReference returned from backend:', initData);
+                    showPaymentError('Payment initiation error: Missing reference.');
+                    return;
+                  }
+
+                  console.log('Starting polling for Yo! ref:', ref);
+                  startPolling(ref);
+                } else {
+                  console.warn('Unexpected status from backend:', initData.status);
+                  showPaymentError('Payment initiation returned unexpected status. Please try again.');
+                }
+            })
+            .catch(err => {
+                console.error('Payment initiation error:', err);
+                console.error('Error details:', {
+                    message: err.message,
+                    name: err.name,
+                    stack: err.stack
+                });
+                
+                // Provide more specific error messages
+                let errorMsg = 'Network error occurred during initiation.';
+                if (err.message.includes('Server error')) {
+                    errorMsg = 'Payment server error. Please try again or contact support on 0786979317.';
+                } else if (err.message.includes('non-JSON')) {
+                    errorMsg = 'Server configuration error. Please contact support on 07869793317.';
+                } else if (err.name === 'TypeError') {
+                    errorMsg = 'Connection failed. Check your internet connection and try again.';
+                }
+                
+                showPaymentError(errorMsg + ' (Error: ' + err.message + ')');
+            });
+        }
+
+        function startPolling(ref) {
+          pollInterval = setInterval(() => {
+            pollCount++;
+            console.log(`Polling attempt ${pollCount}/${MAX_POLLS} for ref: ${ref}`);
+
+            if (pollCount > MAX_POLLS) {
+              clearInterval(pollInterval);
+              showPaymentError('Payment timeout! Please contact support on: 0786979317 if money was deducted from your account.');
+              return;
+            }
+
+            fetch(`https://pay.onlustech.com/yo/check_status.php?ref=${encodeURIComponent(ref)}&t=${Date.now()}`)
+              .then(response => response.json())
+              .then(checkData => {
+                  console.log('Status check response:', checkData);
+
+                  if (checkData.transactionStatus === 1) {
+                    if (checkData.voucherCode) {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        showVoucherSuccess(checkData.voucherCode);
+                    } else {
+                        console.warn('Status check returned success but no voucher code.');
+                        document.getElementById('statusText').innerHTML = `<strong>✅ Payment confirmed.</strong><br>Assigning voucher... (${pollCount * 5}s)`;
+                    }
+                  } else if (checkData.transactionStatus === 2) {
+                    // Status 2 = Retrying with backup service
+                    document.getElementById('paymentStatus').className = 'backup';
+                    document.getElementById('statusText').innerHTML = `<strong>🔄 Trying again with our backup payment service...</strong><br>Please enter PIN if prompted, checking status... (${pollCount * 5}s)`;
+                    document.getElementById('statusSpinner').style.display = 'inline-block';
+                    console.log('Backup service retry in progress');
+                  } else if (checkData.transactionStatus < 0) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    showPaymentError(checkData.errorMessage || 'Payment failed');
+                  } else {
+                    document.getElementById('statusText').innerHTML = `<strong>⏳ Waiting for payment confirmation...</strong><br>(${pollCount * 5}s)`;
+                  }
+              })
+              .catch(err => {
+                  console.error('Polling error:', err);
+                  document.getElementById('statusText').innerHTML = `<strong>⏳ Network issue during check...</strong><br>retrying (${pollCount * 5}s)`;
+              });
+          }, 5000); // Poll every 5 seconds
+        }
+
+        function showVoucherSuccess(voucherCode) {
+          // Close the payment modal
+          document.getElementById('paymentModal').classList.remove('show');
+          
+          // Auto-fill and submit the login form
+          if (document.forms['login'] && document.forms['login'].elements['username']) {
+              document.forms['login'].elements['username'].value = voucherCode;
+              var passwordField = document.forms['login'].elements['password'];
+              if (passwordField) {
+                  passwordField.value = voucherCode;
+              }
+              
+              // Check if CHAP authentication is enabled
+              if (typeof doLogin === 'function') {
+                  doLogin();
+              } else {
+                  document.forms['login'].submit();
+              }
+          } else {
+              console.error("Login form or username element not found for auto-submission.");
+              alert('Error: Could not auto-submit voucher. Please contact support.');
+          }
+        }
+
+        function showPaymentError(message) {
+          document.getElementById('paymentStatus').className = 'error';
+          document.getElementById('statusText').innerHTML = `<strong>${message}</strong>`;
+          document.getElementById('statusSpinner').style.display = 'none';
+          document.getElementById('proceedBtn').disabled = false;
+          document.getElementById('cancelBtn').disabled = false;
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('phoneInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') proceedPayment();
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('paymentModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closePaymentModal();
+            }
+        });
+
+// JS for Find My Voucher Modal
+
+// --- VOUCHER LOOKUP MODAL FUNCTIONS ---
+function openVoucherModal() {
+    document.getElementById('voucherModal').classList.add('show');
+    // Reload iframe to get fresh data
+    document.getElementById('voucherIframe').src = 'https://pay.onlustech.com/yo/look/voucher-lookup.php?mac=$(mac-esc)';
+}
+
+function closeVoucherModal() {
+    document.getElementById('voucherModal').classList.remove('show');
+}
+
+// Listen for messages from the iframe
+window.addEventListener('message', function(event) {
+    // Security: verify origin if possible
+    // if (event.origin !== "your-expected-origin") return;
+    
+    if (event.data && event.data.type === 'VOUCHER_FOUND') {
+        var voucherCode = event.data.voucherCode;
+        
+        // Close the voucher modal
+        closeVoucherModal();
+        
+        // Auto-fill the voucher in the login form using correct form references
+        var loginForm = document.forms['login'];
+        if (loginForm) {
+            var usernameField = loginForm.elements['username'];
+            var passwordField = loginForm.elements['password'];
+            if (usernameField) usernameField.value = voucherCode;
+            if (passwordField) passwordField.value = voucherCode;
+        }
+        
+        // Show the voucher code for 5 seconds with countdown, then auto-connect
+        var infoElement = document.querySelector('.form-container .info');
+        var countdown = 5;
+        if (infoElement) {
+            infoElement.textContent = '✓ Voucher found: ' + voucherCode + ' — Connecting in ' + countdown + 's...';
+            infoElement.style.color = '#059669';
+            infoElement.classList.remove('alert');
+            
+            var countdownTimer = setInterval(function() {
+                countdown--;
+                if (countdown > 0) {
+                    infoElement.textContent = '✓ Voucher found: ' + voucherCode + ' — Connecting in ' + countdown + 's...';
+                } else {
+                    clearInterval(countdownTimer);
+                    infoElement.textContent = '✓ Connecting now...';
+                    // Auto-submit the login form
+                    if (typeof doLogin === 'function') {
+                        doLogin();
+                    } else if (loginForm) {
+                        loginForm.submit();
+                    }
+                }
+            }, 1000);
+        } else {
+            // Fallback: no info element found, just auto-connect after 5 seconds
+            setTimeout(function() {
+                if (typeof doLogin === 'function') {
+                    doLogin();
+                } else if (loginForm) {
+                    loginForm.submit();
+                }
+            }, 5000);
+        }
+        
+        // Focus on the Connect button so user can click early if desired
+        var connectBtn = document.querySelector('.submit-btn');
+        if (connectBtn) {
+            connectBtn.focus();
+        }
+    }
+});
+
+// Close voucher modal when clicking outside
+document.getElementById('voucherModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeVoucherModal();
+    }
+});
+
+</script>
+</body>
+</html>

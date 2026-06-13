@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="-1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in to Bite Tech Network</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #ff6b35 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+            padding: 10px 20px 25px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 107, 53, 0.2) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        
+        .wifi-icon {
+            width: 120px;
+            height: 90px;
+            margin: 0 auto 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .wifi-icon svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+        }    
+
+        h1 {
+            color: white;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            font-weight: 400;
+            position: relative;
+            z-index: 1;
+        }
+
+        .form-container {
+            padding: 24px 20px;
+        }
+
+        .info {
+            text-align: center;
+            color: #5a6c7d;
+            font-size: 13px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .info.alert {
+            color: #ff6b35;
+            font-weight: 600;
+            background: rgba(255, 107, 53, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            border-left: 3px solid #ff6b35;
+        }
+
+        #oper-hint {
+            color: #ff6b35;
+            font-weight: 600;
+            background: rgba(255, 107, 53, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            border-left: 3px solid #ff6b35;
+            text-align: center;
+            font-size: 13px;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 18px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            z-index: 1;
+        }
+
+        #voucherCode, #username, #password, #simplePassword, #phone-number, #verify-code {
+            flex: 1;
+            width: 100%;
+            padding: 14px 14px 14px 48px;
+            border: 2px solid #e0e7ee;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            background: white;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            color: #1e3c72;
+        }
+
+        #username, #password, #simplePassword, #phone-number, #verify-code {
+            padding: 14px;
+        }
+
+        #voucherCode:focus, #username:focus, #password:focus,
+        #simplePassword:focus, #phone-number:focus, #verify-code:focus {
+            outline: none;
+            border-color: #2a5298;
+            box-shadow: 0 0 0 4px rgba(42, 82, 152, 0.1);
+        }
+
+        #voucherCode::placeholder, #username::placeholder, #password::placeholder,
+        #simplePassword::placeholder, #phone-number::placeholder, #verify-code::placeholder {
+            color: #a0aec0;
+            font-weight: 400;
+        }
+
+        #country-code {
+            width: 70px;
+            padding: 14px 10px;
+            border: 2px solid #e0e7ee;
+            border-radius: 12px;
+            font-size: 14px;
+            color: #1e3c72;
+            background: white;
+        }
+
+        #hotspot-section, #input-user, #input-password, #input-simple,
+        #input-phone-num, #input-verify-code, #button-facebook {
+            display: none;
+        }
+
+        #hotspot-selector {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e7ee;
+            border-radius: 12px;
+            color: #1e3c72;
+            font-size: 14px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            background: white;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        #get-code {
+            padding: 14px 18px;
+            background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .find-voucher {
+            text-align: center;
+            margin-top: 12px;
+        }
+
+        .find-voucher a {
+            color: #2a5298;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .find-voucher a:hover {
+            color: #ff6b35;
+        }
+
+        .pricing-section {
+            padding: 20px 24px;
+            border-top: 1px solid #e0e7ee;
+            background: linear-gradient(to bottom, #ffffff 0%, #f8fafc 100%);
+        }
+
+        .pricing-title {
+            text-align: center;
+            color: #1e3c72;
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .pricing-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px;
+        }
+
+        .pricing-table tr {
+            transition: transform 0.2s ease;
+        }
+
+        .pricing-table tr:hover {
+            transform: translateX(4px);
+        }
+
+        .pricing-table td {
+            padding: 10px 12px;
+            background: white;
+            border: 2px solid #e0e7ee;
+        }
+
+        .pricing-table td:first-child {
+            border-radius: 10px 0 0 10px;
+            border-right: none;
+            color: #2a5298;
+            font-weight: 600;
+            font-size: 14px;
+            width: 35%;
+        }
+
+        .pricing-table td:nth-child(2) {
+            border-right: none;
+            border-left: none;
+            color: #1e3c72;
+            font-weight: 700;
+            font-size: 14px;
+            width: 35%;
+        }
+
+        .pricing-table td:last-child {
+            border-radius: 0 10px 10px 0;
+            border-left: none;
+            padding: 6px 10px;
+            width: 30%;
+        }
+
+        .buy-btn {
+            width: 100%;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .buy-btn:hover {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(42, 82, 152, 0.3);
+        }
+
+        .buy-btn:active {
+            transform: translateY(0);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 16px 24px 20px;
+            color: #a0aec0;
+            font-size: 12px;
+            border-top: 1px solid #e0e7ee;
+        }
+
+        .footer-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #5a6c7d;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer-logo svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: rgba(30, 30, 50, 0.95);
+            border-radius: 12px;
+            padding: 25px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s ease;
+            margin: 20px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+            color: #1e3c72;
+            margin: 0;
+            font-weight: 700;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #a0aec0;
+            font-size: 28px;
+            cursor: pointer;
+            transition: color 0.3s;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: #1e3c72;
+        }
+
+        .modal-body {
+            margin-bottom: 16px;
+        }
+
+        .package-summary {
+            background: linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(255, 107, 53, 0.1) 100%);
+            border: 2px solid rgba(42, 82, 152, 0.3);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .package-summary h3 {
+            color: #1e3c72;
+            font-size: 16px;
+            margin: 0 0 6px 0;
+            font-weight: 700;
+        }
+
+        .package-summary .price {
+            color: #ff6b35;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .package-summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .package-summary-row:last-child {
+            margin-bottom: 0;
+            padding-top: 8px;
+            border-top: 1px solid rgba(42, 82, 152, 0.2);
+            font-weight: 600;
+        }
+
+        .package-summary-label {
+            color: #5a6c7d;
+        }
+
+        .package-summary-value {
+            color: #1e3c72;
+            font-weight: 600;
+        }
+
+        .package-summary-amount {
+            color: #ff6b35;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #5a6c7d;
+            font-size: 13px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e0e7ee;
+            border-radius: 10px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #2a5298;
+            box-shadow: 0 0 0 4px rgba(42, 82, 152, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #a0aec0;
+        }
+
+        .form-group small {
+            display: block;
+            color: #5a6c7d;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .warning {
+            color: #ff6b35;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .error-message {
+            color: #ff6b35;
+            font-size: 12px;
+            margin-top: 6px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        #paymentStatus {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 500;
+            display: none;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        #paymentStatus.info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #2a5298;
+            border: 2px solid rgba(42, 82, 152, 0.3);
+        }
+
+        #paymentStatus.success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #059669;
+            border: 2px solid rgba(34, 197, 94, 0.3);
+        }
+
+        #paymentStatus.error {
+            background: rgba(255, 107, 53, 0.1);
+            color: #ff6b35;
+            border: 2px solid rgba(255, 107, 53, 0.3);
+        }
+
+        #paymentStatus code {
+            background: rgba(42, 82, 152, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 15px;
+            color: #1e3c72;
+        }
+
+        .spinner {
+            border: 2px solid #e0e7ee;
+            border-top: 2px solid #2a5298;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-cancel {
+            flex: 1;
+            background: white;
+            color: #5a6c7d;
+            padding: 12px 16px;
+            border: 2px solid #e0e7ee;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+        }
+
+        .btn-cancel:hover {
+            background: #f8fafc;
+            border-color: #2a5298;
+        }
+
+        .btn-proceed {
+            flex: 1;
+            background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+            color: white;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1.2;
+        }
+
+        .btn-proceed:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        .btn-proceed:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-cancel:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                border-radius: 16px;
+                max-width: 100%;
+                margin: 0;
+            }
+
+            .header {
+                padding: 15px 16px 20px;
+            }
+
+            h1 {
+                font-size: 22px;
+                margin-bottom: 4px;
+            }
+
+            .subtitle {
+                font-size: 13px;
+            }
+
+            .wifi-icon {
+                width: 110px;
+                height: 85px;
+                margin: 0 auto 10px;
+            }
+
+            .form-container {
+                padding: 20px 16px;
+            }
+
+            .pricing-section {
+                padding: 18px 16px;
+            }
+
+            .pricing-title {
+                font-size: 15px;
+                margin-bottom: 14px;
+            }
+
+            .pricing-table td:first-child {
+                font-size: 12px;
+                padding: 8px 10px;
+            }
+
+            .pricing-table td:nth-child(2) {
+                font-size: 13px;
+                padding: 8px 10px;
+            }
+
+            .buy-btn {
+                font-size: 10px;
+                padding: 7px 10px;
+            }
+
+            .modal {
+                margin: 10px;
+                max-width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Payment Modal -->
+    <div class="modal-overlay" id="paymentModal">
+        <div class="modal" style="background: rgba(255, 255, 255, 0.98);">
+            <div class="modal-header">
+                <h2 id="modalTitle">Payment Details</h2>
+                <button class="modal-close" onclick="closePaymentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Package Summary -->
+                <div class="package-summary">
+                    <div class="package-summary-row">
+                        <span class="package-summary-label">Package:</span>
+                        <span class="package-summary-value" id="summaryPackage">-</span>
+                    </div>
+                    <div class="package-summary-row">
+                        <span class="package-summary-label">Duration:</span>
+                        <span class="package-summary-value" id="summaryDuration">-</span>
+                    </div>
+                    <div class="package-summary-row">
+                        <span class="package-summary-label">Amount:</span>
+                        <span class="package-summary-amount" id="summaryAmount">-</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <p class="warning">Do not close this page while entering your PIN! In case of challenges please contact support on: <strong>0776750646</strong>.</p>
+                    <label for="phoneInput">Phone Number <span style="color: #ff6b35;">*</span></label>
+                    <input 
+                        type="tel" 
+                        id="phoneInput" 
+                        placeholder="0712345678 or 256712345678"
+                        required
+                        autocomplete="tel"
+                    />
+                    <small>Enter your MTN or Airtel number</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="emailInput">Email (Optional)</label>
+                    <input type="email" id="emailInput" placeholder="your@email.com" autocomplete="email">
+                    <small>For payment receipts and voucher backup</small>
+                </div>
+
+                <!-- Add status display area -->
+                <div id="paymentStatus">
+                    <span id="statusText"></span>
+                    <span id="statusSpinner" class="spinner" style="display: none;"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" id="cancelBtn" onclick="closePaymentModal()">Cancel</button>
+                <button class="btn-proceed" id="proceedBtn" onclick="proceedPayment()">Proceed to Pay</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <div class="wifi-icon">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <linearGradient id="wifiGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffaa00;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#ff8800;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff6600;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="glowRadial">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#ffaa00;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#ff6600;stop-opacity:0" />
+    </radialGradient>
+    <linearGradient id="speedGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffaa00;stop-opacity:0" />
+      <stop offset="50%" style="stop-color:#ffaa00;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffaa00;stop-opacity:0" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="strongGlow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="200" cy="280" r="100" fill="url(#glowRadial)" opacity="0.4">
+    <animate attributeName="r" values="100;130;100" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.4;0.6;0.4" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <path d="M 70 150 Q 200 50 330 150" stroke="url(#wifiGradient)" stroke-width="12" fill="none" stroke-linecap="round" opacity="0">
+    <animate attributeName="opacity" values="0;0.3;0.7;1;0.7;0.3;0" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="stroke-width" values="8;12;8" dur="2s" repeatCount="indefinite"/>
+  </path>
+  <path d="M 100 170 Q 200 90 300 170" stroke="url(#wifiGradient)" stroke-width="12" fill="none" stroke-linecap="round" opacity="0" filter="url(#glow)">
+    <animate attributeName="opacity" values="0;0.4;0.8;1;0.8;0.4;0" dur="2s" repeatCount="indefinite" begin="0.3s"/>
+    <animate attributeName="stroke-width" values="8;12;8" dur="2s" repeatCount="indefinite" begin="0.3s"/>
+  </path>
+  <path d="M 130 190 Q 200 130 270 190" stroke="url(#wifiGradient)" stroke-width="12" fill="none" stroke-linecap="round" opacity="0" filter="url(#glow)">
+    <animate attributeName="opacity" values="0;0.5;0.9;1;0.9;0.5;0" dur="2s" repeatCount="indefinite" begin="0.6s"/>
+    <animate attributeName="stroke-width" values="8;12;8" dur="2s" repeatCount="indefinite" begin="0.6s"/>
+  </path>
+  <path d="M 160 210 Q 200 170 240 210" stroke="url(#wifiGradient)" stroke-width="12" fill="none" stroke-linecap="round" opacity="0" filter="url(#strongGlow)">
+    <animate attributeName="opacity" values="0;0.6;1;1;1;0.6;0" dur="2s" repeatCount="indefinite" begin="0.9s"/>
+    <animate attributeName="stroke-width" values="8;14;8" dur="2s" repeatCount="indefinite" begin="0.9s"/>
+  </path>
+  <g id="routerBase" filter="url(#strongGlow)">
+    <rect x="170" y="265" width="60" height="35" rx="5" fill="url(#wifiGradient)" opacity="0.9">
+      <animate attributeName="opacity" values="0.9;1;0.9" dur="2s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="175" y="268" width="50" height="4" rx="2" fill="#ffaa00" opacity="0.8">
+      <animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="178" y="255" width="4" height="12" rx="2" fill="url(#wifiGradient)">
+      <animate attributeName="fill-opacity" values="0.8;1;0.8" dur="1.8s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="218" y="255" width="4" height="12" rx="2" fill="url(#wifiGradient)">
+      <animate attributeName="fill-opacity" values="0.8;1;0.8" dur="1.8s" repeatCount="indefinite" begin="0.2s"/>
+    </rect>
+  </g>
+  <g id="dataParticles">
+    <circle cx="200" cy="240" r="3" fill="#ffaa00" filter="url(#glow)">
+      <animate attributeName="cx" values="200;80;60" dur="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="cy" values="240;180;160" dur="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="r" values="3;5;2" dur="1.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="200" cy="240" r="3" fill="#ff8800" filter="url(#glow)">
+      <animate attributeName="cx" values="200;90;70" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+      <animate attributeName="cy" values="240;170;150" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+      <animate attributeName="r" values="3;5;2" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+    </circle>
+    <circle cx="200" cy="240" r="3" fill="#ffaa00" filter="url(#glow)">
+      <animate attributeName="cx" values="200;320;340" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+      <animate attributeName="cy" values="240;180;160" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+      <animate attributeName="r" values="3;5;2" dur="1.5s" repeatCount="indefinite" begin="0.2s"/>
+    </circle>
+    <circle cx="200" cy="240" r="3" fill="#ff8800" filter="url(#glow)">
+      <animate attributeName="cx" values="200;310;330" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+      <animate attributeName="cy" values="240;170;150" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+      <animate attributeName="r" values="3;5;2" dur="1.8s" repeatCount="indefinite" begin="0.5s"/>
+    </circle>
+    <circle cx="200" cy="240" r="3" fill="#ff9900" filter="url(#glow)">
+      <animate attributeName="cx" values="200;200;200" dur="1.6s" repeatCount="indefinite" begin="0.4s"/>
+      <animate attributeName="cy" values="240;120;80" dur="1.6s" repeatCount="indefinite" begin="0.4s"/>
+      <animate attributeName="opacity" values="0;1;0" dur="1.6s" repeatCount="indefinite" begin="0.4s"/>
+      <animate attributeName="r" values="3;6;2" dur="1.6s" repeatCount="indefinite" begin="0.4s"/>
+    </circle>
+  </g>
+  <g id="speedChevrons" opacity="0.7">
+    <path d="M 120 200 L 100 220 L 120 240" stroke="#ffaa00" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite"/>
+      <animate attributeName="stroke-width" values="2;4;2" dur="1.2s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 140 200 L 120 220 L 140 240" stroke="#ff9900" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" begin="0.2s"/>
+      <animate attributeName="stroke-width" values="2;4;2" dur="1.2s" repeatCount="indefinite" begin="0.2s"/>
+    </path>
+    <path d="M 280 200 L 300 220 L 280 240" stroke="#ffaa00" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" begin="0.1s"/>
+      <animate attributeName="stroke-width" values="2;4;2" dur="1.2s" repeatCount="indefinite" begin="0.1s"/>
+    </path>
+    <path d="M 260 200 L 280 220 L 260 240" stroke="#ff9900" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite" begin="0.3s"/>
+      <animate attributeName="stroke-width" values="2;4;2" dur="1.2s" repeatCount="indefinite" begin="0.3s"/>
+    </path>
+  </g>
+  <circle cx="200" cy="280" r="8" fill="#ffffff" filter="url(#strongGlow)">
+    <animate attributeName="r" values="6;10;6" dur="1.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.8;1;0.8" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="200" cy="280" r="25" stroke="#ffaa00" stroke-width="2" fill="none" opacity="0.5" stroke-dasharray="5 10">
+    <animateTransform attributeName="transform" type="rotate" from="0 200 280" to="360 200 280" dur="3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.3;0.7;0.3" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <g id="speedStreaks" opacity="0.6">
+    <line x1="0" y1="220" x2="400" y2="220" stroke="url(#speedGradient)" stroke-width="2">
+      <animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite"/>
+    </line>
+    <line x1="0" y1="230" x2="400" y2="230" stroke="url(#speedGradient)" stroke-width="3">
+      <animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite" begin="0.3s"/>
+    </line>
+    <line x1="0" y1="240" x2="400" y2="240" stroke="url(#speedGradient)" stroke-width="2">
+      <animate attributeName="opacity" values="0;1;0" dur="1s" repeatCount="indefinite" begin="0.6s"/>
+    </line>
+  </g>
+  <g id="wifiPulses" opacity="0.4">
+    <path d="M 40 130 Q 200 20 360 130" stroke="#ffaa00" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="10 15">
+      <animate attributeName="stroke-dashoffset" values="0;-100" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.2;0.6;0.2" dur="2s" repeatCount="indefinite"/>
+    </path>
+  </g>
+</svg>
+            </div>
+            <h1>BITE TECH NETWORK</h1>
+            <p class="subtitle">Fast and Affordable Internet</p>
+        </div>
+
+        <div class="form-container">
+            <div id="oper-hint"></div>
+
+            <p class="info">Enter Your Voucher to Access WIFI</p>
+
+            <div id="hotspot-section">
+                <select id="hotspot-selector"></select>
+            </div>
+
+            <form id="login-form">
+                <div id="input-voucher">
+                    <div class="input-group">
+                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 11V6C9 4.34315 10.3431 3 12 3C13.6569 3 15 4.34315 15 6V11M12 14V17M6 11H18C19.1046 11 20 11.8954 20 13V19C20 20.1046 19.1046 21 18 21H6C4.89543 21 4 20.1046 4 19V13C4 11.8954 4.89543 11 6 11Z" stroke="#2a5298" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <input id="voucherCode" name="voucherCode" type="text" placeholder="Enter your voucher here"/>
+                    </div>
+                </div>
+
+                <div id="input-user">
+                    <div class="input-group">
+                        <input id="username" name="username" type="text" placeholder="Username"/>
+                    </div>
+                </div>
+
+                <div id="input-password">
+                    <div class="input-group">
+                        <input id="password" name="password" type="password" placeholder="Password"/>
+                    </div>
+                </div>
+
+                <div id="input-simple">
+                    <div class="input-group">
+                        <input id="simplePassword" name="simplePassword" type="password" placeholder="Password"/>
+                    </div>
+                </div>
+
+                <div id="input-phone-num">
+                    <div class="input-group">
+                        <input id="country-code" type="text" value="">
+                        <input id="phone-number" name="phone-number" type="text" placeholder="Phone Number"/>
+                    </div>
+                </div>
+
+                <div id="input-verify-code">
+                    <div class="input-group">
+                        <input id="verify-code" name="verify-code" type="text" placeholder="Verification Code"/>
+                        <button id="get-code" type="button">Get Code</button>
+                    </div>
+                </div>
+            </form>
+
+            <div id="button-area">
+                <button id="button-facebook" class="submit-btn" style="background: linear-gradient(135deg, #3b5998 0%, #4c6fb1 100%); margin-bottom: 10px;">Facebook</button>
+                <button id="button-login" type="submit" class="submit-btn">Connect Now</button>
+            </div>
+
+            <div class="find-voucher">
+                <a href="#find">🔍 Already bought? Find My Voucher</a>
+            </div>
+        </div>
+
+        <div class="pricing-section">
+            <h2 class="pricing-title">Choose a Package and Pay with Mobile Money</h2>
+            <table class="pricing-table" id="packages">
+                <tr>
+                    <td>3 Hours</td>
+                    <td>UGX 500</td>
+                    <td><button class="buy-btn" onclick="selectPackage('3hours', 500)">BUY</button></td>
+                </tr>
+                <tr>
+                    <td>24 Hours</td>
+                    <td>UGX 1,000</td>
+                    <td><button class="buy-btn" onclick="selectPackage('24hours', 1000)">BUY</button></td>
+                </tr>
+                <tr>
+                    <td>Weekly</td>
+                    <td>UGX 6,000</td>
+                    <td><button class="buy-btn" onclick="selectPackage('7days', 6000)">BUY</button></td>
+                </tr>
+                <tr>
+                    <td>Monthly</td>
+                    <td>UGX 25,000</td>
+                    <td><button class="buy-btn" onclick="selectPackage('30days', 25000)">BUY</button></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="footer">
+            <span class="footer-logo">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20 7L12 3L4 7M20 7L12 11M20 7V17L12 21M12 11L4 7M12 11V21M4 7V17L12 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                We accept: MTN Mobile Money & Airtel Money
+            </span>
+        </div>
+    </div>
+
+    <!-- Omada Portal JavaScript (unchanged functionality) -->
+    <script>
+        var Ajax = {
+            post: function (url, data, fn) {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", url, true);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState == 4 && (xhr.status == 200 || xhr.status == 304)) {
+                        fn.call(this, xhr.responseText);
+                    }
+                };
+                xhr.send(data);
+            }
+        };
+
+        function getQueryStringKey(key) { return getQueryStringAsObject()[key]; }
+        
+        function getQueryStringAsObject() {
+            var b, cv, e, k, ma, sk, v, r = {},
+                d = function (v) { return decodeURIComponent(v); },
+                q = window.location.search.substring(1),
+                s = /([^&;=]+)=?([^&;]*)/g;
+            ma = function(v) {
+                if (typeof v != "object") {
+                    cv = v; v = {}; v.length = 0;
+                    if (cv) { Array.prototype.push.call(v, cv); }
+                }
+                return v;
+            };
+            while (e = s.exec(q)) {
+                b = e[1].indexOf("[");
+                v = d(e[2]);
+                if (b < 0) {
+                    k = d(e[1]);
+                    if (r[k]) {
+                        r[k] = ma(r[k]);
+                        Array.prototype.push.call(r[k], v);
+                    } else {
+                        r[k] = v;
+                    }
+                } else {
+                    k = d(e[1].slice(0, b));
+                    sk = d(e[1].slice(b + 1, e[1].indexOf("]", b)));
+                    r[k] = ma(r[k]);
+                    if (sk) { r[k][sk] = v; }
+                    else { Array.prototype.push.call(r[k], v); }
+                }
+            }
+            return r;
+        }
+
+        var data = {}, globalConfig = {}, submitUrl;
+        var clientMac = getQueryStringKey("clientMac");
+        var apMac = getQueryStringKey("apMac");
+        var gatewayMac = getQueryStringKey("gatewayMac") || undefined;
+        var ssidName = getQueryStringKey("ssidName") || undefined;
+        var radioId = !!getQueryStringKey("radioId")? Number(getQueryStringKey("radioId")) : undefined;
+        var vid = !!getQueryStringKey("vid")? Number(getQueryStringKey("vid")) : undefined;
+        var originUrl = getQueryStringKey("originUrl");
+        
+        var hotspotMap = {3: "Voucher Access", 5: "Local User Access", 6: "SMS Access", 8: "RADIUS Access"};
+        var errorHintMap = {"0": "Successfully Unlocked!", "-1": "General error.", "-41502": "Wrong voucher code", "-41503": "Voucher expired", "-41517": "Incorrect password."};
+        var facebookUrl = !!apMac? ('/portal/fbwifi/forward?clientMac='+encodeURIComponent(clientMac)+'&apMac='+encodeURIComponent(apMac)+'&ssidName='+encodeURIComponent(ssidName)+'&radioId='+encodeURIComponent(radioId)+'&originUrl='+encodeURIComponent(originUrl)) : ('/portal/fbwifi/forward?clientMac='+encodeURIComponent(clientMac)+'&gatewayMac='+encodeURIComponent(gatewayMac)+'&vid='+encodeURIComponent(vid)+'&originUrl='+encodeURIComponent(originUrl));
+        var isCommited;
+
+        Ajax.post('/portal/getPortalPageSetting', JSON.stringify({clientMac,apMac,gatewayMac,ssidName,radioId,vid,originUrl}), function (res) {
+            res = JSON.parse(res);
+            data = res.result;
+            submitUrl = "/portal/auth";
+            var landingUrl = data.landingUrl;
+            isCommited = false;
+            globalConfig = {authType: data.authType, hotspotTypes: !!data.hotspot && data.hotspot.enabledTypes || [], error: data.error || 'ok', countryCode: !!data.sms && data.sms.countryCode || 1};
+            
+            function pageConfigParse(){
+                if (res.errorCode !== 0){ document.getElementById("oper-hint").style.display = "block"; document.getElementById("oper-hint").innerHTML = errorHintMap[res.errorCode]; }
+                document.getElementById("hotspot-section").style.display = "none";
+                document.getElementById("input-voucher").style.display = "none";
+                document.getElementById("input-user").style.display = "none";
+                document.getElementById("input-password").style.display = "none";
+                document.getElementById("input-simple").style.display = "none";
+                document.getElementById("input-phone-num").style.display = "none";
+                document.getElementById("input-verify-code").style.display = "none";
+                document.getElementById("button-facebook").style.display = "none";
+                switch (globalConfig.authType){
+                    case 0: window.authType = 0; break;
+                    case 1: document.getElementById("input-simple").style.display = "block"; window.authType = 1; break;
+                    case 2: hotspotChang(2); window.authType = 2; break;
+                    case 7: document.getElementById("button-facebook").style.display = "block"; document.getElementById("button-facebook").addEventListener("click", function () { window.location.href = facebookUrl; }); document.getElementById("button-login").style.display = "none"; window.authType = 7; break;
+                    case 11: var options = ""; for (var i=0;i<globalConfig.hotspotTypes.length;i++) { options += '<option value="'+globalConfig.hotspotTypes[i]+'">'+hotspotMap[globalConfig.hotspotTypes[i]]+'</option>'; } if (globalConfig.hotspotTypes.length > 1) { document.getElementById("hotspot-section").style.display = "block"; } document.getElementById("hotspot-selector").innerHTML = options; hotspotChang(globalConfig.hotspotTypes[0]); window.authType = globalConfig.hotspotTypes[0]; break;
+                }
+            }
+            
+            function handleSubmit(){
+                var submitData = {}; submitData['authType'] = window.authType;
+                switch (window.authType){
+                    case 3: submitData['voucherCode'] = document.getElementById("voucherCode").value; break;
+                    case 5: submitData['localuser'] = document.getElementById("username").value; submitData['localuserPsw'] = document.getElementById("password").value; break;
+                    case 1: submitData['simplePassword'] = document.getElementById("simplePassword").value; break;
+                    case 6: submitData['phone'] = document.getElementById("country-code").value + document.getElementById("phone-number").value; submitData['code'] = document.getElementById("verify-code").value; break;
+                    case 2: case 8: submitData['username'] = document.getElementById("username").value; submitData['password'] = document.getElementById("password").value; break;
+                }
+                if(isCommited == false){
+                    submitData['clientMac'] = clientMac; submitData['apMac'] = apMac; submitData['gatewayMac'] = gatewayMac; submitData['ssidName'] = ssidName; submitData['radioId'] = radioId; submitData['vid'] = vid;
+                    if(window.authType == 2 || window.authType == 8){ submitUrl = "/portal/radius/auth"; submitData['authType'] = window.authType; } else { submitData['originUrl'] = originUrl; }
+                    Ajax.post(submitUrl, JSON.stringify(submitData).toString(), function(data){ data = JSON.parse(data); if(!!data && data.errorCode === 0) { isCommited = true; window.location.href = landingUrl; } else{ document.getElementById("oper-hint").style.display = "block"; document.getElementById("oper-hint").innerHTML = errorHintMap[data.errorCode]; } });
+                }
+            }
+            
+            function hotspotChang (type) {
+                document.getElementById("input-voucher").style.display = "none"; document.getElementById("input-user").style.display = "none"; document.getElementById("input-password").style.display = "none"; document.getElementById("input-phone-num").style.display = "none"; document.getElementById("input-verify-code").style.display = "none"; document.getElementById("button-login").style.display = "block"; window.authType = type;
+                switch (Number(type)) {
+                    case 3: document.getElementById("input-voucher").style.display = "block"; break;
+                    case 5: case 2: case 8: document.getElementById("input-user").style.display = "block"; document.getElementById("input-password").style.display = "block"; break;
+                    case 6: document.getElementById("input-phone-num").style.display = "block"; document.getElementById("input-verify-code").style.display = "block"; break;
+                }
+            }
+            
+            document.getElementById("country-code").value = parseInt(globalConfig.countryCode, 10);
+            document.getElementById("hotspot-selector").addEventListener("change", function () { var obj = document.getElementById("hotspot-selector"); var opt = obj.options[obj.selectedIndex]; hotspotChang(opt.value); });
+            document.getElementById("button-login").addEventListener("click", handleSubmit);
+            document.getElementById("get-code").addEventListener("click", function(e){ e.preventDefault(); var phoneNum = document.getElementById("phone-number").value; Ajax.post("/portal/sendSmsAuthCode", JSON.stringify({clientMac,apMac,gatewayMac,ssidName,radioId,vid,phone: "+" + document.getElementById("country-code").value + phoneNum}),function(data){ data = JSON.parse(data); document.getElementById("oper-hint").style.display = "block"; document.getElementById("oper-hint").innerHTML = data.errorCode !== 0 ? errorHintMap[data.errorCode] : "SMS sent successfully."; }); });
+            pageConfigParse();
+        });
+    </script>
+
+    <!-- Payment System JavaScript (unchanged functionality) -->
+    <script>
+let pendingPayment = null;
+let pollInterval = null;
+let pollCount = 0;
+const MAX_POLLS = 40;
+const CURRENT_ORIGIN_SITE = 'guma';
+
+function selectPackage(voucherType, amount) {
+    const packageNames = {
+        '3hours': '3 Hours',
+        '12hours': '12 Hours',
+        '24hours': '24 Hours',
+        '7days': 'Weekly',
+        '30days': 'Monthly'
+    };
+
+    const packageDurations = {
+        '3hours': '3 Hours',
+        '12hours': '12 Hours',
+        '24hours': '24 Hours',
+        '7days': '7 Days',
+        '30days': '30 Days'
+    };
+
+    pendingPayment = {
+        packageType: voucherType,
+        amount: amount,
+        packageName: packageNames[voucherType],
+        packageDuration: packageDurations[voucherType],
+        clientMac: clientMac || '',
+        apMac: apMac || '',
+        gatewayMac: gatewayMac || '',
+        ssidName: ssidName || '',
+        radioId: radioId || '',
+        vid: vid || '',
+        originUrl: originUrl || window.location.href,
+        landingUrl: (typeof data !== 'undefined' && data.landingUrl) ? data.landingUrl : (originUrl || window.location.href),
+        previewSite: CURRENT_ORIGIN_SITE
+    };
+    
+    console.log("Package selected - pendingPayment:", pendingPayment);
+
+    document.getElementById('summaryPackage').textContent = packageNames[voucherType];
+    document.getElementById('summaryDuration').textContent = packageDurations[voucherType];
+    document.getElementById('summaryAmount').textContent = 'UGX ' + amount.toLocaleString();
+
+    document.getElementById('phoneInput').value = '';
+    document.getElementById('emailInput').value = '';
+    document.getElementById('paymentStatus').style.display = 'none';
+    document.getElementById('proceedBtn').disabled = false;
+    document.getElementById('cancelBtn').disabled = false;
+
+    document.getElementById('paymentModal').classList.add('show');
+    document.getElementById('phoneInput').focus();
+    
+    console.log("Omada Variables Check:", {
+        clientMac: clientMac,
+        apMac: apMac,
+        gatewayMac: gatewayMac,
+        ssidName: ssidName,
+        radioId: radioId,
+        vid: vid,
+        originUrl: originUrl
+    });
+}
+
+function normalizePhoneNumber(phone) {
+    phone = phone.replace(/\D/g, '');
+    
+    if (phone.startsWith('256')) {
+        return phone;
+    } else if (phone.startsWith('0')) {
+        return '256' + phone.substring(1);
+    } else if (phone.startsWith('7') && phone.length === 9) {
+        return '256' + phone;
+    } else if (phone.length === 9) {
+        return '256' + phone;
+    } else if (phone.startsWith('+256')) {
+        return phone.substring(1);
+    }
+    
+    return phone;
+}
+
+function closePaymentModal() {
+    document.getElementById('paymentModal').classList.remove('show');
+    pendingPayment = null;
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+function proceedPayment() {
+    const phone = document.getElementById('phoneInput').value.trim();
+    const email = document.getElementById('emailInput').value.trim();
+
+    if (!phone) {
+        alert('Please enter your phone number');
+        document.getElementById('phoneInput').focus();
+        return;
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    if (!normalizedPhone.startsWith('256') || normalizedPhone.length !== 12) {
+        alert('Please enter a valid Ugandan phone number (e.g., 0712345678)');
+        document.getElementById('phoneInput').focus();
+        return;
+    }
+
+    if (email && !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        alert('Please enter a valid email address or leave it empty');
+        document.getElementById('emailInput').focus();
+        return;
+    }
+
+    initiatePayment(normalizedPhone, email);
+}
+
+function initiatePayment(phone, email) {
+    document.getElementById('proceedBtn').disabled = true;
+    document.getElementById('cancelBtn').disabled = true;
+    document.getElementById('paymentStatus').className = 'info';
+    document.getElementById('statusText').innerHTML = '<strong>Initiating payment...</strong>';
+    document.getElementById('statusSpinner').style.display = 'inline-block';
+    document.getElementById('paymentStatus').style.display = 'block';
+
+    if (pollInterval) {
+        clearInterval(pollInterval);
+    }
+    pollCount = 0;
+
+    const paymentData = {
+        amount: parseFloat(pendingPayment.amount),
+        msisdn: phone,
+        origin_site: CURRENT_ORIGIN_SITE,
+        client_mac: pendingPayment.clientMac || '',
+        email: email || '',
+        voucher_type: pendingPayment.packageType,
+        origin_url: pendingPayment.originUrl || '',
+        ap_mac: pendingPayment.apMac || '',
+        gateway_mac: pendingPayment.gatewayMac || '',
+        ssid_name: pendingPayment.ssidName || '',
+        radio_id: pendingPayment.radioId || '',
+        vid: pendingPayment.vid || '',
+        landing_url: pendingPayment.landingUrl || '',
+        preview_site: pendingPayment.previewSite || CURRENT_ORIGIN_SITE
+    };
+
+    console.log("Sending payment data to initiate.php:", paymentData);
+    console.log("Pending payment object:", pendingPayment);
+
+    fetch('https://bitetechsystems.com/guma-omada/initiate.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(paymentData)
+    })
+    .then(response => response.json())
+    .then(initData => {
+        console.log('Initiate response:', initData);
+
+        if (initData.status === -1) {
+            showPaymentError(initData.errorMessage || 'Payment initiation failed');
+        } else if (initData.status === 1) {
+            document.getElementById('statusText').innerHTML = '<strong>📱 Check your phone to confirm payment.</strong><br>Waiting for confirmation...';
+            const ref = initData.transactionReference;
+
+            if (!ref) {
+                console.error('No transactionReference returned from backend:', initData);
+                showPaymentError('Payment initiation error: Missing reference.');
+                return;
+            }
+
+            console.log('Starting polling for Yo! ref:', ref);
+            startPolling(ref);
+        } else {
+            console.warn('Unexpected status from backend:', initData.status);
+            showPaymentError('Payment initiation returned unexpected status. Please try again.');
+        }
+    })
+    .catch(err => {
+        console.error('Network error during initiation:', err);
+        showPaymentError('Network error during initiation. Please check your connection and try again.');
+    });
+}
+
+function startPolling(ref) {
+    pollInterval = setInterval(() => {
+        pollCount++;
+        console.log(`Polling attempt ${pollCount}/${MAX_POLLS} for ref: ${ref}`);
+
+        if (pollCount > MAX_POLLS) {
+            clearInterval(pollInterval);
+            showPaymentError('Payment Failed. Please contact support on: 0776750646 if you were charged.');
+            return;
+        }
+
+        fetch(`https://bitetechsystems.com/guma-omada/check_status.php?ref=${encodeURIComponent(ref)}&t=${Date.now()}`)
+            .then(response => response.json())
+            .then(checkData => {
+                console.log('Status check response:', checkData);
+
+                if (checkData.transactionStatus === 1) {
+                    if (checkData.voucherCode) {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                        showVoucherSuccess(checkData.voucherCode);
+                    } else {
+                        console.warn('Status check returned success but no voucher code.');
+                        document.getElementById('statusText').innerHTML = `<strong>✅ Payment confirmed.</strong><br>Assigning voucher... (${pollCount * 5}s)`;
+                    }
+                } else if (checkData.transactionStatus < 0) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    showPaymentError(checkData.errorMessage || 'Payment failed');
+                } else {
+                    document.getElementById('statusText').innerHTML = `<strong>⏳ Waiting for payment confirmation...</strong><br>(${pollCount * 5}s)`;
+                }
+            })
+            .catch(err => {
+                console.error('Polling error:', err);
+                document.getElementById('statusText').innerHTML = `<strong>⏳ Network issue during check...</strong><br>retrying (${pollCount * 5}s)`;
+            });
+    }, 5000);
+}
+
+function showVoucherSuccess(voucherCode) {
+    document.getElementById('paymentStatus').className = 'success';
+    document.getElementById('statusText').innerHTML = `<strong>✅ Payment Successful!</strong><br>Your Voucher Code is: <code>${voucherCode}</code>`;
+    document.getElementById('statusSpinner').style.display = 'none';
+    document.getElementById('paymentStatus').style.display = 'block';
+
+    document.getElementById('proceedBtn').disabled = true;
+
+    let countdown = 3;
+    const countdownInterval = setInterval(() => {
+        if (countdown > 0) {
+            document.getElementById('statusText').innerHTML = `<strong>✅ Payment Successful!</strong><br>Your Voucher Code is: <code>${voucherCode}</code><br>Closing modal... (${countdown}s)`;
+            countdown--;
+        } else {
+            clearInterval(countdownInterval);
+        }
+    }, 1000);
+
+    setTimeout(function() {
+        document.getElementById('paymentModal').classList.remove('show');
+
+        const voucherInput = document.getElementById('voucherCode');
+        if (voucherInput) {
+            voucherInput.value = voucherCode;
+            voucherInput.focus();
+            console.log("Voucher code filled into input field:", voucherCode);
+        } else {
+            console.error("Voucher code input field (#voucherCode) not found on the main page.");
+        }
+    }, 2000);
+}
+
+function showPaymentError(message) {
+    document.getElementById('paymentStatus').className = 'error';
+    document.getElementById('statusText').innerHTML = `<strong>❌ ${message}</strong>`;
+    document.getElementById('statusSpinner').style.display = 'none';
+    document.getElementById('proceedBtn').disabled = false;
+    document.getElementById('cancelBtn').disabled = false;
+}
+
+document.getElementById('proceedBtn').addEventListener('click', proceedPayment);
+document.getElementById('cancelBtn').addEventListener('click', closePaymentModal);
+
+document.getElementById('phoneInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') proceedPayment();
+});
+
+document.getElementById('emailInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') proceedPayment();
+});
+
+document.getElementById('paymentModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closePaymentModal();
+    }
+});
+</script>
+</body>
+</html>
