@@ -92,6 +92,10 @@ function ensureCentralSchema(PDO $pdo): void
             db_user VARCHAR(190) NULL,
             db_pass VARCHAR(255) NULL,
             default_profile VARCHAR(120) NOT NULL DEFAULT 'default',
+            sms_enabled TINYINT(1) NOT NULL DEFAULT 0,
+            sms_sender_id VARCHAR(11) NULL,
+            sms_message_category VARCHAR(32) NULL,
+            sms_brand_name VARCHAR(120) NULL,
             allowed_origins TEXT NULL,
             notes TEXT NULL,
             created_at TIMESTAMP NULL,
@@ -99,6 +103,13 @@ function ensureCentralSchema(PDO $pdo): void
             KEY payment_sites_active_slug_index (active, slug)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+
+    ensureColumns($pdo, 'payment_sites', [
+        'sms_enabled' => 'TINYINT(1) NOT NULL DEFAULT 0',
+        'sms_sender_id' => 'VARCHAR(11) NULL',
+        'sms_message_category' => 'VARCHAR(32) NULL',
+        'sms_brand_name' => 'VARCHAR(120) NULL',
+    ]);
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS payment_transactions (
@@ -131,6 +142,35 @@ function ensureCentralSchema(PDO $pdo): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS payment_sms_logs (
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            site_id BIGINT UNSIGNED NOT NULL,
+            transaction_id BIGINT UNSIGNED NULL,
+            external_ref VARCHAR(120) NULL,
+            provider VARCHAR(32) NOT NULL DEFAULT 'mambosms',
+            recipient VARCHAR(32) NOT NULL,
+            sender_id VARCHAR(11) NULL,
+            message_category VARCHAR(32) NULL,
+            message TEXT NOT NULL,
+            status VARCHAR(32) NOT NULL DEFAULT 'queued',
+            status_message VARCHAR(255) NULL,
+            http_code INT NULL,
+            provider_status_code INT NULL,
+            recipients_count INT NULL,
+            message_count INT NULL,
+            sms_sent INT NULL,
+            sms_cost DECIMAL(14,2) NULL,
+            provider_balance DECIMAL(14,2) NULL,
+            raw_response MEDIUMTEXT NULL,
+            created_at TIMESTAMP NULL,
+            updated_at TIMESTAMP NULL,
+            KEY payment_sms_logs_site_created_index (site_id, created_at),
+            KEY payment_sms_logs_external_ref_index (external_ref),
+            CONSTRAINT payment_sms_logs_site_fk FOREIGN KEY (site_id) REFERENCES payment_sites(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
     $stmt = $pdo->query("SELECT COUNT(*) FROM payment_admins");
     if ((int) $stmt->fetchColumn() === 0) {
         $admin = appConfig('default_admin');
@@ -146,6 +186,24 @@ function ensureCentralSchema(PDO $pdo): void
     }
 
     $checked = true;
+}
+
+function ensureColumns(PDO $pdo, string $table, array $columns): void
+{
+    $existing = [];
+    try {
+        foreach ($pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll() as $column) {
+            $existing[$column['Field']] = true;
+        }
+    } catch (Throwable) {
+        return;
+    }
+
+    foreach ($columns as $column => $definition) {
+        if (!isset($existing[$column])) {
+            $pdo->exec("ALTER TABLE `$table` ADD COLUMN `$column` $definition");
+        }
+    }
 }
 
 function currentAdmin(): ?array
@@ -400,6 +458,20 @@ function updateCentralTransaction(string $externalRef, array $data): void
     $stmt->execute($values);
 }
 
+function smsLogs(int $limit = 100): array
+{
+    $stmt = centralDb()->prepare("
+        SELECT l.*, s.display_name, s.slug
+        FROM payment_sms_logs l
+        JOIN payment_sites s ON s.id = l.site_id
+        ORDER BY l.created_at DESC
+        LIMIT ?
+    ");
+    $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
 function mirrorToTenant(array $site, array $tx): void
 {
     try {
@@ -557,7 +629,242 @@ function handleSuccessfulCollection(string $externalRef, array $updates = []): a
     }
 
     mirrorToTenant($site, $fresh);
+    $fresh = centralTransactionByRef($fresh['external_ref']) ?: $fresh;
+    try {
+        sendTransactionSmsIfEnabled($site, $fresh);
+    } catch (Throwable $e) {
+        logPayment('SMS send skipped after success', [
+            'site' => $site['slug'] ?? null,
+            'external_ref' => $fresh['external_ref'] ?? null,
+            'error' => $e->getMessage(),
+        ]);
+    }
+
     return centralTransactionByRef($fresh['external_ref']) ?: $fresh;
+}
+
+function sendTransactionSmsIfEnabled(array $site, array $tx): array
+{
+    if (empty($site['sms_enabled']) || $tx['transaction_type'] !== 'collection') {
+        return ['success' => false, 'skipped' => true, 'message' => 'SMS disabled for this site'];
+    }
+
+    $recipient = trim((string) ($tx['msisdn'] ?? ''));
+    if ($recipient === '') {
+        return ['success' => false, 'skipped' => true, 'message' => 'Missing recipient phone number'];
+    }
+
+    $existing = centralDb()->prepare("
+        SELECT id, status FROM payment_sms_logs
+        WHERE external_ref = ? AND status = 'sent'
+        LIMIT 1
+    ");
+    $existing->execute([$tx['external_ref']]);
+    if ($existing->fetch()) {
+        return ['success' => true, 'skipped' => true, 'message' => 'SMS already sent'];
+    }
+
+    $message = buildTransactionSmsMessage($site, $tx);
+    return sendMamboSms($site, $tx, $recipient, $message);
+}
+
+function buildTransactionSmsMessage(array $site, array $tx): string
+{
+    $brand = trim((string) ($site['sms_brand_name'] ?: appConfig('sms.brand_name', 'ONLIFI WiFi')));
+    $voucher = trim((string) ($tx['voucher_code'] ?? ''));
+    $package = trim((string) ($tx['voucher_type'] ?? ''));
+
+    if ($voucher !== '') {
+        $packageText = $package !== '' ? " for $package" : '';
+        return "$brand: Your$packageText voucher code is $voucher. Thank you.";
+    }
+
+    $amount = number_format((float) $tx['amount'], 0);
+    return "$brand: Payment of UGX $amount was received successfully. Thank you.";
+}
+
+function sendMamboSms(array $site, array $tx, string $recipient, string $message): array
+{
+    $sms = appConfig('sms', []);
+    $apiKey = trim((string) ($sms['api_key'] ?? ''));
+    $sendUrl = trim((string) ($sms['send_url'] ?? 'https://api-mongolia.mambosms.com/v1/send-sms'));
+    $senderId = substr(trim((string) ($site['sms_sender_id'] ?: ($sms['sender_id'] ?? 'ONLIFI'))), 0, 11);
+    $category = trim((string) ($site['sms_message_category'] ?: ($sms['message_category'] ?? 'customised')));
+    $timeout = (int) ($sms['timeout_seconds'] ?? 10);
+
+    if ($apiKey === '') {
+        return recordSmsResult($site, $tx, $recipient, $senderId, $category, $message, [
+            'success' => false,
+            'message' => 'MamboSMS API key is not configured',
+            'http_code' => null,
+            'response' => null,
+        ]);
+    }
+
+    $payload = [
+        'message' => $message,
+        'recipients' => $recipient,
+        'message_category' => $category,
+        'sender_id' => $senderId,
+    ];
+
+    $response = httpJsonRequest('POST', $sendUrl, $payload, [
+        'Authorization: ' . $apiKey,
+        'Content-Type: application/json',
+        'Accept: application/json',
+    ], $timeout);
+
+    return recordSmsResult($site, $tx, $recipient, $senderId, $category, $message, $response);
+}
+
+function recordSmsResult(array $site, array $tx, string $recipient, string $senderId, string $category, string $message, array $result): array
+{
+    $response = $result['response'] ?? null;
+    $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+    $success = !empty($result['success']) && !empty($response['success']);
+    $messages = $response['messages'] ?? null;
+    $statusMessage = is_array($messages) ? implode(' ', array_map('strval', $messages)) : ($result['message'] ?? null);
+
+    $stmt = centralDb()->prepare("
+        INSERT INTO payment_sms_logs
+            (site_id, transaction_id, external_ref, provider, recipient, sender_id, message_category, message,
+             status, status_message, http_code, provider_status_code, recipients_count, message_count, sms_sent,
+             sms_cost, provider_balance, raw_response, created_at, updated_at)
+        VALUES
+            (?, ?, ?, 'mambosms', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    ");
+    $stmt->execute([
+        $site['id'],
+        $tx['id'] ?? null,
+        $tx['external_ref'] ?? null,
+        $recipient,
+        $senderId,
+        $category,
+        $message,
+        $success ? 'sent' : 'failed',
+        substr((string) $statusMessage, 0, 255),
+        $result['http_code'] ?? null,
+        $response['statusCode'] ?? null,
+        $data['recipients_count'] ?? null,
+        $data['message_count'] ?? null,
+        $data['sms_sent'] ?? null,
+        $data['sms_cost'] ?? null,
+        $data['new_balance'] ?? null,
+        $response !== null ? json_encode($response) : null,
+    ]);
+
+    logPayment('MamboSMS result', [
+        'site' => $site['slug'] ?? null,
+        'external_ref' => $tx['external_ref'] ?? null,
+        'success' => $success,
+        'message' => $statusMessage,
+    ]);
+
+    return [
+        'success' => $success,
+        'message' => $statusMessage ?: ($success ? 'SMS sent successfully' : 'SMS failed'),
+        'response' => $response,
+    ];
+}
+
+function httpJsonRequest(string $method, string $url, ?array $payload, array $headers, int $timeout): array
+{
+    $body = $payload !== null ? json_encode($payload) : null;
+    if ($payload !== null && $body === false) {
+        return ['success' => false, 'message' => 'Could not encode request JSON', 'http_code' => null, 'response' => null];
+    }
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 4);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        if (strtoupper($method) === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
+        $raw = curl_exec($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($raw === false || $error !== '') {
+            return ['success' => false, 'message' => 'HTTP error: ' . $error, 'http_code' => $httpCode, 'response' => null];
+        }
+
+        return parseProviderJsonResponse((string) $raw, $httpCode);
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => strtoupper($method),
+            'header' => implode("\r\n", $headers) . "\r\n",
+            'content' => $body,
+            'timeout' => $timeout,
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    $raw = @file_get_contents($url, false, $context);
+    $httpCode = 0;
+    if (isset($http_response_header) && is_array($http_response_header)) {
+        foreach ($http_response_header as $header) {
+            if (preg_match('/^HTTP\/\S+\s+(\d+)/', $header, $matches)) {
+                $httpCode = (int) $matches[1];
+                break;
+            }
+        }
+    }
+
+    if ($raw === false) {
+        return ['success' => false, 'message' => 'HTTP request failed', 'http_code' => $httpCode, 'response' => null];
+    }
+
+    return parseProviderJsonResponse((string) $raw, $httpCode);
+}
+
+function parseProviderJsonResponse(string $raw, int $httpCode): array
+{
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [
+            'success' => false,
+            'message' => "Provider returned invalid JSON with HTTP $httpCode",
+            'http_code' => $httpCode,
+            'response' => ['raw' => substr($raw, 0, 500)],
+        ];
+    }
+
+    $ok = $httpCode >= 200 && $httpCode < 300 && !empty($decoded['success']);
+    $messages = $decoded['messages'] ?? [];
+    return [
+        'success' => $ok,
+        'message' => is_array($messages) ? implode(' ', array_map('strval', $messages)) : 'Provider responded',
+        'http_code' => $httpCode,
+        'response' => $decoded,
+    ];
+}
+
+function mamboSmsBalance(): array
+{
+    $sms = appConfig('sms', []);
+    $apiKey = trim((string) ($sms['api_key'] ?? ''));
+    if ($apiKey === '') {
+        return ['success' => false, 'message' => 'MamboSMS API key is not configured', 'balance' => null];
+    }
+
+    $result = httpJsonRequest('GET', (string) $sms['balance_url'], null, [
+        'Authorization: ' . $apiKey,
+        'Accept: application/json',
+    ], (int) ($sms['timeout_seconds'] ?? 10));
+
+    return [
+        'success' => !empty($result['success']),
+        'message' => $result['message'],
+        'balance' => $result['response']['data']['balance'] ?? null,
+        'response' => $result['response'],
+    ];
 }
 
 function createTenantVoucher(array $site, array $tx): ?string

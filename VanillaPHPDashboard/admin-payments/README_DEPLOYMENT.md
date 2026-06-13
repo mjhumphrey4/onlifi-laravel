@@ -7,14 +7,15 @@ This is the new admin-only payment dashboard for reusable YoPayments routing.
 - Admins manage sites, not dashboard users.
 - Each site gets a path slug such as `ranken`, `stk-wifi`, or `bite-tech`.
 - Hotspot pages call:
-  - `https://pay.onlifi.net/site-name/initiate.php`
-  - `https://pay.onlifi.net/site-name/check_status.php?ref=...`
-  - `https://pay.onlifi.net/site-name/api.php?action=balance` for Laravel balance reads
+  - `https://payments.onlifi.net/site-name/initiate.php`
+  - `https://payments.onlifi.net/site-name/check_status.php?ref=...`
+  - `https://payments.onlifi.net/site-name/api.php?action=balance` for Laravel balance reads
 - The same physical PHP files serve every site through rewrite rules.
 - Collections and withdrawals share one signed ledger:
   - successful collections are positive amounts
   - successful withdrawals are negative amounts
   - available balance is the sum of successful ledger entries
+- Each site has an SMS ON/OFF switch. When enabled, successful payment transactions send a customer SMS through MamboSMS and write to the SMS Logs tab.
 - Each site can optionally mirror transactions and vouchers into its assigned Onlifi/Laravel tenant database.
 
 ## Install
@@ -22,9 +23,10 @@ This is the new admin-only payment dashboard for reusable YoPayments routing.
 1. Copy `config.example.php` to `config.php`.
 2. Set the central dashboard database credentials.
 3. Set the YoPayments API credentials.
-4. Point the web root or an alias to this folder.
-5. Visit `/login.php`.
-6. Change the default admin password immediately in the database or by creating your own admin row.
+4. Set the MamboSMS API key and default sender settings.
+5. Point the web root or an alias to this folder.
+6. Visit `/login.php`.
+7. Change the default admin password immediately in the database or by creating your own admin row.
 
 The default admin is seeded only when `payment_admins` is empty.
 
@@ -38,11 +40,11 @@ RewriteRule ^([a-zA-Z0-9-]+)/(initiate|check_status|ipn|callback|failure)\.php$ 
 
 ## Nginx Rewrite
 
-Use this pattern for `pay.onlifi.net`:
+Use this pattern for `payments.onlifi.net`:
 
 ```nginx
 server {
-    server_name pay.onlifi.net;
+    server_name payments.onlifi.net;
     root /var/www/onlifi/VanillaPHPDashboard/admin-payments;
     index index.php;
 
@@ -68,7 +70,7 @@ In each MikroTik `login.html`, set the site slug once:
 
 ```js
 const PAYMENT_SITE_SLUG = 'site-name';
-const PAYMENT_BASE_URL = 'https://pay.onlifi.net/' + PAYMENT_SITE_SLUG;
+const PAYMENT_BASE_URL = 'https://payments.onlifi.net/' + PAYMENT_SITE_SLUG;
 ```
 
 Then call:
@@ -84,6 +86,40 @@ fetch(PAYMENT_BASE_URL + '/check_status.php?ref=' + encodeURIComponent(ref) + '&
 ```
 
 The dashboard resolves the site from `/site-name/`, so the same backend files are reused for every site.
+
+## SMS Setup
+
+SMS settings live in `config.php`:
+
+```php
+'sms' => [
+    'api_key' => 'your-mambosms-api-key',
+    'send_url' => 'https://api-mongolia.mambosms.com/v1/send-sms',
+    'balance_url' => 'https://api-mongolia.mambosms.com/v1/accounts/balance',
+    'sender_id' => 'ONLIFI',
+    'message_category' => 'customised',
+    'brand_name' => 'ONLIFI WiFi',
+],
+```
+
+Per site, the admin can set:
+
+- `SMS sender ID`
+- `SMS category`
+- `SMS brand name`
+- `Send SMS after successful transactions`
+
+When the switch is ON, the dashboard sends one SMS per successful collection transaction. If a voucher code exists, the SMS includes the voucher code. If voucher creation is not configured for that site yet, the SMS becomes a payment confirmation. Successful sends are not repeated for the same transaction.
+
+The SMS Logs tab records:
+
+- site
+- recipient
+- sent/failed status
+- provider cost
+- provider balance
+- message body
+- external payment reference
 
 ## Linking To Onlifi Laravel
 
@@ -115,13 +151,13 @@ For withdrawal safety, keep withdrawals in `payment_transactions` as negative `t
 YoPayments IPN is automatically set per site:
 
 ```text
-https://pay.onlifi.net/site-name/ipn.php
+https://payments.onlifi.net/site-name/ipn.php
 ```
 
 Generic provider callbacks can use:
 
 ```text
-https://pay.onlifi.net/site-name/callback.php
+https://payments.onlifi.net/site-name/callback.php
 ```
 
 The callback handler resolves the transaction by external reference and validates it against the central ledger before mirroring to the tenant database.
