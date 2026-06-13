@@ -257,12 +257,24 @@ function onlifiSiteBaseUrl(array $site) {
 
 function onlifiAdminUser() {
     return [
-        'password' => onlifiEnv('ONLIFI_ADMIN_PASSWORD', '##12345678Aa'),
+        'password' => defined('ONLIFI_ADMIN_PASSWORD') ? ONLIFI_ADMIN_PASSWORD : onlifiEnv('ONLIFI_ADMIN_PASSWORD', '##12345678Aa'),
+        'password_hash' => defined('ONLIFI_ADMIN_PASSWORD_HASH') ? ONLIFI_ADMIN_PASSWORD_HASH : onlifiEnv('ONLIFI_ADMIN_PASSWORD_HASH', ''),
         'name' => 'Administrator',
-        'email' => onlifiEnv('ONLIFI_ADMIN_EMAIL', 'admin@payments.onlifi.net'),
+        'email' => defined('ONLIFI_ADMIN_EMAIL') ? ONLIFI_ADMIN_EMAIL : onlifiEnv('ONLIFI_ADMIN_EMAIL', 'admin@payments.onlifi.net'),
         'role' => 'admin',
         'site' => null,
     ];
+}
+
+function onlifiAdminUsername() {
+    return defined('ONLIFI_ADMIN_USERNAME') ? ONLIFI_ADMIN_USERNAME : onlifiEnv('ONLIFI_ADMIN_USERNAME', 'admin');
+}
+
+function onlifiAdminPasswordMatches(array $user, $password) {
+    if (!empty($user['password_hash'])) {
+        return password_verify((string)$password, $user['password_hash']);
+    }
+    return hash_equals((string)$user['password'], (string)$password);
 }
 
 function onlifiLedgerWithdrawalSum($siteLabel, $status = 'SUCCEEDED') {

@@ -4,6 +4,30 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+ini_set('display_errors', '0');
+
+set_exception_handler(function (Throwable $e) {
+    error_log('Dashboard API exception: ' . $e->getMessage());
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+        http_response_code(500);
+    }
+    echo json_encode(['error' => 'Server error: ' . $e->getMessage()]);
+    exit;
+});
+
+register_shutdown_function(function () {
+    $error = error_get_last();
+    if (!$error || !in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        return;
+    }
+    error_log('Dashboard API fatal error: ' . $error['message']);
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+        http_response_code(500);
+    }
+    echo json_encode(['error' => 'Fatal server error: ' . $error['message']]);
+});
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -24,12 +48,12 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-require_once __DIR__ . '/../../site_registry.php';
+require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../sms_helper.php';
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 $USERS = [
-    'admin' => onlifiAdminUser(),
+    onlifiAdminUsername() => onlifiAdminUser(),
 ];
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -131,7 +155,7 @@ switch ($action) {
         global $USERS;
         $username = trim($body['username'] ?? '');
         $password = $body['password'] ?? '';
-        if (isset($USERS[$username]) && $USERS[$username]['password'] === $password) {
+        if (isset($USERS[$username]) && onlifiAdminPasswordMatches($USERS[$username], $password)) {
             $u = $USERS[$username];
             $_SESSION['user'] = [
                 'username' => $username,

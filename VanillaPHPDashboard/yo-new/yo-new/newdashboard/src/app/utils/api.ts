@@ -1,4 +1,8 @@
-const BASE = '/api/api.php';
+const configuredApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+const currentPathBase = window.location.pathname.endsWith('/')
+  ? window.location.pathname
+  : window.location.pathname.replace(/\/[^/]*$/, '/');
+const BASE = configuredApiUrl || new URL('api/api.php', window.location.origin + currentPathBase).toString();
 
 async function req(action: string, opts: RequestInit = {}, params: Record<string, string> = {}) {
   const url = new URL(BASE, window.location.origin);
@@ -9,7 +13,13 @@ async function req(action: string, opts: RequestInit = {}, params: Record<string
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   });
-  const data = await res.json();
+  const text = await res.text();
+  let data: any = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`API returned non-JSON response from ${url.pathname}: ${text.slice(0, 180)}`);
+  }
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }

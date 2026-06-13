@@ -10,6 +10,27 @@ This folder is the source of truth for the new payments system.
 
 The dashboard is admin-only. Site/customer logins were removed from `newdashboard/api/api.php`.
 
+Admin credentials are read from `config.php` or environment variables:
+
+```php
+define('ONLIFI_ADMIN_USERNAME', 'admin');
+define('ONLIFI_ADMIN_PASSWORD', 'change-this-password');
+define('ONLIFI_ADMIN_EMAIL', 'admin@payments.onlifi.net');
+```
+
+For production, use a password hash instead of plain text:
+
+```bash
+php -r "echo password_hash('your-new-password', PASSWORD_DEFAULT), PHP_EOL;"
+```
+
+Then set:
+
+```php
+define('ONLIFI_ADMIN_PASSWORD', '');
+define('ONLIFI_ADMIN_PASSWORD_HASH', '$2y$...');
+```
+
 Run the UI from:
 
 ```bash

@@ -12,6 +12,13 @@ define('DB_USER', getenv('ONLIFI_DB_USER') ?: 'yo');
 define('DB_PASS', getenv('ONLIFI_DB_PASS') ?: 'password');
 define('CENTRAL_DB_NAME', DB_NAME);
 
+// Admin dashboard credentials.
+// In production, prefer environment variables with the same names.
+define('ONLIFI_ADMIN_USERNAME', getenv('ONLIFI_ADMIN_USERNAME') ?: 'admin');
+define('ONLIFI_ADMIN_PASSWORD', getenv('ONLIFI_ADMIN_PASSWORD') ?: '##12345678Aa');
+define('ONLIFI_ADMIN_PASSWORD_HASH', getenv('ONLIFI_ADMIN_PASSWORD_HASH') ?: '');
+define('ONLIFI_ADMIN_EMAIL', getenv('ONLIFI_ADMIN_EMAIL') ?: 'admin@payments.onlifi.net');
+
 
 // YO! Uganda API Configuration - Use these names for YoAPI class
 define('YOAPI_USERNAME', '100812171094'); // Replace with your Yo! API Username
