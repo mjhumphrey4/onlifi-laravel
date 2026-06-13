@@ -46,8 +46,46 @@ Serve the built dashboard together with `newdashboard/api/api.php`.
 Every active site in the `payment_sites` registry can use the same PHP files through rewrite rules:
 
 ```apache
-RewriteRule ^([a-zA-Z0-9-]+)/(initiate|check_status|ipn|callback|failure|validate)\.php$ $2.php?site=$1 [QSA,L]
+RewriteRule ^([a-zA-Z0-9-]+)/(initiate|check_status|ipn|callback|failure|validate|api)\.php$ $2.php?site=$1 [QSA,L]
 ```
+
+For Nginx with the React build served from `newdashboard/dist`, use flat PHP locations:
+
+```nginx
+server {
+    listen 80;
+    server_name payments.onlifi.net;
+
+    root /var/www/onlifi/VanillaPHPDashboard/yo-new/yo-new/newdashboard/dist;
+    index index.html;
+
+    access_log /var/log/nginx/payments_onlifi_access.log;
+    error_log  /var/log/nginx/payments_onlifi_error.log;
+    client_max_body_size 50M;
+
+    location = /api/api.php {
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php7.4-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME /var/www/onlifi/VanillaPHPDashboard/yo-new/yo-new/newdashboard/api/api.php;
+        fastcgi_param DOCUMENT_ROOT /var/www/onlifi/VanillaPHPDashboard/yo-new/yo-new/newdashboard/api;
+        fastcgi_read_timeout 120;
+    }
+
+    location ~ ^/([a-zA-Z0-9-]+)/(initiate|check_status|ipn|callback|failure|validate|api)\.php$ {
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php/php7.4-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME /var/www/onlifi/VanillaPHPDashboard/yo-new/yo-new/$2.php;
+        fastcgi_param QUERY_STRING site=$1&$query_string;
+        fastcgi_read_timeout 120;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+If your server uses a different PHP-FPM socket, replace `/run/php/php7.4-fpm.sock` with the path shown by `ls /run/php/`.
 
 Examples:
 

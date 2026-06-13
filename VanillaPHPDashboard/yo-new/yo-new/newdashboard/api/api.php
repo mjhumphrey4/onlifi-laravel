@@ -62,7 +62,7 @@ $DB_USER = 'yo';
 $DB_PASS = 'password';
 $connections = [];
 
-function getDb($dbname) {
+function dashboardGetDb($dbname) {
     global $connections, $DB_HOST, $DB_USER, $DB_PASS;
     if (!isset($connections[$dbname])) {
         try {
@@ -281,7 +281,7 @@ switch ($action) {
 
         foreach ($sites as $site) {
             [$dbname, $origin] = siteDbName($site);
-            $pdo = $dbname ? getDb($dbname) : null;
+            $pdo = $dbname ? dashboardGetDb($dbname) : null;
             $row = ['total_amount' => 0, 'today_amount' => 0, 'week_amount' => 0, 'month_amount' => 0, 'total_sales' => 0];
             if ($pdo) {
                 try {
@@ -384,7 +384,7 @@ switch ($action) {
         $all = [];
         foreach ($targetSites as $s) {
             [$dbname, $origin] = siteDbName($s);
-            $pdo = $dbname ? getDb($dbname) : null;
+            $pdo = $dbname ? dashboardGetDb($dbname) : null;
             if (!$pdo) continue;
             try {
                 $where = "origin_site=:o";
@@ -503,7 +503,7 @@ switch ($action) {
             $totalPlatformFees = 0;
             foreach (allSites() as $s) {
                 [$dbname, $origin] = siteDbName($s);
-                $pdo = $dbname ? getDb($dbname) : null;
+                $pdo = $dbname ? dashboardGetDb($dbname) : null;
                 if ($pdo) {
                     try {
                         $stmt = $pdo->prepare("SELECT COALESCE(SUM(platform_fee),0) as total FROM transactions WHERE origin_site=:o AND status='success'");
@@ -528,7 +528,7 @@ switch ($action) {
         } else {
             // Regular site withdrawal
             [$dbname, $origin] = siteDbName($site);
-            $pdo = $dbname ? getDb($dbname) : null;
+            $pdo = $dbname ? dashboardGetDb($dbname) : null;
             $totalRevenue = 0;
             if ($pdo) {
                 try {
@@ -631,7 +631,7 @@ switch ($action) {
         if (!in_array($site, $sites)) $site = $sites[0];
 
         [$dbname, $origin] = siteDbName($site);
-        $pdo = $dbname ? getDb($dbname) : null;
+        $pdo = $dbname ? dashboardGetDb($dbname) : null;
         $data = [];
 
         if ($pdo) {
@@ -697,7 +697,7 @@ switch ($action) {
         
         foreach ($targetSites as $s) {
             [$dbname, $origin] = siteDbName($s);
-            $pdo = $dbname ? getDb($dbname) : null;
+            $pdo = $dbname ? dashboardGetDb($dbname) : null;
             if (!$pdo) continue;
             
             try {
@@ -841,7 +841,7 @@ switch ($action) {
         if (!isset($importMap[$site])) fail('Import not configured for this site');
 
         $cfg = $importMap[$site];
-        $pdo = getDb($cfg['db']);
+        $pdo = dashboardGetDb($cfg['db']);
         if (!$pdo) fail('Database unavailable for this site');
         $tbl = $cfg['table'];
 
@@ -958,7 +958,7 @@ switch ($action) {
         if (!in_array($site, $sites)) fail('Invalid site');
 
         [$dbname,] = siteDbName($site);
-        $pdo = $dbname ? getDb($dbname) : null;
+        $pdo = $dbname ? dashboardGetDb($dbname) : null;
         if (!$pdo) fail('Database unavailable for this site');
 
         // Each site stores vouchers in a different table
@@ -1030,7 +1030,7 @@ switch ($action) {
         if (!in_array($site, $sites)) fail('Invalid site');
 
         [$dbname,] = siteDbName($site);
-        $pdo = $dbname ? getDb($dbname) : null;
+        $pdo = $dbname ? dashboardGetDb($dbname) : null;
         if (!$pdo) fail('Database unavailable for this site');
 
         $tableMap = [
@@ -1111,7 +1111,7 @@ switch ($action) {
         if (!is_array($ids) || empty($ids)) fail('No voucher IDs provided');
 
         [$dbname,] = siteDbName($site);
-        $pdo = $dbname ? getDb($dbname) : null;
+        $pdo = $dbname ? dashboardGetDb($dbname) : null;
         if (!$pdo) fail('Database unavailable for this site');
 
         $tableMap = [
