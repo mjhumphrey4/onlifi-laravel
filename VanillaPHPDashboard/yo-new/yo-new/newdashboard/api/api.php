@@ -24,15 +24,12 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+require_once __DIR__ . '/../../site_registry.php';
+require_once __DIR__ . '/../../sms_helper.php';
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 $USERS = [
-    'admin'      => ['password' => '##12345678Aa', 'name' => 'Administrator',     'email' => 'admin@yopayments.com',         'role' => 'admin', 'site' => null],
-    'enock'      => ['password' => 'bite@25',      'name' => 'Enock',             'email' => 'enock@bitetechnetwork.com',    'role' => 'user',  'site' => 'Enock'],
-    'richard'    => ['password' => '0700738027',   'name' => 'Richard',           'email' => 'richard@bitetechnetwork.com',  'role' => 'user',  'site' => 'Richard'],
-    'stk'        => ['password' => '##12345678Aa', 'name' => 'STK Admin',         'email' => 'stk@onlustech.com',            'role' => 'user',  'site' => 'STK'],
-    'remmy'      => ['password' => '0703538708',   'name' => 'Remmy',             'email' => 'remmy@rankenwifi.com',         'role' => 'user',  'site' => 'Remmy'],
-    'guma'       => ['password' => '0701480842',   'name' => 'Guma',              'email' => 'guma@omada.com',               'role' => 'user',  'site' => 'Guma'],
-    'namungoona' => ['password' => '##12345678Aa', 'name' => 'STK Namungoona',    'email' => 'namungoona@onlustech.com',     'role' => 'user',  'site' => 'Namungoona'],
+    'admin' => onlifiAdminUser(),
 ];
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
@@ -45,7 +42,19 @@ function getDb($dbname) {
     global $connections, $DB_HOST, $DB_USER, $DB_PASS;
     if (!isset($connections[$dbname])) {
         try {
-            $pdo = new PDO("mysql:host=$DB_HOST;dbname=$dbname;charset=utf8mb4", $DB_USER, $DB_PASS);
+            $siteConfig = null;
+            foreach (onlifiAllSites(false) as $candidate) {
+                if ($candidate['db_name'] === $dbname) {
+                    $siteConfig = $candidate;
+                    break;
+                }
+            }
+
+            if ($siteConfig) {
+                $pdo = onlifiSitePdo($siteConfig);
+            } else {
+                $pdo = new PDO("mysql:host=$DB_HOST;dbname=$dbname;charset=utf8mb4", $DB_USER, $DB_PASS);
+            }
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $connections[$dbname] = $pdo;
         } catch (PDOException $e) {
@@ -70,23 +79,16 @@ function getSqlite() {
 }
 
 function siteDbName($site) {
-    switch ($site) {
-        case 'STK':        return ['payment_mikrotik', 'STK WIFI'];
-        case 'Remmy':      return ['remmy_mikrotik',   'remmy'];
-        case 'Guma':       return ['guma_omada',       'guma'];
-        case 'Enock':      return ['omada',            'Bite Tech Network'];
-        case 'Richard':    return ['omada',            'Richard Network'];
-        case 'Namungoona': return ['stk_namungoona',   'STK Namungoona'];
-        default:           return [null, null];
-    }
+    $record = onlifiFindSite($site, false);
+    return $record ? [$record['db_name'], $record['origin_site']] : [null, null];
 }
 
 function allSites() {
-    return ['Enock', 'Richard', 'STK', 'Remmy', 'Guma', 'Namungoona'];
+    return array_map(fn($site) => $site['display_name'], onlifiAllSites(true));
 }
 
 function userSites($user) {
-    return $user['role'] === 'admin' ? allSites() : [$user['site']];
+    return allSites();
 }
 
 function respond($data, $code = 200) {
@@ -102,6 +104,12 @@ function fail($msg, $code = 400) {
 function requireAuth() {
     if (empty($_SESSION['user'])) fail('Unauthorized', 401);
     return $_SESSION['user'];
+}
+
+function requireAdmin() {
+    $user = requireAuth();
+    if (($user['role'] ?? '') !== 'admin') fail('Admin access required', 403);
+    return $user;
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -143,6 +151,103 @@ switch ($action) {
     case 'me':
         if (empty($_SESSION['user'])) respond(['user' => null]);
         respond(['user' => $_SESSION['user']]);
+
+    case 'sites':
+        requireAdmin();
+        respond(['sites' => onlifiAllSites(false)]);
+
+    case 'save_site':
+        requireAdmin();
+        $id = (int)($body['id'] ?? 0);
+        $slug = strtolower(trim((string)($body['slug'] ?? '')));
+        $slug = trim(preg_replace('/[^a-z0-9-]+/', '-', $slug), '-');
+        $displayName = trim((string)($body['display_name'] ?? ''));
+        $originSite = trim((string)($body['origin_site'] ?? $displayName));
+        $dbName = trim((string)($body['db_name'] ?? ''));
+        $dbHost = trim((string)($body['db_host'] ?? 'localhost'));
+        $dbUser = trim((string)($body['db_user'] ?? 'yo'));
+        $dbPass = (string)($body['db_pass'] ?? '');
+        if ($slug === '' || $displayName === '' || $originSite === '' || $dbName === '') {
+            fail('Slug, site name, origin site, and database name are required');
+        }
+        $params = [
+            ':slug' => $slug,
+            ':display_name' => $displayName,
+            ':origin_site' => $originSite,
+            ':db_host' => $dbHost,
+            ':db_port' => ($body['db_port'] ?? '') === '' ? null : (int)$body['db_port'],
+            ':db_name' => $dbName,
+            ':db_user' => $dbUser,
+            ':tenant_id' => trim((string)($body['tenant_id'] ?? '')) ?: null,
+            ':onlifi_site_id' => trim((string)($body['onlifi_site_id'] ?? '')) ?: null,
+            ':default_profile' => trim((string)($body['default_profile'] ?? '')) ?: null,
+            ':api_key' => trim((string)($body['api_key'] ?? '')) ?: bin2hex(random_bytes(24)),
+            ':active' => !empty($body['active']) ? 1 : 0,
+            ':sms_enabled' => !empty($body['sms_enabled']) ? 1 : 0,
+            ':sms_sender_id' => trim((string)($body['sms_sender_id'] ?? 'ONLIFI')) ?: 'ONLIFI',
+            ':sms_message_category' => trim((string)($body['sms_message_category'] ?? 'customised')) ?: 'customised',
+            ':sms_brand_name' => trim((string)($body['sms_brand_name'] ?? 'ONLIFI WiFi')) ?: 'ONLIFI WiFi',
+        ];
+        if ($id > 0) {
+            $passSql = $dbPass !== '' ? ", db_pass = :db_pass" : "";
+            if ($dbPass !== '') $params[':db_pass'] = $dbPass;
+            $params[':id'] = $id;
+            $stmt = onlifiCentralDb()->prepare("
+                UPDATE payment_sites
+                SET slug = :slug, display_name = :display_name, origin_site = :origin_site,
+                    db_host = :db_host, db_port = :db_port, db_name = :db_name, db_user = :db_user $passSql,
+                    tenant_id = :tenant_id, onlifi_site_id = :onlifi_site_id, default_profile = :default_profile,
+                    api_key = :api_key, active = :active, sms_enabled = :sms_enabled,
+                    sms_sender_id = :sms_sender_id, sms_message_category = :sms_message_category, sms_brand_name = :sms_brand_name
+                WHERE id = :id
+            ");
+            $stmt->execute($params);
+        } else {
+            $params[':db_pass'] = $dbPass;
+            $stmt = onlifiCentralDb()->prepare("
+                INSERT INTO payment_sites
+                    (slug, display_name, origin_site, db_host, db_port, db_name, db_user, db_pass,
+                     tenant_id, onlifi_site_id, default_profile, api_key, active, sms_enabled,
+                     sms_sender_id, sms_message_category, sms_brand_name)
+                VALUES
+                    (:slug, :display_name, :origin_site, :db_host, :db_port, :db_name, :db_user, :db_pass,
+                     :tenant_id, :onlifi_site_id, :default_profile, :api_key, :active, :sms_enabled,
+                     :sms_sender_id, :sms_message_category, :sms_brand_name)
+            ");
+            $stmt->execute($params);
+        }
+        respond(['ok' => true, 'sites' => onlifiAllSites(false)]);
+
+    case 'sms_logs':
+        requireAdmin();
+        $page = max(1, (int)($_GET['page'] ?? 1));
+        $limit = min(100, max(1, (int)($_GET['limit'] ?? 25)));
+        $offset = ($page - 1) * $limit;
+        $site = trim((string)($_GET['site'] ?? ''));
+        $where = '';
+        $params = [];
+        if ($site !== '') {
+            $record = onlifiFindSite($site, false);
+            $where = 'WHERE site_slug = :site_slug';
+            $params[':site_slug'] = $record['slug'] ?? $site;
+        }
+        $countStmt = onlifiCentralDb()->prepare("SELECT COUNT(*) FROM payment_sms_logs $where");
+        $countStmt->execute($params);
+        $total = (int)$countStmt->fetchColumn();
+        $stmt = onlifiCentralDb()->prepare("
+            SELECT l.*, s.display_name AS site_label
+            FROM payment_sms_logs l
+            LEFT JOIN payment_sites s ON s.slug = l.site_slug
+            $where
+            ORDER BY l.created_at DESC
+            LIMIT $limit OFFSET $offset
+        ");
+        $stmt->execute($params);
+        respond(['logs' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'limit' => $limit]);
+
+    case 'sms_balance':
+        requireAdmin();
+        respond(checkSMSBalance());
 
     // ── Dashboard stats ───────────────────────────────────────────────────────
     case 'stats':
@@ -187,11 +292,21 @@ switch ($action) {
                 } catch (Exception $e) { error_log($e->getMessage()); }
             }
 
+            try {
+                $withdrawn += onlifiLedgerWithdrawalSum($site, 'SUCCEEDED');
+                $pending += onlifiLedgerWithdrawalSum($site, 'PENDING');
+            } catch (Exception $e) { error_log($e->getMessage()); }
+
             $totalFees = (float)($row['total_fees'] ?? 0);
             $platformFees = (float)($row['total_platform_fees'] ?? 0);
             $netRevenue = (float)$row['total_amount'] - $totalFees - $platformFees;
+            $siteRecord = onlifiFindSite($site, false) ?: [];
             
             $result[$site] = [
+                'slug'           => $siteRecord['slug'] ?? null,
+                'origin_site'    => $origin,
+                'db_name'        => $dbname,
+                'sms_enabled'    => !empty($siteRecord['sms_enabled']),
                 'total_amount'   => (float)$row['total_amount'],
                 'today_amount'   => (float)$row['today_amount'],
                 'week_amount'    => (float)$row['week_amount'],
@@ -216,6 +331,12 @@ switch ($action) {
 
                 $s2 = $sqlite->prepare('SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE username="ADMIN" AND status="PENDING"');
                 $adminPending = (float)($s2->execute()->fetchArray(SQLITE3_ASSOC)['t'] ?? 0);
+            } catch (Exception $e) { error_log($e->getMessage()); }
+        }
+        if ($user['role'] === 'admin') {
+            try {
+                $adminWithdrawn += onlifiLedgerWithdrawalSum('ADMIN', 'SUCCEEDED');
+                $adminPending += onlifiLedgerWithdrawalSum('ADMIN', 'PENDING');
             } catch (Exception $e) { error_log($e->getMessage()); }
         }
 
@@ -295,6 +416,34 @@ switch ($action) {
             }
         }
 
+        try {
+            $labels = $sites;
+            if ($user['role'] === 'admin') $labels[] = 'ADMIN';
+            foreach ($labels as $label) {
+                $stmt = onlifiCentralDb()->prepare("
+                    SELECT
+                        id,
+                        site_label AS username,
+                        phone_number,
+                        ABS(amount) AS amount,
+                        status,
+                        transaction_ref AS transaction_reference,
+                        response_message,
+                        comment,
+                        created_at,
+                        site_label
+                    FROM payment_transactions
+                    WHERE transaction_type = 'withdrawal' AND site_label = :site
+                    ORDER BY created_at DESC
+                ");
+                $stmt->execute([':site' => $label]);
+                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    if ($row['site_label'] === 'ADMIN') $row['site_label'] = 'ADMIN (Platform Fees)';
+                    $all[] = $row;
+                }
+            }
+        } catch (Exception $e) { error_log($e->getMessage()); }
+
         usort($all, fn($a,$b) => strtotime($b['created_at']) - strtotime($a['created_at']));
         $total = count($all);
         $paged = array_slice($all, $offset, $limit);
@@ -323,7 +472,6 @@ switch ($action) {
         if (!preg_match('/^\d{10,12}$/', $phone)) fail('Invalid phone number format');
 
         $sqlite = getSqlite();
-        if (!$sqlite) fail('Withdrawal database unavailable');
 
         // Check balance based on withdrawal type
         if ($site === 'ADMIN') {
@@ -342,9 +490,14 @@ switch ($action) {
             }
 
             $adminWithdrawn = 0;
+            if ($sqlite) {
+                try {
+                    $s = $sqlite->prepare('SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE username="ADMIN" AND status="SUCCEEDED"');
+                    $adminWithdrawn = (float)($s->execute()->fetchArray(SQLITE3_ASSOC)['t'] ?? 0);
+                } catch (Exception $e) { error_log($e->getMessage()); }
+            }
             try {
-                $s = $sqlite->prepare('SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE username="ADMIN" AND status="SUCCEEDED"');
-                $adminWithdrawn = (float)($s->execute()->fetchArray(SQLITE3_ASSOC)['t'] ?? 0);
+                $adminWithdrawn += onlifiLedgerWithdrawalSum('ADMIN', 'SUCCEEDED');
             } catch (Exception $e) { error_log($e->getMessage()); }
 
             $balance = $totalPlatformFees - $adminWithdrawn;
@@ -363,10 +516,15 @@ switch ($action) {
             }
 
             $withdrawn = 0;
+            if ($sqlite) {
+                try {
+                    $s = $sqlite->prepare('SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE username=:u AND status="SUCCEEDED"');
+                    $s->bindValue(':u', $site, SQLITE3_TEXT);
+                    $withdrawn = (float)($s->execute()->fetchArray(SQLITE3_ASSOC)['t'] ?? 0);
+                } catch (Exception $e) { error_log($e->getMessage()); }
+            }
             try {
-                $s = $sqlite->prepare('SELECT COALESCE(SUM(amount),0) as t FROM transactions WHERE username=:u AND status="SUCCEEDED"');
-                $s->bindValue(':u', $site, SQLITE3_TEXT);
-                $withdrawn = (float)($s->execute()->fetchArray(SQLITE3_ASSOC)['t'] ?? 0);
+                $withdrawn += onlifiLedgerWithdrawalSum($site, 'SUCCEEDED');
             } catch (Exception $e) { error_log($e->getMessage()); }
 
             $balance = $totalRevenue - $withdrawn;
@@ -415,24 +573,23 @@ switch ($action) {
             error_log('YoAPI withdrawal error: ' . $e->getMessage());
         }
 
-        // Persist result to SQLite
         $txRef = 'WD' . date('YmdHis') . rand(100, 999);
         try {
-            $ins = $sqlite->prepare(
-                'INSERT INTO transactions (username, phone_number, amount, status, transaction_reference, response_message, comment, created_at)
-                 VALUES (:u, :ph, :am, :st, :ref, :msg, :cmt, :ca)'
-            );
-            $ins->bindValue(':u',   $site,               SQLITE3_TEXT);
-            $ins->bindValue(':ph',  $phone,              SQLITE3_TEXT);
-            $ins->bindValue(':am',  $amount,             SQLITE3_FLOAT);
-            $ins->bindValue(':st',  $yoStatus,           SQLITE3_TEXT);
-            $ins->bindValue(':ref', $yoRef ?: $txRef,    SQLITE3_TEXT);
-            $ins->bindValue(':msg', $yoMessage,          SQLITE3_TEXT);
-            $ins->bindValue(':cmt', $comment,            SQLITE3_TEXT);
-            $ins->bindValue(':ca',  date('Y-m-d H:i:s'), SQLITE3_TEXT);
-            $ins->execute();
+            $siteRecord = $site === 'ADMIN' ? null : onlifiFindSite($site, false);
+            onlifiRecordWithdrawal([
+                'site_id' => $siteRecord['id'] ?? null,
+                'site_slug' => $siteRecord['slug'] ?? null,
+                'site_label' => $site,
+                'external_ref' => $extRef,
+                'transaction_ref' => $yoRef ?: $txRef,
+                'phone_number' => $phone,
+                'amount' => $amount,
+                'status' => $yoStatus,
+                'response_message' => $yoMessage,
+                'comment' => $comment,
+            ]);
         } catch (Exception $e) {
-            error_log('SQLite insert error: ' . $e->getMessage());
+            error_log('Central withdrawal ledger insert error: ' . $e->getMessage());
         }
 
         if ($yoStatus === 'SUCCEEDED') {

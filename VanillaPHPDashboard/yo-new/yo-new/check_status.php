@@ -31,6 +31,10 @@ if (empty($ref)) {
     exit;
 }
 
+if (!onlifiCurrentSite()) {
+    onlifiFindSiteByTransactionRef($ref);
+}
+
 try {
     $pdo = getDB();
     $logger->debug("Database connection established");
@@ -133,7 +137,8 @@ try {
                 'external_ref' => $transaction['external_ref']
             ]);
 
-            $validateUrl = 'https://bitetechsystems.com/yo/validate.php';
+            $paymentSite = onlifiCurrentSite(['origin_site' => $transaction['origin_site'] ?? '']);
+            $validateUrl = ($paymentSite ? onlifiSiteBaseUrl($paymentSite) : SITE_URL) . 'validate.php';
             $validateParams = http_build_query([
                 'external_ref' => $transaction['external_ref'],
                 'background_call' => 1

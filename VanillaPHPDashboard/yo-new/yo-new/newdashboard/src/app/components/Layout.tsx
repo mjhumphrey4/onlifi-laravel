@@ -4,6 +4,8 @@ import {
   LayoutDashboard,
   ArrowLeftRight,
   Wallet,
+  Building2,
+  MessageSquareText,
   TrendingUp,
   BarChart3,
   Package,
@@ -19,8 +21,10 @@ import { useAuth } from '../context/AuthContext';
 
 const menuItems = [
   { path: '/',               label: 'Dashboard',          icon: LayoutDashboard },
+  { path: '/sites',          label: 'Sites',              icon: Building2 },
   { path: '/transactions',   label: 'Transactions',       icon: ArrowLeftRight },
   { path: '/withdrawals',    label: 'Withdrawals',        icon: Wallet },
+  { path: '/sms-logs',       label: 'SMS Logs',           icon: MessageSquareText },
   { path: '/performance',    label: 'Analyze Performance',icon: TrendingUp },
   { path: '/performance-graphs', label: 'Performance Graphs', icon: BarChart3 },
   { path: '/voucher-stock',  label: 'Voucher Stock',      icon: Package },

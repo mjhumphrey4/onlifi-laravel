@@ -26,6 +26,11 @@ export const apiLogin  = (username: string, password: string) => post('login', {
 export const apiLogout = () => post('logout');
 export const apiMe     = () => get('me');
 export const apiStats  = () => get('stats');
+export const apiSites  = () => get('sites');
+export const apiSaveSite = (body: Record<string, unknown>) => post('save_site', body);
+export const apiSmsLogs = (p: { page?: number; limit?: number; site?: string }) =>
+  get('sms_logs', { page: String(p.page ?? 1), limit: String(p.limit ?? 25), site: p.site ?? '' });
+export const apiSmsBalance = () => get('sms_balance');
 
 export const apiTransactions = (p: { page?: number; limit?: number; status?: string; search?: string; site?: string }) =>
   get('transactions', {

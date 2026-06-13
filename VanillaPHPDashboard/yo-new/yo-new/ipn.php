@@ -60,6 +60,11 @@ if (isset($_POST)) {
         $amount = $response['amount'];
         $networkRef = $response['network_ref'];
         $externalRef = $response['external_ref'];
+        $GLOBALS['CURRENT_SMS_EXTERNAL_REF'] = $externalRef;
+
+        if (!onlifiCurrentSite()) {
+            onlifiFindSiteByTransactionRef($externalRef);
+        }
 
         // Optional: Log the received details
         logIPN("Details - MSISDN: $msisdn, Amount: $amount, NetworkRef: $networkRef", 'DETAILS');
@@ -133,6 +138,18 @@ if (isset($_POST)) {
 
             if ($stmt->rowCount() > 0) {
                 logIPN("Database updated successfully for external_ref: $externalRef", 'SUCCESS');
+                $paymentSite = onlifiCurrentSite(['origin_site' => $originSite ?? '']);
+                if ($paymentSite) {
+                    onlifiRecordPaymentTransaction($paymentSite, [
+                        'external_ref' => $externalRef,
+                        'transaction_ref' => $networkRef,
+                        'transaction_type' => 'collection',
+                        'phone_number' => $msisdn,
+                        'amount' => $amount,
+                        'status' => 'success',
+                        'response_message' => $narrative,
+                    ]);
+                }
                 
                 // Immediately assign voucher to this successful transaction
                 logIPN("Attempting to assign voucher for external_ref: $externalRef", 'VOUCHER_ASSIGNMENT');

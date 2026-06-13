@@ -22,29 +22,28 @@ header('Content-Type: application/json');
 error_reporting(E_ALL);
 ini_set('display_errors', 0); // Set to 1 only for debugging
 
-// Read input safely
-$input = file_get_contents('php://input');
-$data = json_decode($input, true);
-
-if (json_last_error() !== JSON_ERROR_NONE) {
-  $jsonError = json_last_error_msg();
-  error_log("JSON decode error in initiate.php: $jsonError - Input: $input");
-  echo json_encode(['error' => "Invalid JSON input: $jsonError"]);
-  exit;
-}
+// Read JSON or form-encoded hotspot requests.
+$data = onlifiReadInputData();
 
 // Add origin_site validation/checking
 // Also add client_mac, email, voucher_type, origin_url
-if (!isset($data['amount']) || !isset($data['msisdn']) || !isset($data['origin_site']) 
+if (!isset($data['amount']) || !isset($data['msisdn'])
     || !isset($data['client_mac']) || !isset($data['voucher_type']) || !isset($data['origin_url'])) {
-  error_log("Missing required fields in initiate.php: amount, msisdn, origin_site, client_mac, voucher_type, origin_url");
-  echo json_encode(['error' => 'Missing required fields: amount, msisdn, origin_site, client_mac, voucher_type, origin_url']);
+  error_log("Missing required fields in initiate.php: amount, msisdn, client_mac, voucher_type, origin_url");
+  echo json_encode(['error' => 'Missing required fields: amount, msisdn, client_mac, voucher_type, origin_url']);
+  exit;
+}
+
+$paymentSite = onlifiCurrentSite($data);
+if (!$paymentSite) {
+  error_log("Unknown payment site in initiate.php: " . json_encode($data));
+  echo json_encode(['error' => 'Unknown or inactive payment site']);
   exit;
 }
 
 $amount = (float) $data['amount'];
 $msisdn = $data['msisdn'];
-$originSite = trim($data['origin_site']); // Get the origin site ID from the frontend
+$originSite = $paymentSite['origin_site'];
 $clientMac = $data['client_mac']; // Get client MAC
 $email = $data['email'] ?? null; // Get email (optional)
 $voucherType = $data['voucher_type']; // Get voucher type
@@ -86,6 +85,14 @@ try {
       VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
   ");
   $stmt->execute([$externalRef, $msisdn, $amount, $originSite, $clientMac, $email, $voucherType, $originUrl, $telecomFee, $familyType, $wifiName]);
+  onlifiRecordPaymentTransaction($paymentSite, [
+      'external_ref' => $externalRef,
+      'transaction_type' => 'collection',
+      'phone_number' => $msisdn,
+      'amount' => $amount,
+      'status' => 'pending',
+      'response_message' => 'Awaiting customer approval',
+  ]);
   error_log("Transaction inserted into DB: $externalRef from origin site: $originSite, MAC: $clientMac, Type: $voucherType, FamilyType: $familyType, WifiName: $wifiName, Fee: $telecomFee");
 } catch (PDOException $e) {
   error_log("Database insert error in initiate.php: " . $e->getMessage());
@@ -103,8 +110,9 @@ $yoAPI->set_external_reference($externalRef);
 $yoAPI->set_nonblocking("TRUE");
 
 // Define your IPN and Failure URLs using SITE_URL constant
-$ipnUrl = SITE_URL . 'ipn.php'; // Adjust path as needed
-$failureUrl = SITE_URL . 'failure.php'; // Adjust path as needed
+$siteBaseUrl = onlifiSiteBaseUrl($paymentSite);
+$ipnUrl = $siteBaseUrl . 'ipn.php';
+$failureUrl = $siteBaseUrl . 'failure.php';
 
 // Set the notification URLs
 $yoAPI->set_instant_notification_url($ipnUrl);
@@ -131,6 +139,15 @@ if($response['Status'] == 'OK') {
             WHERE external_ref = ?
         ");
         $stmt->execute([$yoTransactionRef, $statusMessage, $externalRef]);
+        onlifiRecordPaymentTransaction($paymentSite, [
+            'external_ref' => $externalRef,
+            'transaction_ref' => $yoTransactionRef,
+            'transaction_type' => 'collection',
+            'phone_number' => $msisdn,
+            'amount' => $amount,
+            'status' => 'pending',
+            'response_message' => $statusMessage,
+        ]);
         error_log("Transaction updated in DB with Yo! ref: $yoTransactionRef from origin site: $originSite");
     } catch (PDOException $e) {
         error_log("Database update error in initiate.php: " . $e->getMessage());
@@ -148,6 +165,7 @@ if($response['Status'] == 'OK') {
         'debug' => [
             'yoApiStatusCode' => $statusCode,
             'originSite' => $originSite, // Optionally return origin_site to frontend for debugging
+            'siteSlug' => $paymentSite['slug'],
             'note' => 'Check your phone to confirm the payment.'
         ]
     ]);
@@ -166,6 +184,14 @@ if($response['Status'] == 'OK') {
             WHERE external_ref = ?
         ");
         $stmt->execute([$errorMessage, $externalRef]);
+        onlifiRecordPaymentTransaction($paymentSite, [
+            'external_ref' => $externalRef,
+            'transaction_type' => 'collection',
+            'phone_number' => $msisdn,
+            'amount' => $amount,
+            'status' => 'failed',
+            'response_message' => $errorMessage,
+        ]);
         error_log("Transaction marked as FAILED in DB: $externalRef from origin site: $originSite. Reason: $errorMessage");
     } catch (PDOException $e) {
         error_log("Database update error on failure in initiate.php: " . $e->getMessage());
@@ -178,6 +204,7 @@ if($response['Status'] == 'OK') {
         'externalReference' => $externalRef, // Still return the ref for tracking if needed
         'debug' => [
             'originSite' => $originSite, // Optionally return origin_site to frontend for debugging
+            'siteSlug' => $paymentSite['slug'],
         ]
     ]);
 }

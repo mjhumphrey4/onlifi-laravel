@@ -5,6 +5,10 @@ import { useAuth } from '../context/AuthContext';
 import { apiStats, apiTransactions } from '../utils/api';
 
 interface SiteStat {
+  slug?: string;
+  origin_site?: string;
+  db_name?: string;
+  sms_enabled?: boolean;
   total_amount: number;
   today_amount: number;
   week_amount: number;
@@ -127,8 +131,17 @@ export function Dashboard() {
                 className={`bg-gradient-to-br ${SITE_COLORS[site] ?? 'from-slate-600 to-slate-700'} rounded-xl p-5 text-white`}
               >
                 <p className="text-sm font-semibold opacity-80 mb-1">{site}</p>
+                <p className="text-xs opacity-70 mb-3">/{stat.slug ?? site.toLowerCase()}/</p>
                 <p className="text-2xl font-bold mb-3">{fmt(stat.total_amount)}</p>
                 <div className="space-y-1 text-xs bg-white/10 rounded-lg p-3">
+                  <div className="flex justify-between">
+                    <span className="opacity-80">Database</span>
+                    <span className="font-semibold truncate max-w-[120px]">{stat.db_name ?? '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="opacity-80">SMS</span>
+                    <span className="font-semibold">{stat.sms_enabled ? 'ON' : 'OFF'}</span>
+                  </div>
                   <div className="flex justify-between">
                     <span className="opacity-80">Today</span>
                     <span className="font-semibold">{fmt(stat.today_amount)}</span>

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { apiMe, apiLogin, apiLogout } from '../utils/api';
+import { apiMe, apiLogin, apiLogout, apiSites } from '../utils/api';
 
 export interface AuthUser {
   username: string;
@@ -18,17 +18,27 @@ interface AuthContextType {
   userSites: () => string[];
 }
 
-const ALL_SITES = ['Enock', 'Richard', 'STK', 'Remmy', 'Guma', 'Namungoona'];
+interface PaymentSite {
+  display_name: string;
+  active: number | boolean;
+}
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [siteNames, setSiteNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     apiMe()
-      .then((d) => setUser(d.user ?? null))
+      .then(async (d) => {
+        setUser(d.user ?? null);
+        if (d.user?.role === 'admin') {
+          const sites = await apiSites().catch(() => ({ sites: [] }));
+          setSiteNames((sites.sites ?? []).filter((site: PaymentSite) => site.active === 1 || site.active === true).map((site: PaymentSite) => site.display_name));
+        }
+      })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
@@ -36,15 +46,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (username: string, password: string) => {
     const d = await apiLogin(username, password);
     setUser(d.user);
+    if (d.user?.role === 'admin') {
+      const sites = await apiSites().catch(() => ({ sites: [] }));
+      setSiteNames((sites.sites ?? []).filter((site: PaymentSite) => site.active === 1 || site.active === true).map((site: PaymentSite) => site.display_name));
+    }
   };
 
   const logout = async () => {
     await apiLogout();
     setUser(null);
+    setSiteNames([]);
   };
 
   const isAdmin = () => user?.role === 'admin';
-  const userSites = () => (user?.role === 'admin' ? ALL_SITES : user?.site ? [user.site] : []);
+  const userSites = () => (user?.role === 'admin' ? siteNames : user?.site ? [user.site] : []);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, userSites }}>

@@ -4,11 +4,13 @@
 // Set timezone to East Africa Time (EAT) - UTC+3
 date_default_timezone_set('Africa/Nairobi');
 
-// Database configuration
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'payment_mikrotik');
-define('DB_USER', 'yo'); // Change to your MySQL username
-define('DB_PASS', 'password'); // Change to your MySQL password
+// Central database configuration. The site registry in this DB decides where
+// each site's payment transactions and vouchers are written.
+define('DB_HOST', getenv('ONLIFI_DB_HOST') ?: 'localhost');
+define('DB_NAME', getenv('ONLIFI_CENTRAL_DB_NAME') ?: 'payment_mikrotik');
+define('DB_USER', getenv('ONLIFI_DB_USER') ?: 'yo');
+define('DB_PASS', getenv('ONLIFI_DB_PASS') ?: 'password');
+define('CENTRAL_DB_NAME', DB_NAME);
 
 
 // YO! Uganda API Configuration - Use these names for YoAPI class
@@ -19,11 +21,23 @@ define('YOAPI_MODE', 'production'); // Change to 'production' when ready to go l
 
 // Your site URL (change to your actual domain)
 // Use HTTPS in production
-define('SITE_URL', 'https://bitetechsystems.com/yo/'); // Replace with your actual site URL
+define('MAIN_PORTAL_URL', getenv('ONLIFI_PAYMENTS_URL') ?: 'https://payments.onlifi.net');
+
+require_once __DIR__ . '/site_registry.php';
+
+if (!defined('SITE_URL')) {
+  $siteForUrl = onlifiCurrentSite();
+  define('SITE_URL', $siteForUrl ? onlifiSiteBaseUrl($siteForUrl) : rtrim(MAIN_PORTAL_URL, '/') . '/');
+}
 
 // Database connection function
 function getDB() {
   try {
+    $site = onlifiCurrentSite();
+    if ($site) {
+      return onlifiSitePdo($site);
+    }
+
     $pdo = new PDO(
       "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
       DB_USER,
